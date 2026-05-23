@@ -187,11 +187,17 @@
                             </template>
                         </div>
 
-                        <button @click="triggerServices()" :disabled="executing"
-                                class="w-full btn-apple py-6 text-[10px] font-black uppercase tracking-[0.4em] shadow-2xl active:scale-[0.98] transition-all disabled:opacity-30">
-                            <span x-show="!executing">Execute Workflow</span>
-                            <div x-show="executing" class="w-6 h-6 border-2 border-black/10 border-t-black rounded-full animate-spin mx-auto"></div>
-                        </button>
+                        <div class="flex gap-4">
+                            <button @click="triggerServices()" :disabled="executing"
+                                    class="flex-1 btn-apple py-6 text-[10px] font-black uppercase tracking-[0.4em] shadow-2xl active:scale-[0.98] transition-all disabled:opacity-30">
+                                <span x-show="!executing">Execute Workflow</span>
+                                <div x-show="executing" class="w-6 h-6 border-2 border-black/10 border-t-black rounded-full animate-spin mx-auto"></div>
+                            </button>
+                            <button @click="runIdentification()" :disabled="executing"
+                                    class="glass px-8 rounded-[2rem] text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-white hover:bg-white/5 transition-all">
+                                🔄 Rerun AI
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
