@@ -1,3 +1,4 @@
+import json
 import os
 import io
 import uuid
@@ -58,7 +59,6 @@ async def get_db():
 # --- Core Endpoints ---
 
 
-@app.get("/pipelines")
 
 def get_pipeline(pipeline_id: str):
     from pipelines import PIPELINE_REGISTRY, DefaultPipeline, ComposablePipeline
@@ -75,26 +75,33 @@ def get_pipeline(pipeline_id: str):
                 config = json.load(f)
                 for cp in config.get("custom_pipelines", []):
                     if cp["id"] == pipeline_id:
-                        # Instantiate a ComposablePipeline and set its name/schema?
-                        # Actually, we can just return a custom instance
-                        p = ComposablePipeline()
-                        return p
+                        return ComposablePipeline()
     except:
         pass
         
     return DefaultPipeline()
 
+
 @app.get("/pipelines")
 async def list_pipelines():
     from pipelines import get_all_pipelines
-    base = get_all_pipelines()
-    
-    config_path = "config/user_config.json"
-    if os.path.exists(config_path):
-        with open(config_path, "r") as f:
-            config = json.load(f)
-            custom = config.get("custom_pipelines", [])
-            return {"success": True, "pipelines": base + custom}
+    try:
+        base = get_all_pipelines()
+        logger.info(f"Base pipelines: {[p['id'] for p in base]}")
+        
+        config_path = "config/user_config.json"
+        custom = []
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                config = json.load(f)
+                custom = config.get("custom_pipelines", [])
+        
+        logger.info(f"Custom pipelines: {[p['id'] for p in custom]}")
+        return {"success": True, "pipelines": base + custom}
+    except Exception as e:
+        logger.error(f"Error listing pipelines: {e}")
+        return {"success": False, "error": str(e)}
+
             
     return {"success": True, "pipelines": base}
 
