@@ -2,266 +2,303 @@
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vision Pipeline 2.0</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vision Pipeline 2.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #000; color: #fff; }
+        body { font-family: 'Inter', sans-serif; background-color: #000; color: #fff; overflow-x: hidden; }
         [x-cloak] { display: none !important; }
-        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .glass-dark { background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        .ios-toggle { position: relative; width: 44px; height: 24px; appearance: none; background: #333; border-radius: 20px; transition: .4s; cursor: pointer; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .glass-dark { background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .ios-toggle { position: relative; width: 44px; height: 24px; appearance: none; background: #2c2c2e; border-radius: 20px; transition: .3s; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); }
         .ios-toggle:checked { background: #34C759; }
-        .ios-toggle::before { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; top: 2px; left: 2px; background: #fff; transition: .4s; transform: scale(1); }
-        .ios-toggle:checked::before { left: 22px; }
-        .btn-primary { background: #fff; color: #000; font-weight: 700; transition: all 0.2s; }
-        .btn-primary:active { transform: scale(0.96); }
+        .ios-toggle::before { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; top: 1px; left: 1px; background: #fff; transition: .3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .ios-toggle:checked::before { left: 21px; }
+        .btn-apple { background: #fff; color: #000; font-weight: 800; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 1.25rem; }
+        .btn-apple:active { transform: scale(0.96); opacity: 0.9; }
+        .terminal-text { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: rgba(255,255,255,0.6); }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
+        
+        /* Cropper Overrides */
+        .cropper-view-box, .cropper-face { border-radius: 0; }
+        .cropper-line, .cropper-point { background-color: #fff; }
+        .cropper-bg { background-image: none; background-color: #000; }
     </style>
 </head>
-<body x-data="visionApp()" class="scrollbar-hide antialiased">
+<body x-data="visionApp()" class="scrollbar-hide antialiased selection:bg-white/20">
+    <!-- Precision Mode (Cropper Modal) -->
+    <div x-show="precisionMode" class="fixed inset-0 z-[300] bg-black flex flex-col" x-cloak x-transition>
+        <div class="p-6 flex justify-between items-center glass border-b-0">
+            <button @click="closePrecision()" class="text-white/60 hover:text-white font-bold text-sm uppercase tracking-widest">Cancel</button>
+            <h2 class="text-xs font-black uppercase tracking-[0.3em]">Precision Mode</h2>
+            <button @click="applyCrop()" class="bg-white text-black px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">Identify Selection</button>
+        </div>
+        <div class="flex-1 relative overflow-hidden bg-black">
+            <img id="cropper-target" :src="rawImage" class="max-w-full">
+        </div>
+        <div class="p-8 glass flex justify-center gap-6">
+            <button @click="cropper.rotate(-90)" class="w-12 h-12 glass rounded-full flex items-center justify-center">🔄</button>
+            <button @click="cropper.zoom(0.1)" class="w-12 h-12 glass rounded-full flex items-center justify-center">➕</button>
+            <button @click="cropper.zoom(-0.1)" class="w-12 h-12 glass rounded-full flex items-center justify-center">➖</button>
+        </div>
+    </div>
+
     <!-- Top Navigation -->
-    <nav class="fixed top-0 left-0 right-0 z-50 glass border-b border-white/5 px-6 py-4 flex justify-between items-center">
+    <nav class="fixed top-0 left-0 right-0 z-50 glass border-b border-white/5 px-6 py-4 flex justify-between items-center backdrop-blur-3xl">
         <div class="flex items-center gap-3">
-            <div class="w-8 h-8 bg-gradient-to-tr from-blue-500 to-purple-600 rounded-lg shadow-lg shadow-blue-500/20"></div>
-            <h1 class="text-lg font-black tracking-tighter uppercase">Vision 2.0</h1>
+            <div class="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-lg"><span class="text-black text-[10px] font-black">V2</span></div>
+            <h1 class="text-sm font-black tracking-tighter uppercase">Vision Pipeline</h1>
         </div>
         <div class="flex gap-1 bg-white/5 p-1 rounded-xl">
             <template x-for="tab in ['capture', 'batch', 'review']">
                 <button @click="activeTab = tab" 
-                        :class="activeTab === tab ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white'"
-                        class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-widest" 
+                        :class="activeTab === tab ? 'bg-white/10 text-white shadow-sm' : 'text-white/30 hover:text-white'"
+                        class="px-4 py-1.5 rounded-lg text-[10px] font-black transition-all uppercase tracking-widest" 
                         x-text="tab"></button>
             </template>
         </div>
     </nav>
 
-    <main class="pt-24 pb-32 px-6 max-w-2xl mx-auto space-y-8">
+    <main class="pt-24 pb-32 px-6 max-w-xl mx-auto space-y-8">
         <!-- Tab: Single Capture -->
-        <div x-show="activeTab === 'capture'" class="space-y-8" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4">
-            <!-- Viewfinder -->
-            <div class="relative rounded-3xl overflow-hidden glass aspect-[3/4] shadow-2xl group">
+        <div x-show="activeTab === 'capture'" class="space-y-6" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 translate-y-12">
+            <!-- Main Viewfinder -->
+            <div class="relative rounded-[2.5rem] overflow-hidden glass aspect-[4/5] shadow-2xl group border-white/10">
                 <template x-if="!aiPreview">
-                    <div class="absolute inset-0 flex flex-col items-center justify-center space-y-4">
-                        <div class="w-20 h-20 rounded-full border-4 border-white/10 flex items-center justify-center animate-pulse">
-                            <span class="text-4xl">📸</span>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center space-y-6">
+                        <div class="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center animate-pulse bg-white/[0.02]">
+                            <span class="text-5xl opacity-40">📸</span>
                         </div>
-                        <p class="text-white/40 text-sm font-medium tracking-wide">Frame an item to identify</p>
+                        <div class="text-center space-y-1">
+                            <p class="text-white font-black text-xs uppercase tracking-[0.2em]">Ready to Identify</p>
+                            <p class="text-white/20 text-[10px] font-bold uppercase tracking-widest">Awaiting Input</p>
+                        </div>
                     </div>
                 </template>
-                <img x-show="aiPreview" :src="aiPreview" class="w-full h-full object-cover">
+                
+                <div x-show="aiPreview" class="w-full h-full relative">
+                    <img :src="aiPreview" class="w-full h-full object-cover cursor-crosshair" @click="enterPrecision()">
+                    <div class="absolute top-6 left-6 glass-dark px-4 py-2 rounded-full border border-white/10 animate-fade-in">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-white/60">Tap to Lasso</span>
+                    </div>
+                </div>
                 
                 <div class="absolute bottom-8 left-0 right-0 flex justify-center px-8 gap-4">
                     <label class="cursor-pointer">
                         <input type="file" capture="environment" accept="image/*" class="hidden" @change="onFileSelected">
-                        <div class="bg-white text-black px-10 py-5 rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-2xl active:scale-95 transition-all">Identify Item</div>
+                        <div class="bg-white text-black px-12 py-5 rounded-[2rem] font-black uppercase tracking-widest text-[10px] shadow-2xl active:scale-95 transition-all">Capture</div>
                     </label>
                     <label class="cursor-pointer">
                         <input type="file" accept="image/*" class="hidden" @change="onFileSelected">
-                        <div class="bg-white/10 backdrop-blur-xl border border-white/10 text-white p-5 rounded-[2rem] active:scale-95 transition-all">📂</div>
+                        <div class="bg-white/10 backdrop-blur-xl border border-white/10 text-white p-5 rounded-[2rem] active:scale-95 transition-all text-xl">📂</div>
                     </label>
-                </div>
-
-                <div x-show="aiPreview" class="absolute top-6 right-6 flex flex-col gap-2">
-                    <button @click="rotation = (rotation + 90) % 360" class="glass-dark p-3 rounded-xl hover:bg-white/10 transition-colors">🔄</button>
-                    <button @click="mirror = !mirror" class="glass-dark p-3 rounded-xl hover:bg-white/10 transition-colors">↔️</button>
                 </div>
             </div>
 
-            <!-- Single Result Panel -->
-            <div x-show="results" class="space-y-6" x-transition>
-                <div class="glass p-8 rounded-[3rem] shadow-2xl space-y-8">
+            <!-- Terminal / Action Log -->
+            <div x-show="logs.length > 0 || loading" class="glass-dark rounded-[1.5rem] p-5 border border-white/10 space-y-3 shadow-xl overflow-hidden">
+                <div class="flex justify-between items-center">
+                    <span class="text-[9px] font-black text-white/30 uppercase tracking-[0.2em]">Live Action Log</span>
+                    <div x-show="loading" class="w-3 h-3 border border-white/20 border-t-white rounded-full animate-spin"></div>
+                </div>
+                <div class="h-24 overflow-y-auto scrollbar-hide flex flex-col-reverse space-y-reverse space-y-1.5" id="terminal-log">
+                    <template x-for="(log, i) in [...logs].reverse()" :key="i">
+                        <div class="terminal-text flex gap-2">
+                            <span class="text-white/20" x-text="'>'"></span>
+                            <span x-text="log"></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Single Result Card -->
+            <div x-show="results" class="space-y-6" x-transition:enter="transition ease-out duration-700" x-transition:enter-start="opacity-0 translate-y-20">
+                <div class="glass p-8 rounded-[3rem] shadow-2xl space-y-8 border-white/10 bg-white/[0.01]">
                     <div class="space-y-2">
-                        <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Identity</label>
-                        <input type="text" x-model="form.product_name" class="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-5 text-xl font-black focus:ring-2 focus:ring-white/20 outline-none transition-all">
+                        <label class="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] ml-2">Identified Object</label>
+                        <input type="text" x-model="form.product_name" class="w-full bg-transparent border-none p-2 text-2xl font-black focus:ring-0 outline-none transition-all tracking-tighter">
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-2 gap-8">
                         <div class="space-y-2">
-                            <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Brand</label>
-                            <input type="text" x-model="form.brand" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-sm font-bold outline-none">
+                            <label class="text-[9px] font-black text-white/20 uppercase tracking-widest ml-2">Brand</label>
+                            <input type="text" x-model="form.brand" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-xs font-bold outline-none focus:bg-white/10 transition-all">
                         </div>
                         <div class="space-y-2">
-                            <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Category</label>
-                            <input type="text" x-model="form.category" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-sm font-bold outline-none">
+                            <label class="text-[9px] font-black text-white/20 uppercase tracking-widest ml-2">Category</label>
+                            <input type="text" x-model="form.category" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-xs font-bold outline-none focus:bg-white/10 transition-all">
                         </div>
                     </div>
 
                     <div class="space-y-2">
-                        <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Description</label>
-                        <textarea x-model="form.description" rows="3" class="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-5 text-sm font-medium outline-none resize-none"></textarea>
+                        <label class="text-[9px] font-black text-white/20 uppercase tracking-widest ml-2">Brief Summary</label>
+                        <textarea x-model="form.description" rows="2" class="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-5 text-sm font-medium outline-none resize-none focus:bg-white/10 transition-all"></textarea>
                     </div>
 
-                    <!-- Details Toggle -->
-                    <div x-data="{ open: false }" class="border-t border-white/5 pt-6">
-                        <button @click="open = !open" class="flex items-center gap-2 text-[10px] font-black text-white/30 uppercase tracking-widest hover:text-white transition-colors">
-                            <svg class="w-3 h-3 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"></path></svg>
-                            Technical Details & Specs
+                    <!-- Technical Section -->
+                    <div x-data="{ open: false }" class="space-y-4">
+                        <button @click="open = !open" class="flex items-center gap-3 text-[9px] font-black text-white/30 uppercase tracking-[0.2em] hover:text-white transition-colors group">
+                            <div class="w-6 h-6 rounded-full glass flex items-center justify-center group-hover:bg-white/10 transition-all">
+                                <svg class="w-2.5 h-2.5 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                            Technical Specifications
                         </button>
-                        <div x-show="open" x-transition class="space-y-4 mt-6">
+                        <div x-show="open" x-transition class="grid grid-cols-1 gap-4 mt-2">
                             <div class="grid grid-cols-2 gap-4">
-                                <div class="space-y-2">
-                                    <label class="text-[10px] font-black text-white/30 uppercase ml-1">Manufacturer</label>
-                                    <input type="text" x-model="form.manufacturer" class="w-full bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold outline-none">
-                                </div>
-                                <div class="space-y-2">
-                                    <label class="text-[10px] font-black text-white/30 uppercase ml-1">MSRP</label>
-                                    <input type="text" x-model="form.msrp" class="w-full bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold outline-none">
-                                </div>
+                                <input type="text" x-model="form.manufacturer" placeholder="Manufacturer" class="bg-white/5 border border-white/5 rounded-xl px-5 py-3 text-[10px] font-bold outline-none">
+                                <input type="text" x-model="form.msrp" placeholder="MSRP" class="bg-white/5 border border-white/5 rounded-xl px-5 py-3 text-[10px] font-bold outline-none">
                             </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div class="space-y-2">
-                                    <label class="text-[10px] font-black text-white/30 uppercase ml-1">Model #</label>
-                                    <input type="text" x-model="form.model_number" class="w-full bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold outline-none">
-                                </div>
-                                <div class="space-y-2">
-                                    <label class="text-[10px] font-black text-white/30 uppercase ml-1">Serial #</label>
-                                    <input type="text" x-model="form.serial_number" class="w-full bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold outline-none">
-                                </div>
-                            </div>
-                            <div class="space-y-2">
-                                <label class="text-[10px] font-black text-white/30 uppercase ml-1">Technical Details</label>
-                                <textarea x-model="form.technical_details" rows="3" class="w-full bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-[10px] font-mono outline-none resize-none"></textarea>
-                            </div>
-                            <div class="space-y-2">
-                                <label class="text-[10px] font-black text-white/30 uppercase ml-1">Product Link</label>
-                                <input type="text" x-model="form.product_url" class="w-full bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold outline-none">
-                            </div>
+                            <textarea x-model="form.technical_details" placeholder="Technical Specs (Dimensions, Material, etc.)" class="bg-white/5 border border-white/5 rounded-xl px-5 py-4 text-[10px] font-mono outline-none resize-none h-24"></textarea>
                         </div>
                     </div>
 
                     <!-- Multi-Service Pipeline -->
-                    <div class="border-t border-white/10 pt-8 space-y-6">
+                    <div class="border-t border-white/5 pt-8 space-y-6">
                         <div class="flex justify-between items-center px-1">
-                            <h3 class="text-xs font-black text-white/40 uppercase tracking-widest">Execute Pipeline</h3>
-                            <div class="text-[10px] font-black text-blue-500 uppercase tracking-widest" x-text="selectedServices.length + ' Targets Selected'"></div>
+                            <h3 class="text-[9px] font-black text-white/30 uppercase tracking-[0.3em]">Pipeline Execution</h3>
+                            <button @click="showPayload = !showPayload" class="text-[8px] font-black text-white/20 hover:text-white uppercase tracking-widest border border-white/10 px-3 py-1 rounded-full">Review Payload</button>
                         </div>
+
+                        <!-- Payload Preview -->
+                        <div x-show="showPayload" x-transition class="bg-black/40 rounded-2xl p-6 border border-white/5 font-mono text-[9px] overflow-x-auto">
+                            <pre class="text-blue-400" x-text="JSON.stringify(form, null, 2)"></pre>
+                        </div>
+
                         <div class="grid grid-cols-2 gap-3">
                             <template x-for="svc in [
-                                {id: 'homebox', label: 'Homebox', sub: 'Inventory'},
-                                {id: 'mealie', label: 'Mealie', sub: 'Recipes'},
-                                {id: 'pricebuddy', label: 'PriceBuddy', sub: 'Tracking'},
-                                {id: 'changedetection', label: 'Tracker', sub: 'Monitoring'}
+                                {id: 'homebox', label: 'Homebox', icon: '📦'},
+                                {id: 'mealie', label: 'Mealie', icon: '🍎'},
+                                {id: 'pricebuddy', label: 'PriceBuddy', icon: '🏷️'},
+                                {id: 'changedetection', label: 'Tracker', icon: '🔔'}
                             ]">
-                                <label class="flex items-center justify-between p-4 glass-dark rounded-2xl border border-white/5 cursor-pointer hover:bg-white/[0.02] transition-colors group">
-                                    <div>
-                                        <div class="text-[11px] font-black uppercase tracking-tight group-hover:text-white transition-colors" x-text="svc.label"></div>
-                                        <div class="text-[9px] text-white/30 font-bold uppercase tracking-widest" x-text="svc.sub"></div>
+                                <label class="flex items-center justify-between p-4 glass rounded-2xl cursor-pointer hover:bg-white/[0.05] transition-all group"
+                                       :class="serviceResults[svc.id]?.success ? 'border-green-500/50 bg-green-500/5' : ''">
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-sm opacity-50 group-hover:opacity-100 transition-opacity" x-text="svc.icon"></span>
+                                        <span class="text-[10px] font-black uppercase tracking-tight" x-text="svc.label"></span>
                                     </div>
-                                    <input type="checkbox" :value="svc.id" x-model="selectedServices" class="ios-toggle scale-75 origin-right">
+                                    <div class="flex items-center gap-2">
+                                        <span x-show="serviceResults[svc.id]?.success" class="text-[10px] animate-bounce">✅</span>
+                                        <input type="checkbox" :value="svc.id" x-model="selectedServices" class="ios-toggle scale-75 origin-right">
+                                    </div>
                                 </label>
                             </template>
                         </div>
 
                         <button @click="triggerServices()" :disabled="executing"
-                                class="w-full btn-primary py-6 rounded-[2rem] text-sm font-black uppercase tracking-[0.3em] shadow-2xl shadow-white/10 active:scale-[0.98] transition-all disabled:opacity-50">
+                                class="w-full btn-apple py-6 text-[10px] font-black uppercase tracking-[0.4em] shadow-2xl shadow-white/5 active:scale-[0.98] transition-all disabled:opacity-30">
                             <span x-show="!executing">Execute Workflow</span>
-                            <div x-show="executing" class="w-6 h-6 border-2 border-black/20 border-t-black rounded-full animate-spin mx-auto"></div>
+                            <div x-show="executing" class="w-6 h-6 border-2 border-black/10 border-t-black rounded-full animate-spin mx-auto"></div>
                         </button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Tab: Batch -->
+        <!-- Tab: Batch (Simplified Apple Style) -->
         <div x-show="activeTab === 'batch'" class="space-y-8" x-transition>
-            <div class="glass p-12 rounded-[3.5rem] space-y-10 text-center border-dashed border-2 border-white/10">
+            <div class="glass p-12 rounded-[3.5rem] space-y-12 text-center border-white/10 bg-white/[0.01]">
                 <div class="space-y-4">
-                    <div class="text-7xl mb-6">🗂️</div>
-                    <h2 class="text-3xl font-black tracking-tighter">Bulk Ingestion</h2>
-                    <p class="text-white/40 text-sm max-w-xs mx-auto leading-relaxed">Select multiple high-resolution images for concurrent AI analysis.</p>
+                    <div class="text-7xl mb-8 opacity-40">🗂️</div>
+                    <h2 class="text-3xl font-black tracking-tight uppercase">Bulk Import</h2>
+                    <p class="text-white/30 text-xs max-w-xs mx-auto leading-relaxed font-medium">Batch process high-resolution assets with adaptive AI context.</p>
                 </div>
 
-                <div class="space-y-4 text-left">
-                    <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-4">Batch Description / Context</label>
-                    <textarea x-model="textInfo" placeholder="e.g. Toiletries for the master bathroom..." 
-                              class="w-full bg-white/5 border border-white/5 rounded-[2rem] px-8 py-6 text-sm focus:ring-2 focus:ring-white/20 outline-none resize-none"></textarea>
+                <div class="space-y-4 text-left max-w-sm mx-auto">
+                    <label class="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] ml-4">Batch Context</label>
+                    <textarea x-model="textInfo" placeholder="Global tags or location context..." 
+                              class="w-full bg-white/5 border border-white/5 rounded-[2rem] px-8 py-7 text-sm focus:ring-2 focus:ring-white/10 outline-none resize-none font-medium"></textarea>
                 </div>
 
                 <label class="block cursor-pointer group">
                     <input type="file" multiple accept="image/*" class="hidden" @change="onBatchSelected">
-                    <div class="bg-white text-black py-6 rounded-[2rem] font-black uppercase tracking-widest text-xs group-active:scale-95 transition-all shadow-2xl">Upload Files</div>
+                    <div class="bg-white text-black py-6 rounded-[2.5rem] font-black uppercase tracking-[0.3em] text-[10px] group-active:scale-95 transition-all shadow-2xl shadow-white/10">Select Files</div>
                 </label>
             </div>
         </div>
 
         <!-- Tab: Review -->
-        <div x-show="activeTab === 'review'" class="space-y-6" x-transition>
-            <div class="flex justify-between items-center mb-8 px-2">
-                <h2 class="text-3xl font-black tracking-tight">Queue</h2>
-                <div class="flex gap-2 p-1 bg-white/5 rounded-2xl">
-                    <button @click="filterType = 'all'" :class="filterType === 'all' ? 'bg-white text-black' : 'text-white/40 hover:text-white'" class="px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">All</button>
-                    <button @click="filterType = 'food'" :class="filterType === 'food' ? 'bg-white text-black' : 'text-white/40 hover:text-white'" class="px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Food</button>
+        <div x-show="activeTab === 'review'" class="space-y-8" x-transition>
+            <div class="flex justify-between items-end mb-10 px-4">
+                <div>
+                    <h2 class="text-4xl font-black tracking-tighter">Queue</h2>
+                    <p class="text-[9px] font-black text-white/20 uppercase tracking-[0.4em] mt-2">Awaiting Verification</p>
+                </div>
+                <div class="flex gap-2 p-1 glass rounded-2xl">
+                    <button @click="filterType = 'all'" :class="filterType === 'all' ? 'bg-white text-black shadow-lg' : 'text-white/30'" class="px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">All</button>
+                    <button @click="filterType = 'food'" :class="filterType === 'food' ? 'bg-white text-black shadow-lg' : 'text-white/30'" class="px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">Food</button>
                 </div>
             </div>
 
-            <div class="space-y-4">
+            <div class="space-y-6">
                 <template x-for="item in filteredQueue" :key="item.id">
-                    <div class="glass rounded-[2.5rem] overflow-hidden group">
-                        <div class="flex h-36 border-b border-white/5">
-                            <div class="w-36 h-full relative flex-shrink-0">
+                    <div class="glass rounded-[2.5rem] overflow-hidden group border-white/5 hover:border-white/20 transition-all shadow-xl">
+                        <div class="flex h-40">
+                            <div class="w-40 h-full relative flex-shrink-0 group-hover:scale-105 transition-transform duration-700">
                                 <img :src="'/uploads/' + item.image_path" class="w-full h-full object-cover">
-                                <div x-show="item.status === 'processing'" class="absolute inset-0 bg-black/60 backdrop-blur-xl flex items-center justify-center">
-                                    <div class="w-8 h-8 border-2 border-white/10 border-t-white rounded-full animate-spin"></div>
+                                <div x-show="item.status === 'processing'" class="absolute inset-0 bg-black/70 backdrop-blur-2xl flex items-center justify-center">
+                                    <div class="w-10 h-10 border border-white/10 border-t-white rounded-full animate-spin"></div>
                                 </div>
                             </div>
-                            <div class="p-6 flex-1 min-w-0 flex flex-col justify-center">
-                                <div class="flex justify-between items-start">
+                            <div class="p-8 flex-1 min-w-0 flex flex-col justify-center">
+                                <div class="flex justify-between items-start gap-4">
                                     <div class="truncate">
                                         <input type="text" x-model="item.edit_data.product_name" class="bg-transparent border-none p-0 text-xl font-black focus:ring-0 w-full tracking-tight">
-                                        <div class="text-[10px] text-white/40 font-black uppercase tracking-[0.2em] mt-1.5" x-text="item.edit_data.brand || 'Unnamed Brand'"></div>
+                                        <div class="text-[9px] text-white/30 font-black uppercase tracking-[0.2em] mt-2" x-text="item.edit_data.brand || 'Original Source'"></div>
                                     </div>
-                                    <button @click="item.show_more = !item.show_more" class="glass-dark p-3 rounded-2xl active:scale-90 transition-all hover:bg-white/10">
-                                        <svg class="w-4 h-4 transition-transform" :class="item.show_more ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M19 9l-7 7-7-7"></path></svg>
+                                    <button @click="item.show_more = !item.show_more" class="glass p-3 rounded-2xl active:scale-90 transition-all hover:bg-white/10 group">
+                                        <svg class="w-4 h-4 transition-transform group-hover:text-white" :class="item.show_more ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M19 9l-7 7-7-7"></path></svg>
                                     </button>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Card Expansion -->
-                        <div x-show="item.show_more" class="p-8 bg-white/[0.02] space-y-8" x-transition>
-                            <div class="grid grid-cols-2 gap-6">
-                                <div class="space-y-2">
-                                    <label class="text-[9px] font-black text-white/30 uppercase tracking-widest ml-1">Store Location</label>
-                                    <select x-model="item.edit_data.location" class="w-full bg-white/5 border border-white/5 rounded-[1.25rem] px-5 py-4 text-xs font-black outline-none focus:ring-2 focus:ring-white/20 transition-all">
+                        <div x-show="item.show_more" class="p-10 bg-white/[0.01] space-y-10 border-t border-white/5" x-transition>
+                            <div class="grid grid-cols-2 gap-8">
+                                <div class="space-y-3">
+                                    <label class="text-[8px] font-black text-white/20 uppercase tracking-[0.4em] ml-2">Fulfillment</label>
+                                    <select x-model="item.edit_data.location" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black outline-none focus:bg-white/10 transition-all">
                                         <template x-for="loc in locations">
                                             <option :value="loc.name" x-text="loc.name"></option>
                                         </template>
                                     </select>
                                 </div>
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div class="space-y-2">
-                                        <label class="text-[9px] font-black text-white/30 uppercase tracking-widest ml-1">Qty</label>
-                                        <input type="number" x-model="item.edit_data.quantity" class="w-full bg-white/5 border border-white/5 rounded-[1.25rem] px-5 py-4 text-xs font-black outline-none">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="space-y-3">
+                                        <label class="text-[8px] font-black text-white/20 uppercase tracking-[0.4em] ml-2">Unit</label>
+                                        <input type="text" x-model="item.edit_data.unit" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black outline-none">
                                     </div>
-                                    <div class="space-y-2">
-                                        <label class="text-[9px] font-black text-white/30 uppercase tracking-widest ml-1">Unit</label>
-                                        <input type="text" x-model="item.edit_data.unit" class="w-full bg-white/5 border border-white/5 rounded-[1.25rem] px-5 py-4 text-xs font-black outline-none">
+                                    <div class="space-y-3">
+                                        <label class="text-[8px] font-black text-white/20 uppercase tracking-[0.4em] ml-2">Qty</label>
+                                        <input type="number" x-model="item.edit_data.quantity" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black outline-none">
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="space-y-4">
-                                <label class="text-[9px] font-black text-white/30 uppercase tracking-widest ml-1">Pipeline Targets</label>
+                            <div class="space-y-6">
+                                <label class="text-[8px] font-black text-white/20 uppercase tracking-[0.4em] ml-2">Workflow Routing</label>
                                 <div class="grid grid-cols-2 gap-3">
                                     <template x-for="svc in ['homebox', 'mealie', 'pricebuddy', 'changedetection']">
-                                        <label class="glass-dark p-4 rounded-2xl flex items-center justify-between border border-white/5 cursor-pointer hover:bg-white/5 transition-colors">
-                                            <span class="text-[10px] font-black uppercase" x-text="svc === 'changedetection' ? 'Tracker' : svc"></span>
+                                        <label class="glass p-5 rounded-3xl flex items-center justify-between border-white/5 cursor-pointer hover:bg-white/5 transition-all">
+                                            <span class="text-[9px] font-black uppercase tracking-widest" x-text="svc"></span>
                                             <input type="checkbox" :value="svc" x-model="item.selected_services" class="ios-toggle scale-75 origin-right">
                                         </label>
                                     </template>
                                 </div>
                             </div>
 
-                            <div class="flex gap-4 pt-4">
+                            <div class="flex gap-4 pt-6">
                                 <button @click="triggerServices(item)" :disabled="item.executing" 
-                                        class="flex-1 btn-primary py-5 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.2em] shadow-xl">
-                                    <span x-show="!item.executing">Process Item</span>
-                                    <div x-show="item.executing" class="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin mx-auto"></div>
+                                        class="flex-1 btn-apple py-6 text-[10px] font-black uppercase tracking-[0.4em] shadow-xl shadow-white/5">
+                                    <span x-show="!item.executing">Process Entry</span>
+                                    <div x-show="item.executing" class="w-5 h-5 border-2 border-black/10 border-t-black rounded-full animate-spin mx-auto"></div>
                                 </button>
-                                <button @click="discardItem(item.id)" class="glass px-8 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-500/10 transition-colors">Discard</button>
+                                <button @click="discardItem(item.id)" class="glass px-10 rounded-[1.5rem] text-[9px] font-black uppercase tracking-widest text-red-500 hover:bg-red-500/10 transition-colors">Discard</button>
                             </div>
                         </div>
                     </div>
@@ -270,22 +307,26 @@
         </div>
     </main>
 
-    <!-- Global Components -->
-    <div class="fixed bottom-12 left-0 right-0 z-[100] flex flex-col items-center gap-3 pointer-events-none px-6">
+    <!-- Toasts -->
+    <div class="fixed bottom-12 left-0 right-0 z-[400] flex flex-col items-center gap-3 pointer-events-none px-6">
         <template x-for="toast in toasts" :key="toast.id">
             <div x-show="toast.show" 
                  x-transition:enter="transition cubic-bezier(0.17, 0.67, 0.83, 0.67) duration-500"
                  x-transition:enter-start="opacity-0 translate-y-12 scale-90"
-                 class="glass-dark px-8 py-4 rounded-[2rem] text-xs font-black shadow-2xl border border-white/10"
+                 class="glass-dark px-10 py-5 rounded-[3rem] text-[10px] font-black shadow-2xl border border-white/10 uppercase tracking-widest"
                  :class="toast.type === 'error' ? 'text-red-400' : 'text-white'"
                  x-text="toast.msg"></div>
         </template>
     </div>
 
-    <div x-show="loading" class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-3xl flex items-center justify-center" x-transition>
-        <div class="text-center space-y-10 scale-110">
-            <div class="w-20 h-20 border-4 border-white/5 border-t-white rounded-full animate-spin mx-auto shadow-2xl"></div>
-            <p class="text-xs font-black uppercase tracking-[0.5em] text-white/60" x-text="loadingStatus"></p>
+    <!-- Global Processing Overlay -->
+    <div x-show="loading && !precisionMode" class="fixed inset-0 z-[500] bg-black/80 backdrop-blur-3xl flex items-center justify-center" x-transition>
+        <div class="text-center space-y-12 scale-110">
+            <div class="w-24 h-24 border-2 border-white/5 border-t-white rounded-full animate-spin mx-auto shadow-[0_0_50px_rgba(255,255,255,0.1)]"></div>
+            <div class="space-y-2">
+                <p class="text-[10px] font-black uppercase tracking-[1em] text-white/40 ml-[1em]" x-text="loadingStatus"></p>
+                <p class="text-[8px] font-mono text-white/20 uppercase" x-text="logs[logs.length-1] || 'Initializing Agent'"></p>
+            </div>
         </div>
     </div>
 
@@ -294,22 +335,28 @@
             return {
                 activeTab: 'capture',
                 loading: false,
-                loadingStatus: 'IDENTIFYING...',
+                loadingStatus: 'Analyzing',
                 executing: false,
                 results: null,
                 aiPreview: null,
+                rawImage: null,
+                logs: [],
                 textInfo: '',
                 queue: [],
                 filterType: 'all',
                 selectedServices: ['homebox'],
+                serviceResults: {},
+                showPayload: false,
+                precisionMode: false,
+                cropper: null,
                 form: {
                     product_name: '', brand: '', manufacturer: '', model_number: '', serial_number: '',
                     category: '', description: '', technical_details: '', notes: '',
                     quantity: 1, unit: '', msrp: '', product_url: '',
                     location: 'pantry', is_food: false, purchase_price: 0
                 },
-                rotation: parseInt(localStorage.getItem('vision_rotation')) || 0,
-                mirror: localStorage.getItem('vision_mirror') === 'true',
+                rotation: 0,
+                mirror: false,
                 toasts: [],
                 locations: [],
 
@@ -346,13 +393,8 @@
                                 edit_data: i.user_overrides || {
                                     product_name: llm.product_name || '',
                                     brand: llm.brand || '',
-                                    manufacturer: llm.manufacturer || llm.brand || '',
-                                    model_number: llm.model_number || '',
-                                    serial_number: llm.serial_number || '',
                                     category: llm.category || '',
                                     description: llm.description || '',
-                                    technical_details: llm.technical_details || '',
-                                    notes: llm.notes || '',
                                     quantity: 1, unit: '', location: 'pantry',
                                     msrp: llm.msrp || '', product_url: llm.product_url || '',
                                     purchase_price: parseFloat(llm.msrp?.replace(/[^0-9.]/g, '')) || 0
@@ -362,15 +404,63 @@
                     } catch (err) { console.error(err); }
                 },
 
+                enterPrecision() {
+                    this.precisionMode = true;
+                    this.$nextTick(() => {
+                        const img = document.getElementById('cropper-target');
+                        if (this.cropper) this.cropper.destroy();
+                        this.cropper = new Cropper(img, {
+                            viewMode: 1,
+                            dragMode: 'move',
+                            autoCropArea: 0.5,
+                            restore: false,
+                            guides: true,
+                            center: true,
+                            highlight: false,
+                            cropBoxMovable: true,
+                            cropBoxResizable: true,
+                            toggleDragModeOnDblclick: false,
+                        });
+                    });
+                },
+
+                closePrecision() {
+                    this.precisionMode = false;
+                    if (this.cropper) this.cropper.destroy();
+                },
+
+                applyCrop() {
+                    const canvas = this.cropper.getCroppedCanvas({ maxWidth: 2048, maxHeight: 2048 });
+                    canvas.toBlob((blob) => {
+                        this.precisionMode = false;
+                        this.runIdentification(blob);
+                    }, 'image/jpeg', 0.9);
+                },
+
                 async onFileSelected(e) {
                     const file = e.target.files[0];
                     if (!file) return;
+                    this.rawImage = URL.createObjectURL(file);
+                    this.runIdentification(file);
+                },
+
+                async runIdentification(file) {
                     this.loading = true;
                     this.results = null;
+                    this.logs = [];
+                    this.serviceResults = {};
+                    
+                    const sessionId = Math.random().toString(36).substring(7);
+                    const logInterval = setInterval(async () => {
+                        const resp = await fetch(`/logs/${sessionId}`);
+                        const data = await resp.json();
+                        this.logs = data.logs;
+                    }, 800);
+
                     const formData = new FormData();
                     formData.append('file', file);
-                    formData.append('rotation', this.rotation);
-                    formData.append('mirror', this.mirror);
+                    formData.append('session_id', sessionId);
+                    
                     try {
                         const response = await fetch('/identify', { method: 'POST', body: formData });
                         const data = await response.json();
@@ -380,21 +470,19 @@
                             const llm = data.results.llm_output;
                             this.form = {
                                 product_name: llm.product_name, brand: llm.brand, 
-                                manufacturer: llm.manufacturer || llm.brand || '',
-                                model_number: llm.model_number || '',
-                                serial_number: llm.serial_number || '',
                                 category: llm.category, description: llm.description,
-                                technical_details: llm.technical_details || '',
-                                notes: llm.notes || '',
-                                quantity: 1, unit: '', msrp: llm.msrp || '',
-                                product_url: llm.product_url || '',
-                                location: 'pantry', is_food: llm.is_food,
-                                purchase_price: parseFloat(llm.msrp?.replace(/[^0-9.]/g, '')) || 0
+                                manufacturer: llm.manufacturer || '', msrp: llm.msrp || '',
+                                model_number: llm.model_number || '', serial_number: llm.serial_number || '',
+                                technical_details: llm.technical_details || '', product_url: llm.product_url || '',
+                                location: 'pantry', is_food: llm.is_food, purchase_price: 0
                             };
-                            this.notify('Identity Confirmed');
+                            this.notify('Object Identified');
                         }
                     } catch (err) { this.notify('Identification Error', 'error'); }
-                    finally { this.loading = false; }
+                    finally { 
+                        clearInterval(logInterval);
+                        this.loading = false; 
+                    }
                 },
 
                 async triggerServices(item = null) {
@@ -414,11 +502,13 @@
                         const data = await response.json();
                         if (data.success) {
                             this.notify('Pipeline Executed');
-                            if (item) this.fetchQueue(); else this.results = null;
+                            // Merge results rather than clearing
+                            Object.assign(this.serviceResults, data.results);
+                            if (item) this.fetchQueue(); 
                         } else {
                             this.notify(data.error || 'Execution Error', 'error');
                         }
-                    } catch (err) { this.notify('Execution Failed', 'error'); }
+                    } catch (err) { this.notify('Network Error', 'error'); }
                     finally { if (item) item.executing = false; else this.executing = false; }
                 },
 
@@ -426,7 +516,7 @@
                     const files = e.target.files;
                     if (!files.length) return;
                     this.loading = true;
-                    this.loadingStatus = 'UPLOADING BATCH...';
+                    this.loadingStatus = 'Uploading Batch';
                     const formData = new FormData();
                     for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
                     if (this.textInfo) formData.append('text', this.textInfo);
@@ -434,19 +524,19 @@
                         const response = await fetch('/batch-upload', { method: 'POST', body: formData });
                         const data = await response.json();
                         if (data.success) {
-                            this.notify(`${files.length} items queued`);
+                            this.notify(`${files.length} Assets Ingested`);
                             this.activeTab = 'review';
                             this.fetchQueue();
                         }
-                    } catch (err) { this.notify('Upload Failed', 'error'); }
+                    } catch (err) { this.notify('Ingestion Failed', 'error'); }
                     finally { this.loading = false; }
                 },
 
                 async discardItem(id) {
-                    if (!confirm('Discard item?')) return;
+                    if (!confirm('Discard asset?')) return;
                     await fetch(`/items/${id}`, { method: 'DELETE' });
                     this.queue = this.queue.filter(i => i.id !== id);
-                    this.notify('Discarded');
+                    this.notify('Asset Purged');
                 },
 
                 notify(msg, type = 'success') {

@@ -18,6 +18,7 @@ from database import init_db, AsyncSessionLocal, Batch, Item
 from services.homebox import HomeboxService
 from services.mealie import MealieService
 from services.enrichers import PriceBuddyService, ChangeDetectionService
+from logger import session_logger
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
@@ -75,6 +76,10 @@ async def get_locations():
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@app.get("/logs/{session_id}")
+async def get_session_logs(session_id: str):
+    return {"logs": session_logger.get_logs(session_id)}
+
 # --- Single Identity ---
 
 @app.post("/identify")
@@ -82,36 +87,45 @@ async def identify(
     file: UploadFile = File(...),
     text: Optional[str] = Form(None),
     rotation: int = Form(0),
-    mirror: bool = Form(False)
+    mirror: bool = Form(False),
+    session_id: str = Form(None)
 ):
+    sid = session_id or str(uuid.uuid4())
+    session_logger.start_session(sid)
+    def log_it(msg): session_logger.log(sid, msg)
+
     try:
         content = await file.read()
         img = Image.open(io.BytesIO(content))
         img = ImageOps.exif_transpose(img)
-        if rotation != 0:
-            img = img.rotate(-rotation, expand=True)
-        if mirror:
-            img = ImageOps.mirror(img)
+        if rotation != 0: img = img.rotate(-rotation, expand=True)
+        if mirror: img = ImageOps.mirror(img)
             
-        results = core_pipeline.run_pipeline(img, text)
+        results = core_pipeline.run_pipeline(img, text, log_cb=log_it)
         
-        # Service-specific pre-enrichment (duplicates, etc.)
+        # Service-specific pre-enrichment
+        log_it("🔌 Checking for existing entries in services...")
         enrichment_tasks = [s.get_pre_enrichment(results['llm_output']) for s in SERVICES.values()]
         enrichments = await asyncio.gather(*enrichment_tasks)
         results["service_enrichments"] = {list(SERVICES.keys())[i]: enrichments[i] for i in range(len(enrichments))}
+        log_it("✨ UI updating with findings.")
 
         buf = io.BytesIO()
         img.save(buf, format='JPEG')
         b64_img = base64.b64encode(buf.getvalue()).decode()
         
+        session_logger.end_session(sid)
         return {
             "success": True,
+            "session_id": sid,
             "results": results,
             "ai_preview": f"data:image/jpeg;base64,{b64_img}"
         }
     except Exception as e:
+        log_it(f"❌ Error: {str(e)}")
         logger.error(f"Identification failed: {e}", exc_info=True)
-        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+        session_logger.end_session(sid)
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e), "session_id": sid})
 
 # --- Execution Endpoints ---
 
@@ -193,6 +207,10 @@ async def process_item_task(item_id: int):
         item = result.scalar_one_or_none()
         if not item: return
 
+        sid = f"batch-item-{item_id}"
+        session_logger.start_session(sid)
+        def log_it(msg): session_logger.log(sid, msg)
+
         res = await db.execute(select(Batch).where(Batch.id == item.batch_id))
         batch = res.scalar_one_or_none()
         batch_text = batch.description if batch else None
@@ -200,7 +218,7 @@ async def process_item_task(item_id: int):
         try:
             full_path = f"data/uploads/{item.image_path}"
             img = Image.open(full_path)
-            results = core_pipeline.run_pipeline(img, text_description=batch_text)
+            results = core_pipeline.run_pipeline(img, text_description=batch_text, log_cb=log_it)
             
             # Service-specific pre-enrichment
             enrichment_tasks = [s.get_pre_enrichment(results['llm_output']) for s in SERVICES.values()]
@@ -211,9 +229,12 @@ async def process_item_task(item_id: int):
             item.product_type = "food" if results.get("llm_output", {}).get("is_food") else "product"
             item.status = "pending"
         except Exception as e:
+            log_it(f"❌ Error: {str(e)}")
             logger.error(f"Processing failed for item {item_id}: {e}")
             item.status = "error"
             item.error = str(e)
+        
+        session_logger.end_session(sid)
         await db.commit()
 
 @app.get("/queue")
@@ -247,15 +268,12 @@ async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
     return {"success": True}
 
 # --- Legacy Compatibility ---
-# These will be deprecated in favor of /execute but kept for now.
 
 @app.post("/bulk-approve")
 async def bulk_approve(data: dict, db: AsyncSession = Depends(get_db)):
     item_ids = data.get("item_ids", [])
-    # Defaulting to Homebox for product, Mealie for food in legacy mode
     results = {"success": [], "failed": []}
     for iid in item_ids:
-        # Simple redirect to execute logic for each
         res = await db.execute(select(Item).where(Item.id == iid))
         item = res.scalar_one_or_none()
         if not item: continue

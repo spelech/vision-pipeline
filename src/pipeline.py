@@ -31,25 +31,36 @@ class VisionPipeline:
             api_key=self.openrouter_api_key,
         )
 
-    def scan_barcode(self, image):
+    def scan_barcode(self, image, log_cb=None):
         """Extract barcodes from an image using pyzbar with multi-pass preprocessing."""
         if image is None: return None
+        if log_cb: log_cb("🔍 Scanning for barcodes...")
         try:
             # Pass 1: Raw
             barcodes = decode(image)
-            if barcodes: return barcodes[0].data.decode("utf-8")
+            if barcodes: 
+                res = barcodes[0].data.decode("utf-8")
+                if log_cb: log_cb(f"✅ Barcode found: {res}")
+                return res
             
             # Pass 2: Grayscale
             gray = image.convert('L')
             barcodes = decode(gray)
-            if barcodes: return barcodes[0].data.decode("utf-8")
+            if barcodes: 
+                res = barcodes[0].data.decode("utf-8")
+                if log_cb: log_cb(f"✅ Barcode found (grayscale pass): {res}")
+                return res
                 
             # Pass 3: High Contrast
             enhancer = ImageEnhance.Contrast(gray)
             sharp = enhancer.enhance(2.5).filter(ImageFilter.SHARPEN)
             barcodes = decode(sharp)
-            if barcodes: return barcodes[0].data.decode("utf-8")
+            if barcodes: 
+                res = barcodes[0].data.decode("utf-8")
+                if log_cb: log_cb(f"✅ Barcode found (high-contrast pass): {res}")
+                return res
             
+            if log_cb: log_cb("⚠️ No barcode detected in image.")
             return None
         except Exception as e:
             logger.error(f"Error during barcode scanning: {e}")
@@ -62,11 +73,12 @@ class VisionPipeline:
         img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
         return f"data:image/jpeg;base64,{img_str}"
 
-    def call_vision_llm(self, image=None, text_description=None, model="qwen/qwen2.5-vl-72b-instruct"):
+    def call_vision_llm(self, image=None, text_description=None, model="qwen/qwen2.5-vl-72b-instruct", log_cb=None):
         """Identify the product from image and/or text."""
         if not self.openrouter_api_key:
             return {"error": "API Key not found"}
 
+        if log_cb: log_cb(f"🤖 Calling Vision LLM ({model})...")
         content_list = []
         prompt = """
         Analyze the provided input (image and/or description) of a product, toy, or food item.
@@ -103,7 +115,6 @@ class VisionPipeline:
             content_list.append({"type": "image_url", "image_url": {"url": image_data_url}})
         
         try:
-            logger.info(f"Calling Vision LLM...")
             response = self.client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": content_list}],
@@ -111,27 +122,31 @@ class VisionPipeline:
             content = response.choices[0].message.content
             # Basic JSON extraction
             match = re.search(r'\{.*\}', content, re.DOTALL)
-            if match:
-                return json.loads(match.group())
-            return json.loads(content)
+            res = json.loads(match.group()) if match else json.loads(content)
+            if log_cb: log_cb(f"✨ LLM identified: {res.get('product_name')} ({round(res.get('confidence_score', 0)*100)}% confidence)")
+            return res
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
             return {"product_name": "Error", "description": str(e), "confidence_score": 0.0}
 
-    def search_searxng(self, query):
+    def search_searxng(self, query, log_cb=None):
         """Search local SearxNG for product enrichment."""
         if not self.searxng_url: return []
+        if log_cb: log_cb(f"🌐 Searching Web for '{query}'...")
         try:
             params = {"q": query, "format": "json", "categories": "general"}
             response = requests.get(f"{self.searxng_url}/search", params=params, timeout=5)
             data = response.json()
-            return [{"title": r['title'], "url": r['url']} for r in data.get('results', [])[:3]]
+            results = [{"title": r['title'], "url": r['url']} for r in data.get('results', [])[:3]]
+            if log_cb: log_cb(f"🔗 Found {len(results)} relevant search results.")
+            return results
         except Exception as e:
             logger.error(f"SearxNG search failed: {e}")
             return []
 
-    def enrich_data(self, current_data, search_results):
+    def enrich_data(self, current_data, search_results, log_cb=None):
         """Refine data using search results via high-parameter LLM."""
+        if log_cb: log_cb("🧠 Performing deep data refinement...")
         enrich_prompt = f"Refine this product data using these search results:\nData: {json.dumps(current_data)}\nResults: {json.dumps(search_results)}\nReturn EXACT same JSON schema."
         try:
             response = self.client.chat.completions.create(
@@ -144,17 +159,19 @@ class VisionPipeline:
             # Patch missing critical fields
             for k, v in current_data.items():
                 if refined.get(k) in [None, "Unknown"]: refined[k] = v
+            if log_cb: log_cb("✅ Data enrichment complete.")
             return refined
         except Exception:
+            if log_cb: log_cb("⚠️ Enrichment failed, using primary results.")
             return current_data
 
-    def run_pipeline(self, image=None, text_description=None):
+    def run_pipeline(self, image=None, text_description=None, log_cb=None):
         """Run the core extraction pipeline."""
         results = {"barcode": None, "llm_output": None, "searxng_results": []}
 
-        if image: results["barcode"] = self.scan_barcode(image)
+        if image: results["barcode"] = self.scan_barcode(image, log_cb=log_cb)
         
-        results["llm_output"] = self.call_vision_llm(image, text_description)
+        results["llm_output"] = self.call_vision_llm(image, text_description, log_cb=log_cb)
 
         # Barcode fallback/sanitization
         if not results["barcode"]: results["barcode"] = results["llm_output"].get("barcode")
@@ -166,8 +183,9 @@ class VisionPipeline:
         # Enrichment
         query = results["barcode"] or results["llm_output"].get("search_query") or results["llm_output"].get("product_name")
         if query and query not in ["Unknown", "Error"]:
-            results["searxng_results"] = self.search_searxng(query)
+            results["searxng_results"] = self.search_searxng(query, log_cb=log_cb)
             if results["searxng_results"]:
-                results["llm_output"] = self.enrich_data(results["llm_output"], results["searxng_results"])
+                results["llm_output"] = self.enrich_data(results["llm_output"], results["searxng_results"], log_cb=log_cb)
 
+        if log_cb: log_cb("🏁 Pipeline finished.")
         return results
