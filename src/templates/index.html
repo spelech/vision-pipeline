@@ -11,17 +11,17 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #050505; color: #fff; overflow-x: hidden; font-size: 15px; }
         @media (min-width: 1024px) { 
-            body { font-size: 20px !important; } 
-            h1 { font-size: 4rem !important; }
-            h2 { font-size: 1.5rem !important; }
-            h3 { font-size: 2rem !important; }
-            .text-sm { font-size: 1.2rem !important; }
-            .text-xs { font-size: 1.1rem !important; }
-            .text-\[10px\] { font-size: 1rem !important; }
-            .text-\[9px\] { font-size: 0.95rem !important; }
-            .text-\[8px\] { font-size: 0.9rem !important; }
-            input, select, textarea { font-size: 1.1rem !important; }
-            .label-apple { font-size: 16px !important; }
+            body { font-size: 18px !important; } 
+            h1 { font-size: 2.5rem !important; }
+            h2 { font-size: 1.2rem !important; }
+            h3 { font-size: 1.5rem !important; }
+            .text-sm { font-size: 1rem !important; }
+            .text-xs { font-size: 0.9rem !important; }
+            .text-\[10px\] { font-size: 0.85rem !important; }
+            .text-\[9px\] { font-size: 0.8rem !important; }
+            .text-\[8px\] { font-size: 0.75rem !important; }
+            input, select, textarea { font-size: 1rem !important; }
+            .label-apple { font-size: 13px !important; }
         }
         /* Improve contrast for "dark gray" labels/text */
         .text-white\/40 { color: rgba(255, 255, 255, 0.65) !important; }
@@ -94,7 +94,7 @@
         </div>
     </div>
 
-    <main class="pt-32 pb-32 px-6 lg:px-12 w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <main class="pt-24 pb-32 px-6 lg:px-12 w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         <!-- Tab: Single Capture (Column 1) -->
         <div x-show="activeTab === 'capture'" class="lg:col-span-7 space-y-8" x-transition>
@@ -104,7 +104,7 @@
                 <div class="glass p-6 rounded-3xl space-y-2">
                     <label class="label-apple ml-1">Active Pipeline</label>
                     <div class="relative">
-                        <select x-model="selectedPipeline" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm font-bold focus:outline-none appearance-none">
+                        <select x-model="selectedPipeline" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm font-bold focus:outline-none pr-8 cursor-pointer">
                             <template x-for="p in pipelines" :key="p.id">
                                 <option :value="p.id" x-text="p.name" class="bg-black text-white"></option>
                             </template>
@@ -174,7 +174,7 @@
             </div>
             
             <template x-if="results">
-                <div class="glass p-6 lg:p-4 rounded-[3.5rem] lg:rounded-[2.5rem] space-y-10 border-blue-500/20 bg-blue-500/[0.03] shadow-2xl border-2 transition-all">
+                <div class="glass p-6 lg:p-4 rounded-[3.5rem] lg:rounded-[2.5rem] space-y-4 border-blue-500/20 bg-blue-500/[0.03] shadow-2xl border-2 transition-all">
                     <div class="flex justify-between items-start">
                         <div class="space-y-1">
                             <h2 class="text-3xl font-black tracking-tighter" x-text="form.product_name"></h2>
@@ -230,7 +230,7 @@
         </div>
 
         <!-- Tab: Batch Ingestion -->
-        <div x-show="activeTab === 'batch'" class="lg:col-span-12 w-full max-w-5xl mx-auto space-y-12 lg:space-y-8" x-transition>
+        <div x-show="activeTab === 'batch'" class="lg:col-span-12 w-full max-w-5xl mx-auto space-y-6 lg:space-y-8" x-transition>
             <div class="text-center space-y-4">
                 <h2 class="text-[11px] font-black uppercase tracking-[0.5em] text-blue-400">Bulk Asset Management</h2>
                 <h1 class="text-6xl font-black tracking-tighter">Batch Ingestion</h1>
@@ -240,7 +240,7 @@
                     <div class="glass p-6 rounded-[2rem] space-y-3 text-left">
                         <label class="label-apple ml-2">Ingestion Pipeline</label>
                         <div class="relative">
-                            <select x-model="selectedPipeline" class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-sm font-black focus:outline-none appearance-none">
+                            <select x-model="selectedPipeline" class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-sm font-black focus:outline-none pr-8 cursor-pointer">
                                 <template x-for="p in pipelines" :key="p.id">
                                     <option :value="p.id" x-text="p.name" class="bg-black text-white"></option>
                                 </template>
@@ -272,7 +272,7 @@
                 <div class="flex flex-wrap gap-4 items-center bg-white/5 p-4 rounded-3xl">
                     <div class="flex flex-col gap-1">
                         <span class="text-[8px] font-black uppercase opacity-30 ml-2">Type</span>
-                        <select x-model="filterType" class="bg-black/40 border-none rounded-xl text-[10px] font-black uppercase tracking-widest p-2 px-4 focus:ring-0 appearance-none min-w-[120px]">
+                        <select x-model="filterType" class="bg-black/40 border-none rounded-xl text-[10px] font-black uppercase tracking-widest p-2 px-4 focus:ring-0 min-w-[140px] pr-8 cursor-pointer">
                             <option value="all">All Items</option>
                             <option value="food">Food</option>
                             <option value="product">Products</option>
@@ -280,7 +280,7 @@
                     </div>
                     <div class="flex flex-col gap-1">
                         <span class="text-[8px] font-black uppercase opacity-30 ml-2">Sort By</span>
-                        <select x-model="sortBy" class="bg-black/40 border-none rounded-xl text-[10px] font-black uppercase tracking-widest p-2 px-4 focus:ring-0 appearance-none min-w-[120px]">
+                        <select x-model="sortBy" class="bg-black/40 border-none rounded-xl text-[10px] font-black uppercase tracking-widest p-2 px-4 focus:ring-0 min-w-[140px] pr-8 cursor-pointer">
                             <option value="newest">Newest First</option>
                             <option value="oldest">Oldest First</option>
                         </select>
@@ -313,11 +313,11 @@
                         </div>
 
                         <!-- Item Card Expanded Details -->
-                        <div x-show="item.show_more" class="p-6 bg-white/[0.01] space-y-12 lg:space-y-8 border-t border-white/10" x-transition>
+                        <div x-show="item.show_more" class="p-6 bg-white/[0.01] space-y-6 lg:space-y-8 border-t border-white/10" x-transition>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div class="space-y-4">
                                     <label class="label-apple ml-2">Inventory Placement</label>
-                                    <select x-model="item.edit_data.location" class="w-full bg-white/5 border border-white/10 rounded-[1.5rem] px-6 py-5 text-xs font-bold outline-none focus:bg-white/10 transition-all text-white appearance-none">
+                                    <select x-model="item.edit_data.location" class="w-full bg-white/5 border border-white/10 rounded-[1.5rem] px-6 py-5 text-xs font-bold outline-none focus:bg-white/10 transition-all text-white pr-8 cursor-pointer">
                                         <template x-for="loc in locations">
                                             <option :value="loc.name" x-text="loc.name"></option>
                                         </template>
@@ -350,7 +350,7 @@
         </div>
 
         <!-- Tab: Archive Search -->
-        <div x-show="activeTab === 'search'" class="lg:col-span-12 max-w-5xl mx-auto space-y-10 pt-8 pb-32" x-transition>
+        <div x-show="activeTab === 'search'" class="lg:col-span-12 max-w-5xl mx-auto space-y-4 pt-8 pb-32" x-transition>
             <div class="glass p-8 rounded-[3.5rem] space-y-8 bg-white/[0.02]">
                 <h2 class="text-[11px] font-black uppercase tracking-[0.5em] mb-4 text-white/30">Archive Retrieval</h2>
                 <div class="flex flex-col sm:flex-row gap-3">
@@ -386,7 +386,7 @@
         </div>
 
         <!-- Tab: Pipelines -->
-        <div x-show="activeTab === 'pipelines'" class="lg:col-span-12 w-full max-w-6xl mx-auto space-y-12 lg:space-y-8" x-transition>
+        <div x-show="activeTab === 'pipelines'" class="lg:col-span-12 w-full max-w-6xl mx-auto space-y-6 lg:space-y-8" x-transition>
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-8">
                 <div class="space-y-2">
                     <h2 class="text-[11px] font-black uppercase tracking-[0.5em] text-blue-400">Node Infrastructure</h2>
@@ -400,7 +400,7 @@
 
             <div class="grid grid-cols-1 gap-6">
                 <template x-for="p in pipelines" :key="p.id">
-                    <div class="glass p-6 lg:p-8 rounded-[4rem] lg:rounded-[2.5rem] space-y-12 lg:space-y-8 group hover:border-white/20 transition-all shadow-2xl relative overflow-hidden border-2 border-white/5">
+                    <div class="glass p-6 lg:p-8 rounded-[4rem] lg:rounded-[2.5rem] space-y-6 lg:space-y-8 group hover:border-white/20 transition-all shadow-2xl relative overflow-hidden border-2 border-white/5">
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
                             <div class="space-y-2">
                                 <div class="flex items-center gap-4">
@@ -430,7 +430,7 @@
                                             <span class="text-[10px] block font-black uppercase text-white/20 mb-2 tracking-widest" x-text="'STAGE ' + (index + 1)"></span>
                                             <span class="text-[13px] font-black uppercase tracking-[0.2em] text-white/90" x-text="node"></span>
                                         </div>
-                                        <template x-if="index < (p.schema.active_nodes ? p.schema.active_nodes.default.length : 4) - 1">
+                                        <template x-if="index < (p.schema.active_nodes ? p.schema.active_nodes.default.length : 0) - 1">
                                             <span class="text-white/10 text-3xl font-thin hidden md:block opacity-40">→</span>
                                             <span class="text-white/10 text-2xl font-thin md:hidden block self-center opacity-40">↓</span>
                                         </template>
@@ -444,7 +444,7 @@
         </div>
 
         <!-- Tab: Settings -->
-        <div x-show="activeTab === 'settings'" class="lg:col-span-12 w-full max-w-5xl mx-auto space-y-12 lg:space-y-8 pt-8 pb-32" x-transition>
+        <div x-show="activeTab === 'settings'" class="lg:col-span-12 w-full max-w-5xl mx-auto space-y-6 lg:space-y-8 pt-8 pb-32" x-transition>
             <div class="text-center space-y-2">
                 <h2 class="text-[11px] font-black uppercase tracking-[0.5em] text-blue-400">Environment Configuration</h2>
                 <h1 class="text-5xl font-black tracking-tighter">System Settings</h1>
@@ -464,7 +464,7 @@
                                 <span>JPEG Quality</span>
                                 <span class="text-blue-400" x-text="imageOptimization.quality + '%'"></span>
                             </div>
-                            <input type="range" min="10" max="100" x-model="imageOptimization.quality" class="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white">
+                            <input type="range" min="10" max="100" x-model="imageOptimization.quality" class="w-full h-1.5 bg-white/10 rounded-lg pr-8 cursor-pointer cursor-pointer accent-white">
                         </div>
                     </div>
                 </section>
@@ -543,7 +543,7 @@
                     <button @click="editingPipeline = null" class="w-16 h-16 rounded-[1.5rem] glass-dark flex items-center justify-center text-xl active:scale-90 transition-all">✕</button>
                 </div>
                 
-                <div class="p-6 overflow-y-auto no-scrollbar space-y-12 lg:space-y-8">
+                <div class="p-6 overflow-y-auto no-scrollbar space-y-6 lg:space-y-8">
                     <div class="space-y-4">
                         <label class="label-apple ml-2">Pipeline Identification</label>
                         <input type="text" x-model="editingPipeline.name" class="w-full bg-white/5 border border-white/10 rounded-[2rem] p-7 text-lg font-black tracking-tight focus:outline-none focus:border-blue-500/50 shadow-inner text-white">
@@ -572,12 +572,12 @@
                         </div>
                     </div>
 
-                    <div class="space-y-10 pt-4 border-t border-white/5">
+                    <div class="space-y-4 pt-4 border-t border-white/5">
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div class="space-y-5">
                                 <label class="label-apple ml-4">Vision Model (Default)</label>
                                 <div class="relative">
-                                    <select x-model="editingPipeline.schema.vision_model.default" class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-sm font-black focus:outline-none appearance-none text-white">
+                                    <select x-model="editingPipeline.schema.vision_model.default" class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-sm font-black focus:outline-none pr-8 cursor-pointer text-white">
                                         <template x-for="m in getSortedModels()" :key="m">
                                             <option :value="m" x-text="m.split('/')[1]" class="bg-black text-white"></option>
                                         </template>
