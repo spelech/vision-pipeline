@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vision Pipeline 2.1.1</title>
+    <title>Vision Pipeline 2.1.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -22,7 +22,6 @@
         .btn-apple:active { transform: scale(0.96); opacity: 0.9; }
         .terminal-text { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: rgba(255,255,255,0.6); }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
-        
         .cropper-view-box, .cropper-face { border-radius: 0; }
         .cropper-line, .cropper-point { background-color: #fff; }
         .cropper-bg { background-image: none; background-color: #000; }
@@ -66,16 +65,7 @@
         <!-- Tab: Single Capture -->
         <div x-show="activeTab === 'capture'" class="space-y-6" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 translate-y-12">
             
-            <!-- Context Input (RESTORING THIS) -->
-            <div class="space-y-2">
-                <label class="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] ml-4">Supplemental Context</label>
-                <div class="glass rounded-[2rem] p-1 flex gap-2 border-white/5 bg-white/[0.01]">
-                    <textarea x-model="textInfo" placeholder="Add details to help the AI (e.g. this is a battery for a Dyson)..." 
-                              class="flex-1 bg-transparent border-none px-6 py-4 text-xs focus:ring-0 outline-none resize-none font-medium placeholder:text-white/10 h-16"></textarea>
-                </div>
-            </div>
-
-            <!-- Main Viewfinder -->
+            <!-- Viewfinder -->
             <div class="relative rounded-[2.5rem] overflow-hidden glass aspect-[4/5] shadow-2xl group border-white/10">
                 <template x-if="!aiPreview">
                     <div class="absolute inset-0 flex flex-col items-center justify-center space-y-6">
@@ -106,6 +96,16 @@
                         <div class="bg-white/10 backdrop-blur-xl border border-white/10 text-white p-5 rounded-[2rem] active:scale-95 transition-all text-xl">📂</div>
                     </label>
                 </div>
+            </div>
+
+            <!-- Context Input (Repositioned for better flow) -->
+            <div class="glass p-6 rounded-[2rem] space-y-3 border-white/5 bg-white/[0.01]">
+                <div class="flex justify-between items-center px-1">
+                    <label class="text-[9px] font-black text-white/20 uppercase tracking-[0.3em]">Supplemental Context</label>
+                    <button x-show="textInfo" @click="textInfo = ''" class="text-[8px] font-black text-white/10 hover:text-white uppercase tracking-widest">Clear</button>
+                </div>
+                <textarea x-model="textInfo" placeholder="e.g. This is for the master bathroom..." 
+                          class="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-4 text-xs focus:ring-1 focus:ring-white/20 outline-none resize-none font-medium placeholder:text-white/10 h-20 transition-all"></textarea>
             </div>
 
             <!-- Single Result Card -->
@@ -296,7 +296,7 @@
         </div>
     </main>
 
-    <!-- Global Processing Overlay (TERMINAL IS NOW HERE) -->
+    <!-- Global Processing Overlay -->
     <div x-show="loading && !precisionMode" class="fixed inset-0 z-[500] bg-black/80 backdrop-blur-3xl flex flex-col items-center justify-center p-8" x-transition>
         <div class="w-full max-w-sm space-y-10 flex flex-col items-center">
             <div class="w-24 h-24 border-2 border-white/5 border-t-white rounded-full animate-spin shadow-[0_0_50px_rgba(255,255,255,0.1)]"></div>
@@ -306,7 +306,7 @@
                 <p class="text-[9px] font-black text-white/60 uppercase tracking-widest animate-pulse">Running Vision Pipeline</p>
             </div>
 
-            <!-- THE TERMINAL -->
+            <!-- TERMINAL LOGS -->
             <div class="w-full glass rounded-[1.5rem] p-6 border border-white/10 space-y-4 shadow-2xl bg-black/40">
                 <div class="flex justify-between items-center border-b border-white/5 pb-3">
                     <span class="text-[8px] font-black text-white/20 uppercase tracking-[0.3em]">System Trace</span>
@@ -316,10 +316,10 @@
                         <div class="w-1.5 h-1.5 rounded-full bg-green-500/40"></div>
                     </div>
                 </div>
-                <div class="h-48 overflow-y-auto scrollbar-hide flex flex-col-reverse space-y-reverse space-y-2" id="terminal-log-overlay">
-                    <template x-for="(log, i) in [...logs].reverse()" :key="i">
+                <div class="h-48 overflow-y-auto scrollbar-hide flex flex-col space-y-2" x-ref="overlayLog">
+                    <template x-for="(log, i) in logs" :key="i">
                         <div class="terminal-text flex gap-3">
-                            <span class="text-white/20 select-none">00:0<span x-text="i"></span></span>
+                            <span class="text-white/20 select-none" x-text="'00:0' + i"></span>
                             <span :class="log.includes('❌') ? 'text-red-400' : (log.includes('✅') ? 'text-green-400' : 'text-white/70')" x-text="log"></span>
                         </div>
                     </template>
@@ -376,6 +376,13 @@
                     setInterval(() => {
                         if (this.queue.some(i => i.status === 'processing')) this.fetchQueue();
                     }, 5000);
+                    
+                    this.$watch('logs', () => {
+                        this.$nextTick(() => {
+                            const el = this.$refs.overlayLog;
+                            if (el) el.scrollTop = el.scrollHeight;
+                        });
+                    });
                 },
 
                 async fetchLocations() {
@@ -460,16 +467,18 @@
                     this.logs = [];
                     this.serviceResults = {};
                     
-                    const sessionId = Math.random().toString(36).substring(7);
+                    const sessionId = 'sid-' + Math.random().toString(36).slice(2, 10);
                     const logInterval = setInterval(async () => {
-                        const resp = await fetch(`/logs/${sessionId}`);
-                        const data = await resp.json();
-                        this.logs = data.logs;
-                    }, 800);
+                        try {
+                            const resp = await fetch(`/logs/${sessionId}`);
+                            const data = await resp.json();
+                            this.logs = data.logs || [];
+                        } catch (e) {}
+                    }, 500);
 
                     const formData = new FormData();
                     formData.append('file', file);
-                    formData.append('text', this.textInfo); // SENDING THE CONTEXT
+                    formData.append('text', this.textInfo);
                     formData.append('session_id', sessionId);
                     
                     try {
@@ -493,7 +502,7 @@
                         }
                     } catch (err) { this.notify('Identification Error', 'error'); }
                     finally { 
-                        clearInterval(logInterval);
+                        setTimeout(() => clearInterval(logInterval), 2000);
                         this.loading = false; 
                     }
                 },

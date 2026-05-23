@@ -128,15 +128,16 @@ class VisionPipeline:
             if match:
                 json_str = match.group()
             
-            # Remove potential control characters that break json.loads
-            json_str = re.sub(r'[\x00-\x1F\x7F]', '', json_str)
+            # Remove dangerous control characters but preserve common whitespace
+            # Preserves \n (0x0A), \r (0x0D), \t (0x09)
+            json_str = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', json_str)
                 
             res = json.loads(json_str)
             if log_cb: log_cb(f"✨ LLM identified: {res.get('product_name')} ({round(res.get('confidence_score', 0)*100)}% confidence)")
             return res
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
-            if log_cb: log_cb(f"❌ LLM Error: {str(e)}")
+            if log_cb: log_cb(f"❌ Identification Error: {str(e)}")
             return {"product_name": "Error", "description": str(e), "confidence_score": 0.0}
 
     def search_searxng(self, query, log_cb=None):
