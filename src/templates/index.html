@@ -4,13 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Vision Pipeline v3.2.0</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #050505; color: #fff; overflow-x: hidden; font-size: 15px; }
         @media (min-width: 1024px) { 
-            body { font-size: 22px !important; } 
+            body { font-size: 20px !important; } 
             h1 { font-size: 4rem !important; }
             h2 { font-size: 1.5rem !important; }
             h3 { font-size: 2rem !important; }
@@ -73,7 +74,7 @@
     <!-- Side Navigation Menu -->
     <div x-show="showMenu" class="fixed inset-0 z-[1000] bg-black/70 backdrop-blur-md" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:leave="transition ease-in duration-200" x-transition:leave-end="opacity-0">
         <div class="absolute left-0 top-0 bottom-0 w-80 glass border-r border-white/10 flex flex-col shadow-2xl" @click.away="showMenu = false" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="-translate-x-full" x-transition:leave="transition ease-in duration-200" x-transition:leave-end="-translate-x-full">
-            <div class="p-10 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
+            <div class="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
                 <h2 class="text-[11px] font-black uppercase tracking-[0.3em] opacity-40">System Menu</h2>
                 <button @click="showMenu = false" class="text-white/40 hover:text-white text-xl">✕</button>
             </div>
@@ -87,13 +88,13 @@
                     </button>
                 </template>
             </div>
-            <div class="p-10 border-t border-white/10 text-center">
+            <div class="p-6 border-t border-white/10 text-center">
                 <p class="text-[9px] font-black uppercase tracking-[0.4em] opacity-20">Vision Pipeline v3.2.0</p>
             </div>
         </div>
     </div>
 
-    <main class="pt-28 pb-32 px-6 lg:px-12 w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <main class="pt-32 pb-32 px-6 lg:px-12 w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         <!-- Tab: Single Capture (Column 1) -->
         <div x-show="activeTab === 'capture'" class="lg:col-span-7 space-y-8" x-transition>
@@ -144,7 +145,7 @@
             </div>
 
             <!-- 3. Guidance & Identification Execution -->
-            <div class="glass p-8 rounded-[2.5rem] space-y-6 border-white/10 bg-white/[0.02]">
+            <div class="glass p-6 rounded-[2rem] space-y-6 border-white/10 bg-white/[0.02]">
                 <div class="space-y-3">
                     <label class="label-apple ml-1">AI Guidance / Notes</label>
                     <textarea x-model="textInfo" placeholder="Context for the AI..." 
@@ -173,7 +174,7 @@
             </div>
             
             <template x-if="results">
-                <div class="glass p-10 lg:p-8 rounded-[3.5rem] lg:rounded-[2.5rem] space-y-10 border-blue-500/20 bg-blue-500/[0.03] shadow-2xl border-2 transition-all">
+                <div class="glass p-6 lg:p-4 rounded-[3.5rem] lg:rounded-[2.5rem] space-y-10 border-blue-500/20 bg-blue-500/[0.03] shadow-2xl border-2 transition-all">
                     <div class="flex justify-between items-start">
                         <div class="space-y-1">
                             <h2 class="text-3xl font-black tracking-tighter" x-text="form.product_name"></h2>
@@ -298,7 +299,7 @@
                                     <div class="w-12 h-12 border-3 border-white/10 border-t-white rounded-full animate-spin"></div>
                                 </div>
                             </div>
-                            <div class="p-10 flex-1 min-w-0 flex flex-col justify-center bg-white/[0.01]">
+                            <div class="p-6 flex-1 min-w-0 flex flex-col justify-center bg-white/[0.01]">
                                 <div class="flex justify-between items-start gap-6">
                                     <div class="truncate flex-1">
                                         <input type="text" x-model="item.edit_data.product_name" class="bg-transparent border-none p-0 text-2xl font-black focus:ring-0 w-full tracking-tighter text-white">
@@ -312,8 +313,8 @@
                         </div>
 
                         <!-- Item Card Expanded Details -->
-                        <div x-show="item.show_more" class="p-12 bg-white/[0.01] space-y-12 lg:space-y-8 border-t border-white/10" x-transition>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                        <div x-show="item.show_more" class="p-6 bg-white/[0.01] space-y-12 lg:space-y-8 border-t border-white/10" x-transition>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div class="space-y-4">
                                     <label class="label-apple ml-2">Inventory Placement</label>
                                     <select x-model="item.edit_data.location" class="w-full bg-white/5 border border-white/10 rounded-[1.5rem] px-6 py-5 text-xs font-bold outline-none focus:bg-white/10 transition-all text-white appearance-none">
@@ -350,15 +351,16 @@
 
         <!-- Tab: Archive Search -->
         <div x-show="activeTab === 'search'" class="lg:col-span-12 max-w-5xl mx-auto space-y-10 pt-8 pb-32" x-transition>
-            <div class="glass p-10 lg:p-8 rounded-[3.5rem] lg:rounded-[2.5rem] space-y-8 bg-white/[0.02]">
+            <div class="glass p-8 rounded-[3.5rem] space-y-8 bg-white/[0.02]">
                 <h2 class="text-[11px] font-black uppercase tracking-[0.5em] mb-4 text-white/30">Archive Retrieval</h2>
-                <div class="flex flex-col sm:flex-row gap-5">
-                    <div class="relative flex-1">
-                        <input type="text" x-model="searchQuery" @keyup.enter="runSearch()" placeholder="Search metadata archives (use % as wildcard)..." class="w-full bg-white/5 border border-white/10 rounded-[1.75rem] p-6 lg:p-4 pl-16 text-sm lg:text-base focus:outline-none focus:border-blue-500/50 transition-all">
-                        <span class="absolute left-6 top-6 text-2xl opacity-40">🔍</span>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <div class="glass-dark flex-1 flex items-center px-5 rounded-2xl border border-white/10 focus-within:border-blue-500/50 transition-all">
+                        <span class="text-xl opacity-30 mr-4">🔍</span>
+                        <input type="text" x-model="searchQuery" @keyup.enter="runSearch()" placeholder="Search metadata archives..." class="flex-1 bg-transparent border-none py-4 text-sm focus:ring-0 outline-none">
                     </div>
-                    <button @click="runSearch()" class="btn-apple px-12 py-6 text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all">Search</button>
+                    <button @click="runSearch()" class="btn-apple px-10 py-4 text-[10px] font-black uppercase tracking-widest shadow-xl">Search</button>
                 </div>
+            </div>
             </div>
 
             <div class="grid grid-cols-1 gap-6">
@@ -396,9 +398,9 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 gap-10">
+            <div class="grid grid-cols-1 gap-6">
                 <template x-for="p in pipelines" :key="p.id">
-                    <div class="glass p-12 lg:p-8 rounded-[4rem] lg:rounded-[2.5rem] space-y-12 lg:space-y-8 group hover:border-white/20 transition-all shadow-2xl relative overflow-hidden border-2 border-white/5">
+                    <div class="glass p-6 lg:p-8 rounded-[4rem] lg:rounded-[2.5rem] space-y-12 lg:space-y-8 group hover:border-white/20 transition-all shadow-2xl relative overflow-hidden border-2 border-white/5">
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
                             <div class="space-y-2">
                                 <div class="flex items-center gap-4">
@@ -452,7 +454,7 @@
                 <!-- Image Optimization -->
                 <section class="space-y-6 text-center md:text-left">
                     <label class="label-apple">Image Processing</label>
-                    <div class="glass p-8 rounded-[2.5rem] space-y-8 bg-black/20">
+                    <div class="glass p-6 rounded-[2rem] space-y-8 bg-black/20">
                         <div class="flex justify-between items-center">
                             <span class="text-[11px] font-black uppercase text-white/40 tracking-widest">Res Limit (px)</span>
                             <input type="number" x-model="imageOptimization.max_dimension" class="w-24 bg-black/60 border border-white/10 rounded-xl p-3 text-sm text-center font-bold">
@@ -470,7 +472,7 @@
                 <!-- Model Management -->
                 <section class="space-y-6">
                     <label class="label-apple">AI Model Core</label>
-                    <div class="glass p-8 rounded-[2.5rem] space-y-6 bg-black/20">
+                    <div class="glass p-6 rounded-[2rem] space-y-6 bg-black/20">
                         <div class="space-y-4">
                             <span class="text-[9px] font-black uppercase text-white/30">Model Registry</span>
                             <div class="space-y-2 max-h-64 overflow-y-auto no-scrollbar">
@@ -500,12 +502,15 @@
             <!-- Prompt Templates Section -->
             <section class="space-y-8">
                 <label class="label-apple">Contextual Prompt Engineering</label>
-                <div class="grid grid-cols-1 gap-10">
+                <div class="grid grid-cols-1 gap-6">
                     <template x-for="p in promptTemplates" :key="p.id">
-                        <div class="glass p-10 rounded-[3rem] space-y-8 bg-white/[0.01] group border-white/5 border-2 hover:border-blue-500/20 transition-all shadow-2xl">
+                        <div class="glass p-6 rounded-[3rem] space-y-8 bg-white/[0.01] group border-white/5 border-2 hover:border-blue-500/20 transition-all shadow-2xl">
                             <div class="flex justify-between items-center border-b border-white/5 pb-6">
-                                <input type="text" x-model="p.name" class="bg-transparent border-none p-0 text-xl font-black uppercase text-blue-400 focus:ring-0 tracking-[0.2em] w-3/4">
-                                <button @click="promptTemplates = promptTemplates.filter(x => x.id !== p.id); saveConfig();" class="text-red-500/40 hover:text-red-500 text-xs font-black uppercase tracking-widest transition-colors">Delete Asset</button>
+                                <input type="text" x-model="p.name" class="bg-transparent border-none p-0 text-sm font-black uppercase text-blue-400 focus:ring-0 tracking-widest w-2/3">
+                                <div class="flex gap-4">
+                                    <button @click="prettifyTemplate(p)" class="text-blue-500/50 hover:text-blue-400 text-[8px] font-black uppercase">Format JSON</button>
+                                    <button @click="promptTemplates = promptTemplates.filter(x => x.id !== p.id); saveConfig();" class="text-red-500/40 hover:text-red-500 text-xs font-black uppercase">Delete</button>
+                                </div>
                             </div>
                             <div class="space-y-4">
                                 <span class="text-[9px] font-black uppercase tracking-widest text-white/20">System Instructions</span>
@@ -530,7 +535,7 @@
     <div x-show="editingPipeline" class="fixed inset-0 z-[1200] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl" x-cloak x-transition>
         <template x-if="editingPipeline">
             <div class="glass w-full max-w-4xl rounded-[4rem] overflow-hidden flex flex-col max-h-full border-2 border-white/10 shadow-2xl shadow-blue-500/10">
-                <div class="p-12 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
+                <div class="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
                     <div class="space-y-1">
                         <h2 class="font-black tracking-[0.5em] uppercase text-[10px] opacity-40">Neural Configuration</h2>
                         <h3 class="text-3xl font-black tracking-tighter text-blue-400" x-text="editingPipeline.name"></h3>
@@ -538,7 +543,7 @@
                     <button @click="editingPipeline = null" class="w-16 h-16 rounded-[1.5rem] glass-dark flex items-center justify-center text-xl active:scale-90 transition-all">✕</button>
                 </div>
                 
-                <div class="p-12 overflow-y-auto no-scrollbar space-y-12 lg:space-y-8">
+                <div class="p-6 overflow-y-auto no-scrollbar space-y-12 lg:space-y-8">
                     <div class="space-y-4">
                         <label class="label-apple ml-2">Pipeline Identification</label>
                         <input type="text" x-model="editingPipeline.name" class="w-full bg-white/5 border border-white/10 rounded-[2rem] p-7 text-lg font-black tracking-tight focus:outline-none focus:border-blue-500/50 shadow-inner text-white">
@@ -568,7 +573,7 @@
                     </div>
 
                     <div class="space-y-10 pt-4 border-t border-white/5">
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div class="space-y-5">
                                 <label class="label-apple ml-4">Vision Model (Default)</label>
                                 <div class="relative">
@@ -582,7 +587,7 @@
                             </div>
                         </div>
                         
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div class="space-y-5">
                                 <span class="label-apple ml-4">Vision Node Prompt</span>
                                 <textarea x-model="editingPipeline.schema.vision_prompt.default" class="w-full h-[40rem] bg-black/60 border border-white/10 rounded-[2.5rem] p-8 text-[16px] font-mono text-white/80 focus:outline-none focus:border-blue-500/50 leading-relaxed no-scrollbar shadow-inner"></textarea>
@@ -595,7 +600,7 @@
                     </div>
                 </div>
 
-                <div class="p-12 border-t border-white/10 flex flex-col sm:flex-row gap-6 bg-black/40">
+                <div class="p-6 border-t border-white/10 flex flex-col sm:flex-row gap-6 bg-black/40">
                     <button @click="editingPipeline = null" class="flex-1 px-10 py-7 rounded-[2.25rem] font-black text-xs uppercase tracking-widest text-white/40 hover:bg-white/5 transition-all">Discard Changes</button>
                     <button @click="savePipelineChanges()" class="flex-[2] btn-apple py-7 rounded-[2.25rem] font-black text-xs uppercase tracking-[0.5em] shadow-2xl active:scale-95 transition-all">Sync to Registry</button>
                 </div>
@@ -653,6 +658,15 @@
                 imageOptimization: { max_dimension: 1024, quality: 85 },
                 showSettings: false,
                 vibrate(ms=50) { if (navigator.vibrate) navigator.vibrate(ms); },
+                                prettifyTemplate(p) {
+                    try {
+                        const obj = JSON.parse(p.prompt);
+                        p.prompt = JSON.stringify(obj, null, 4);
+                        this.notify('JSON Formatted');
+                    } catch (e) {
+                        this.notify('Invalid JSON structure', 'error');
+                    }
+                },
                 
                 getSortedModels() {
                     return [...this.modelFavorites].sort((a, b) => {
