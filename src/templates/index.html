@@ -44,7 +44,7 @@
         </div>
         <button @click="showSettings = true" class="w-8 h-8 rounded-full glass flex items-center justify-center text-[10px] ml-4">⚙️</button>
         <div class="flex gap-1 bg-white/5 p-1 rounded-xl">
-            <template x-for="tab in ['capture', 'batch', 'review', 'search']">
+            <template x-for="tab in ['capture', 'batch', 'review', 'search', 'pipelines']">
                 <button @click="activeTab = tab" 
                         :class="activeTab === tab ? 'bg-white/10 text-white shadow-sm' : 'text-white/30 hover:text-white'"
                         class="px-4 py-1.5 rounded-lg text-[10px] font-black transition-all uppercase tracking-widest" 
@@ -53,9 +53,9 @@
         </div>
     </nav>
 
-    <main class="pt-24 pb-32 px-6 max-w-xl mx-auto space-y-8">
+    <main class="pt-24 pb-32 px-6 w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
         <!-- Tab: Single Capture -->
-        <div x-show="activeTab === 'capture'" class="space-y-6" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 translate-y-12">
+        <div x-show="activeTab === 'capture'" class="lg:col-span-7 space-y-6" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 translate-y-12">
             
             <!-- Guidance Control -->
             <div class="glass p-6 rounded-[2rem] space-y-5 border-white/10 bg-white/[0.04]">
@@ -309,6 +309,41 @@
         </div>
 
         <!-- Tab: Batch -->
+        
+        <!-- Desktop Results Sidebar -->
+        <div x-show="activeTab === 'capture'" class="hidden lg:block lg:col-span-5 space-y-6 sticky top-24 h-fit">
+            <div x-show="!results" class="glass p-12 rounded-[3rem] text-center opacity-20 border-dashed">
+                <p class="text-[10px] font-black uppercase tracking-[0.3em]">Identification data will appear here</p>
+            </div>
+            
+            <template x-if="results">
+                <div class="glass p-8 rounded-[3rem] space-y-8 border-blue-500/20 bg-blue-500/[0.02] shadow-2xl">
+                    <div class="flex justify-between items-start">
+                        <h2 class="text-2xl font-black tracking-tighter" x-text="form.product_name"></h2>
+                        <span class="px-4 py-2 rounded-2xl bg-white/10 text-[10px] font-black uppercase tracking-widest text-blue-400" x-text="results.llm_output.confidence_score ? Math.round(results.llm_output.confidence_score*100)+'%' : 'AI'"></span>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <label class="label-apple">Service Routing</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <template x-for="svc in ['homebox', 'mealie', 'pricebuddy']">
+                                <button @click="if(selectedServices.includes(svc)) selectedServices = selectedServices.filter(s=>s!==svc); else selectedServices.push(svc)"
+                                        class="p-4 rounded-2xl border transition-all text-[10px] font-black uppercase tracking-widest"
+                                        :class="selectedServices.includes(svc) ? 'bg-white text-black border-white' : 'glass-dark border-white/5 text-white/40'">
+                                    <span x-text="svc"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <button @click="triggerServices()" :disabled="executing" class="w-full btn-apple py-6 text-[10px] font-black uppercase tracking-[0.4em]">
+                        <span x-show="!executing">Dispatch to Services</span>
+                        <div x-show="executing" class="w-6 h-6 border-2 border-black/10 border-t-black rounded-full animate-spin mx-auto"></div>
+                    </button>
+                </div>
+            </template>
+        </div>
+
         <div x-show="activeTab === 'batch'" class="space-y-8" x-transition>
             <div class="glass p-12 rounded-[3.5rem] space-y-12 text-center border-white/10 bg-white/[0.01]">
                 <div class="space-y-4">
@@ -455,6 +490,7 @@
                                 promptTemplates: [],
                 modelFavorites: [],
                 imageOptimization: { max_dimension: 1024, quality: 85 },
+                                editingPipeline: null,
                 showSettings: false,
                 lastItemId: null,
                 lastResults: null,
@@ -549,7 +585,7 @@
                         const response = await fetch('/pipelines');
                         const data = await response.json();
                         if (data.success) {
-                            this.pipelines = data.pipelines;
+                            this.pipelines = data.pipelines; if(!this.selectedPipeline && this.pipelines.length) this.selectedPipeline = this.pipelines[0].id;
                         }
                     } catch (e) {}
                 },
@@ -563,6 +599,25 @@
                 },
 
                 
+                                createNewPipeline() {
+                    const id = 'custom-' + Math.random().toString(36).slice(2, 7);
+                    const newP = {
+                        id: id,
+                        name: 'New Custom Pipeline',
+                        schema: {
+                            active_nodes: { default: ['barcode', 'vision', 'refine'], options: ['barcode', 'vision', 'search', 'scrape', 'refine'], type: 'multiselect', label: 'Nodes' },
+                            vision_prompt: { type: 'textarea', label: 'Vision Prompt', default: '' },
+                            refine_prompt: { type: 'textarea', label: 'Refine Prompt', default: '' }
+                        }
+                    };
+                    this.pipelines.push(newP);
+                    this.notify('Pipeline Skeleton Created');
+                },
+                async deletePipeline(id) {
+                    if(!confirm('Delete this pipeline?')) return;
+                    this.pipelines = this.pipelines.filter(p => p.id !== id);
+                },
+
                 async fetchConfig() {
                     try {
                         const resp = await fetch('/config');
@@ -571,6 +626,38 @@
                         this.modelFavorites = data.model_favorites || [];
                         this.imageOptimization = data.image_optimization || { max_dimension: 1024, quality: 85 };
                     } catch (e) {}
+                },
+
+                                editPipeline(p) {
+                    // Clone to avoid direct mutation
+                    this.editingPipeline = JSON.parse(JSON.stringify(p));
+                },
+                async savePipelineChanges() {
+                    if (!this.editingPipeline) return;
+                    
+                    // Update the pipelines list
+                    const idx = this.pipelines.findIndex(p => p.id === this.editingPipeline.id);
+                    if (idx !== -1) {
+                        this.pipelines[idx] = this.editingPipeline;
+                    } else {
+                        this.pipelines.push(this.editingPipeline);
+                    }
+                    
+                    // Persist custom pipelines to backend
+                    const custom = this.pipelines.filter(p => p.id.startsWith('custom-'));
+                    const configResp = await fetch('/config');
+                    const configData = await configResp.json();
+                    configData.custom_pipelines = custom;
+                    
+                    await fetch('/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(configData)
+                    });
+                    
+                    this.editingPipeline = null;
+                    this.notify('Pipeline Saved');
+                    this.fetchPipelines(); // Refresh
                 },
 
                 async saveConfig() {
@@ -895,7 +982,7 @@
 
 
         <!-- Search Tab -->
-        <div x-show="activeTab === 'search'" class="space-y-6 pt-24 pb-32 px-6">
+        <div x-show="activeTab === 'search'" class="lg:col-span-12 max-w-4xl mx-auto space-y-6 pt-24 pb-32 px-6">
             <div class="glass p-6 rounded-[2.5rem]">
                 <h2 class="text-xs font-black uppercase tracking-[0.3em] mb-6">Archive Search</h2>
                 <div class="relative">
@@ -1011,6 +1098,69 @@
             
             <div class="p-6 border-t border-white/10">
                 <button @click="saveConfig(); showSettings = false" class="w-full btn-apple py-4 text-[10px] font-black uppercase tracking-widest">Apply Changes</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Pipeline Edit Modal -->
+    <div x-show="editingPipeline" class="fixed inset-0 z-[900] bg-black/80 flex items-center justify-center p-4 backdrop-blur-xl" x-cloak x-transition>
+        <div class="glass w-full max-w-2xl rounded-[3rem] overflow-hidden flex flex-col max-h-full border-white/20">
+            <div class="p-8 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
+                <div>
+                    <h2 class="font-black tracking-widest uppercase text-[10px] opacity-40 mb-1">Configuration</h2>
+                    <h3 class="text-xl font-black tracking-tight" x-text="editingPipeline?.name"></h3>
+                </div>
+                <button @click="editingPipeline = null" class="w-10 h-10 rounded-full glass-dark flex items-center justify-center text-xs">✕</button>
+            </div>
+            
+            <div class="p-8 overflow-y-auto space-y-8 scrollbar-hide">
+                <div class="space-y-3">
+                    <label class="label-apple">Display Name</label>
+                    <input type="text" x-model="editingPipeline.name" class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-sm focus:outline-none focus:border-blue-500/50">
+                </div>
+
+                <div class="space-y-6">
+                    <label class="label-apple">Pipeline Sequence (Nodes)</label>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <template x-for="node in ['barcode', 'vision', 'search', 'scrape', 'refine']" :key="node">
+                            <button 
+                                @click="
+                                    if (!editingPipeline.schema.active_nodes.default) editingPipeline.schema.active_nodes.default = [];
+                                    if (editingPipeline.schema.active_nodes.default.includes(node)) {
+                                        editingPipeline.schema.active_nodes.default = editingPipeline.schema.active_nodes.default.filter(n => n !== node);
+                                    } else {
+                                        editingPipeline.schema.active_nodes.default.push(node);
+                                    }
+                                "
+                                class="p-4 rounded-2xl border transition-all text-[10px] font-black uppercase tracking-widest flex items-center justify-between"
+                                :class="editingPipeline.schema.active_nodes.default.includes(node) ? 'bg-white text-black border-white' : 'glass-dark border-white/5 text-white/40'"
+                            >
+                                <span x-text="node"></span>
+                                <span x-show="editingPipeline.schema.active_nodes.default.includes(node)">●</span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <label class="label-apple">Node Parameters</label>
+                    <div class="space-y-4">
+                        <div class="space-y-3">
+                            <span class="text-[9px] font-black uppercase text-white/30">Vision Node Prompt</span>
+                            <textarea x-model="editingPipeline.schema.vision_prompt.default" class="w-full h-32 bg-black/40 border border-white/10 rounded-2xl p-4 text-xs font-mono focus:outline-none focus:border-blue-500/50"></textarea>
+                        </div>
+                        <div class="space-y-3">
+                            <span class="text-[9px] font-black uppercase text-white/30">Refine Node Prompt</span>
+                            <textarea x-model="editingPipeline.schema.refine_prompt.default" class="w-full h-32 bg-black/40 border border-white/10 rounded-2xl p-4 text-xs font-mono focus:outline-none focus:border-blue-500/50"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-8 border-t border-white/10 flex justify-end gap-4 bg-black/20">
+                <button @click="editingPipeline = null" class="px-8 py-4 rounded-full font-black text-xs uppercase tracking-widest text-white/60 hover:bg-white/5">Discard</button>
+                <button @click="savePipelineChanges()" class="btn-apple bg-white text-black px-10 py-4 rounded-full font-black text-xs uppercase tracking-widest shadow-2xl shadow-white/10">Save Pipeline</button>
             </div>
         </div>
     </div>

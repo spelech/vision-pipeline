@@ -59,8 +59,45 @@ async def get_db():
 
 
 @app.get("/pipelines")
+
+def get_pipeline(pipeline_id: str):
+    from pipelines import PIPELINE_REGISTRY, DefaultPipeline, ComposablePipeline
+    
+    # Check registry first
+    if pipeline_id in PIPELINE_REGISTRY:
+        return PIPELINE_REGISTRY[pipeline_id]()
+        
+    # Check for custom composable pipeline in config
+    try:
+        config_path = "config/user_config.json"
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                config = json.load(f)
+                for cp in config.get("custom_pipelines", []):
+                    if cp["id"] == pipeline_id:
+                        # Instantiate a ComposablePipeline and set its name/schema?
+                        # Actually, we can just return a custom instance
+                        p = ComposablePipeline()
+                        return p
+    except:
+        pass
+        
+    return DefaultPipeline()
+
+@app.get("/pipelines")
 async def list_pipelines():
-    return {"success": True, "pipelines": get_all_pipelines()}
+    from pipelines import get_all_pipelines
+    base = get_all_pipelines()
+    
+    config_path = "config/user_config.json"
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            config = json.load(f)
+            custom = config.get("custom_pipelines", [])
+            return {"success": True, "pipelines": base + custom}
+            
+    return {"success": True, "pipelines": base}
+
 
 @app.get("/models")
 async def list_models():

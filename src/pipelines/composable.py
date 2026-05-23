@@ -15,7 +15,7 @@ class ComposablePipeline(BasePipeline):
 
     @classmethod
     def get_name(cls) -> str:
-        return "Custom Composable Pipeline"
+        return getattr(cls, 'pipeline_name', "Custom Composable Pipeline")
 
     @classmethod
     def get_settings_schema(cls) -> dict:
