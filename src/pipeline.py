@@ -64,6 +64,7 @@ class VisionPipeline:
             return None
         except Exception as e:
             logger.error(f"Error during barcode scanning: {e}")
+            if log_cb: log_cb(f"❌ Barcode scan error: {str(e)}")
             return None
 
     def _prepare_image_for_llm(self, image):
@@ -120,13 +121,22 @@ class VisionPipeline:
                 messages=[{"role": "user", "content": content_list}],
             )
             content = response.choices[0].message.content
-            # Basic JSON extraction
+            
+            # Robust JSON extraction
+            json_str = content
             match = re.search(r'\{.*\}', content, re.DOTALL)
-            res = json.loads(match.group()) if match else json.loads(content)
+            if match:
+                json_str = match.group()
+            
+            # Remove potential control characters that break json.loads
+            json_str = re.sub(r'[\x00-\x1F\x7F]', '', json_str)
+                
+            res = json.loads(json_str)
             if log_cb: log_cb(f"✨ LLM identified: {res.get('product_name')} ({round(res.get('confidence_score', 0)*100)}% confidence)")
             return res
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
+            if log_cb: log_cb(f"❌ LLM Error: {str(e)}")
             return {"product_name": "Error", "description": str(e), "confidence_score": 0.0}
 
     def search_searxng(self, query, log_cb=None):
@@ -142,6 +152,7 @@ class VisionPipeline:
             return results
         except Exception as e:
             logger.error(f"SearxNG search failed: {e}")
+            if log_cb: log_cb(f"⚠️ Search failed: {str(e)}")
             return []
 
     def enrich_data(self, current_data, search_results, log_cb=None):
@@ -154,15 +165,19 @@ class VisionPipeline:
                 messages=[{"role": "user", "content": enrich_prompt}],
             )
             content = response.choices[0].message.content
+            
             match = re.search(r'\{.*\}', content, re.DOTALL)
-            refined = json.loads(match.group()) if match else json.loads(content)
+            json_str = match.group() if match else content
+            json_str = re.sub(r'[\x00-\x1F\x7F]', '', json_str)
+            
+            refined = json.loads(json_str)
             # Patch missing critical fields
             for k, v in current_data.items():
                 if refined.get(k) in [None, "Unknown"]: refined[k] = v
             if log_cb: log_cb("✅ Data enrichment complete.")
             return refined
-        except Exception:
-            if log_cb: log_cb("⚠️ Enrichment failed, using primary results.")
+        except Exception as e:
+            if log_cb: log_cb(f"⚠️ Enrichment failed: {str(e)}")
             return current_data
 
     def run_pipeline(self, image=None, text_description=None, log_cb=None):

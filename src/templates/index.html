@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vision Pipeline 2.1</title>
+    <title>Vision Pipeline 2.1.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -23,7 +23,6 @@
         .terminal-text { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: rgba(255,255,255,0.6); }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         
-        /* Cropper Overrides */
         .cropper-view-box, .cropper-face { border-radius: 0; }
         .cropper-line, .cropper-point { background-color: #fff; }
         .cropper-bg { background-image: none; background-color: #000; }
@@ -31,7 +30,7 @@
 </head>
 <body x-data="visionApp()" class="scrollbar-hide antialiased selection:bg-white/20">
     <!-- Precision Mode (Cropper Modal) -->
-    <div x-show="precisionMode" class="fixed inset-0 z-[300] bg-black flex flex-col" x-cloak x-transition>
+    <div x-show="precisionMode" class="fixed inset-0 z-[600] bg-black flex flex-col" x-cloak x-transition>
         <div class="p-6 flex justify-between items-center glass border-b-0">
             <button @click="closePrecision()" class="text-white/60 hover:text-white font-bold text-sm uppercase tracking-widest">Cancel</button>
             <h2 class="text-xs font-black uppercase tracking-[0.3em]">Precision Mode</h2>
@@ -66,6 +65,16 @@
     <main class="pt-24 pb-32 px-6 max-w-xl mx-auto space-y-8">
         <!-- Tab: Single Capture -->
         <div x-show="activeTab === 'capture'" class="space-y-6" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 translate-y-12">
+            
+            <!-- Context Input (RESTORING THIS) -->
+            <div class="space-y-2">
+                <label class="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] ml-4">Supplemental Context</label>
+                <div class="glass rounded-[2rem] p-1 flex gap-2 border-white/5 bg-white/[0.01]">
+                    <textarea x-model="textInfo" placeholder="Add details to help the AI (e.g. this is a battery for a Dyson)..." 
+                              class="flex-1 bg-transparent border-none px-6 py-4 text-xs focus:ring-0 outline-none resize-none font-medium placeholder:text-white/10 h-16"></textarea>
+                </div>
+            </div>
+
             <!-- Main Viewfinder -->
             <div class="relative rounded-[2.5rem] overflow-hidden glass aspect-[4/5] shadow-2xl group border-white/10">
                 <template x-if="!aiPreview">
@@ -82,7 +91,7 @@
                 
                 <div x-show="aiPreview" class="w-full h-full relative">
                     <img :src="aiPreview" class="w-full h-full object-cover cursor-crosshair" @click="enterPrecision()">
-                    <div class="absolute top-6 left-6 glass-dark px-4 py-2 rounded-full border border-white/10 animate-fade-in">
+                    <div class="absolute top-6 left-6 glass-dark px-4 py-2 rounded-full border border-white/10">
                         <span class="text-[9px] font-black uppercase tracking-widest text-white/60">Tap to Lasso</span>
                     </div>
                 </div>
@@ -96,22 +105,6 @@
                         <input type="file" accept="image/*" class="hidden" @change="onFileSelected">
                         <div class="bg-white/10 backdrop-blur-xl border border-white/10 text-white p-5 rounded-[2rem] active:scale-95 transition-all text-xl">📂</div>
                     </label>
-                </div>
-            </div>
-
-            <!-- Terminal / Action Log -->
-            <div x-show="logs.length > 0 || loading" class="glass-dark rounded-[1.5rem] p-5 border border-white/10 space-y-3 shadow-xl overflow-hidden">
-                <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black text-white/30 uppercase tracking-[0.2em]">Live Action Log</span>
-                    <div x-show="loading" class="w-3 h-3 border border-white/20 border-t-white rounded-full animate-spin"></div>
-                </div>
-                <div class="h-24 overflow-y-auto scrollbar-hide flex flex-col-reverse space-y-reverse space-y-1.5" id="terminal-log">
-                    <template x-for="(log, i) in [...logs].reverse()" :key="i">
-                        <div class="terminal-text flex gap-2">
-                            <span class="text-white/20" x-text="'>'"></span>
-                            <span x-text="log"></span>
-                        </div>
-                    </template>
                 </div>
             </div>
 
@@ -139,7 +132,6 @@
                         <textarea x-model="form.description" rows="2" class="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-5 text-sm font-medium outline-none resize-none focus:bg-white/10 transition-all"></textarea>
                     </div>
 
-                    <!-- Technical Section -->
                     <div x-data="{ open: false }" class="space-y-4">
                         <button @click="open = !open" class="flex items-center gap-3 text-[9px] font-black text-white/30 uppercase tracking-[0.2em] hover:text-white transition-colors group">
                             <div class="w-6 h-6 rounded-full glass flex items-center justify-center group-hover:bg-white/10 transition-all">
@@ -156,14 +148,12 @@
                         </div>
                     </div>
 
-                    <!-- Multi-Service Pipeline -->
                     <div class="border-t border-white/5 pt-8 space-y-6">
                         <div class="flex justify-between items-center px-1">
                             <h3 class="text-[9px] font-black text-white/30 uppercase tracking-[0.3em]">Pipeline Execution</h3>
                             <button @click="showPayload = !showPayload" class="text-[8px] font-black text-white/20 hover:text-white uppercase tracking-widest border border-white/10 px-3 py-1 rounded-full">Review Payload</button>
                         </div>
 
-                        <!-- Payload Preview -->
                         <div x-show="showPayload" x-transition class="bg-black/40 rounded-2xl p-6 border border-white/5 font-mono text-[9px] overflow-x-auto">
                             <pre class="text-blue-400" x-text="JSON.stringify(form, null, 2)"></pre>
                         </div>
@@ -199,7 +189,7 @@
             </div>
         </div>
 
-        <!-- Tab: Batch (Simplified Apple Style) -->
+        <!-- Tab: Batch -->
         <div x-show="activeTab === 'batch'" class="space-y-8" x-transition>
             <div class="glass p-12 rounded-[3.5rem] space-y-12 text-center border-white/10 bg-white/[0.01]">
                 <div class="space-y-4">
@@ -257,7 +247,6 @@
                             </div>
                         </div>
 
-                        <!-- Card Expansion -->
                         <div x-show="item.show_more" class="p-10 bg-white/[0.01] space-y-10 border-t border-white/5" x-transition>
                             <div class="grid grid-cols-2 gap-8">
                                 <div class="space-y-3">
@@ -307,6 +296,38 @@
         </div>
     </main>
 
+    <!-- Global Processing Overlay (TERMINAL IS NOW HERE) -->
+    <div x-show="loading && !precisionMode" class="fixed inset-0 z-[500] bg-black/80 backdrop-blur-3xl flex flex-col items-center justify-center p-8" x-transition>
+        <div class="w-full max-w-sm space-y-10 flex flex-col items-center">
+            <div class="w-24 h-24 border-2 border-white/5 border-t-white rounded-full animate-spin shadow-[0_0_50px_rgba(255,255,255,0.1)]"></div>
+            
+            <div class="text-center space-y-2">
+                <p class="text-[10px] font-black uppercase tracking-[1em] text-white/40 ml-[1em]" x-text="loadingStatus"></p>
+                <p class="text-[9px] font-black text-white/60 uppercase tracking-widest animate-pulse">Running Vision Pipeline</p>
+            </div>
+
+            <!-- THE TERMINAL -->
+            <div class="w-full glass rounded-[1.5rem] p-6 border border-white/10 space-y-4 shadow-2xl bg-black/40">
+                <div class="flex justify-between items-center border-b border-white/5 pb-3">
+                    <span class="text-[8px] font-black text-white/20 uppercase tracking-[0.3em]">System Trace</span>
+                    <div class="flex gap-1">
+                        <div class="w-1.5 h-1.5 rounded-full bg-red-500/40"></div>
+                        <div class="w-1.5 h-1.5 rounded-full bg-orange-500/40"></div>
+                        <div class="w-1.5 h-1.5 rounded-full bg-green-500/40"></div>
+                    </div>
+                </div>
+                <div class="h-48 overflow-y-auto scrollbar-hide flex flex-col-reverse space-y-reverse space-y-2" id="terminal-log-overlay">
+                    <template x-for="(log, i) in [...logs].reverse()" :key="i">
+                        <div class="terminal-text flex gap-3">
+                            <span class="text-white/20 select-none">00:0<span x-text="i"></span></span>
+                            <span :class="log.includes('❌') ? 'text-red-400' : (log.includes('✅') ? 'text-green-400' : 'text-white/70')" x-text="log"></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toasts -->
     <div class="fixed bottom-12 left-0 right-0 z-[400] flex flex-col items-center gap-3 pointer-events-none px-6">
         <template x-for="toast in toasts" :key="toast.id">
@@ -319,23 +340,12 @@
         </template>
     </div>
 
-    <!-- Global Processing Overlay -->
-    <div x-show="loading && !precisionMode" class="fixed inset-0 z-[500] bg-black/80 backdrop-blur-3xl flex items-center justify-center" x-transition>
-        <div class="text-center space-y-12 scale-110">
-            <div class="w-24 h-24 border-2 border-white/5 border-t-white rounded-full animate-spin mx-auto shadow-[0_0_50px_rgba(255,255,255,0.1)]"></div>
-            <div class="space-y-2">
-                <p class="text-[10px] font-black uppercase tracking-[1em] text-white/40 ml-[1em]" x-text="loadingStatus"></p>
-                <p class="text-[8px] font-mono text-white/20 uppercase" x-text="logs[logs.length-1] || 'Initializing Agent'"></p>
-            </div>
-        </div>
-    </div>
-
     <script>
         function visionApp() {
             return {
                 activeTab: 'capture',
                 loading: false,
-                loadingStatus: 'Analyzing',
+                loadingStatus: 'Processing',
                 executing: false,
                 results: null,
                 aiPreview: null,
@@ -459,6 +469,7 @@
 
                     const formData = new FormData();
                     formData.append('file', file);
+                    formData.append('text', this.textInfo); // SENDING THE CONTEXT
                     formData.append('session_id', sessionId);
                     
                     try {
@@ -477,6 +488,8 @@
                                 location: 'pantry', is_food: llm.is_food, purchase_price: 0
                             };
                             this.notify('Object Identified');
+                        } else {
+                            this.notify(data.error || 'Identification Error', 'error');
                         }
                     } catch (err) { this.notify('Identification Error', 'error'); }
                     finally { 
@@ -502,7 +515,6 @@
                         const data = await response.json();
                         if (data.success) {
                             this.notify('Pipeline Executed');
-                            // Merge results rather than clearing
                             Object.assign(this.serviceResults, data.results);
                             if (item) this.fetchQueue(); 
                         } else {
@@ -516,7 +528,7 @@
                     const files = e.target.files;
                     if (!files.length) return;
                     this.loading = true;
-                    this.loadingStatus = 'Uploading Batch';
+                    this.loadingStatus = 'Importing';
                     const formData = new FormData();
                     for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
                     if (this.textInfo) formData.append('text', this.textInfo);
