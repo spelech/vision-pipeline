@@ -20,59 +20,69 @@ class MealieService(BaseService):
             return None
         return {"Authorization": f"Bearer {self.api_key}"}
 
-    async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None) -> Dict[str, Any]:
+    async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
         headers = self._get_headers()
         if not headers:
             return {"success": False, "error": "No API Key"}
 
         try:
-            # We support three modes: Create Recipe, Add Food (Inventory), Add Shopping List
-            # Based on the user's intent or some data flag. 
-            # For now, let's implement the standard Recipe creation from extracted data.
+            recipe_id = external_id
             
+            # Check if exists
+            if recipe_id:
+                check = requests.get(f"{self.api_url}/recipes/{recipe_id}", headers=headers, timeout=5)
+                if check.status_code == 404:
+                    recipe_id = None
+
+            ingredients = data.get('recipe_ingredients', [])
+            if not ingredients and data.get('recipe_ingredients_raw'):
+                ingredients = data['recipe_ingredients_raw'].split('\n')
+                
+            instructions = data.get('recipe_instructions', [])
+            if not instructions and data.get('recipe_instructions_raw'):
+                instructions = data['recipe_instructions_raw'].split('\n')
+
             recipe_payload = {
                 "name": data.get('product_name') or data.get('name'),
                 "description": data.get('description', ''),
-                "recipeIngredients": [{"note": i} for i in data.get('recipe_ingredients', [])],
-                "recipeInstructions": [{"text": i} for i in data.get('recipe_instructions', [])],
+                "recipeIngredients": [{"note": i} for i in ingredients if i.strip()],
+                "recipeInstructions": [{"text": i} for i in instructions if i.strip()],
                 "yield": data.get('yield', '1 serving')
             }
 
-            resp = requests.post(f"{self.api_url}/recipes", headers=headers, json=recipe_payload, timeout=10)
-            resp.raise_for_status()
-            recipe = resp.json()
+            if recipe_id:
+                resp = requests.put(f"{self.api_url}/recipes/{recipe_id}", headers=headers, json=recipe_payload, timeout=10)
+                resp.raise_for_status()
+            else:
+                resp = requests.post(f"{self.api_url}/recipes", headers=headers, json=recipe_payload, timeout=10)
+                resp.raise_for_status()
+                recipe = resp.json()
+                recipe_id = recipe.get('id')
             
-            # TODO: Handle image upload to recipe if needed
+            # TODO: Handle image upload
             
-            return {"success": True, "recipe_id": recipe.get('id')}
+            return {
+                "success": True, 
+                "item_id": recipe_id,
+                "url": f"{self.api_url.replace('/api', '')}/recipe/{recipe_id}" # UI URL
+            }
         except Exception as e:
             logger.error(f"Mealie execution failed: {e}")
             return {"success": False, "error": str(e)}
 
     async def get_pre_enrichment(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Search for existing recipes or foods."""
         headers = self._get_headers()
         if not headers: return {}
         name = data.get('product_name') or data.get('name')
         if not name: return {}
         try:
-            # Search recipes
             resp = requests.get(f"{self.api_url}/recipes", headers=headers, params={"query": name}, timeout=5)
             recipes = resp.json().get('items', []) if resp.status_code == 200 else []
-            
-            # Search foods
-            f_resp = requests.get(f"{self.api_url}/foods", headers=headers, params={"query": name}, timeout=5)
-            foods = f_resp.json().get('items', []) if f_resp.status_code == 200 else []
-
-            return {
-                "existing_recipes": recipes,
-                "existing_foods": foods
-            }
+            return {"existing_recipes": recipes}
         except Exception:
             return {}
 
     def get_payload(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Return the payload for Mealie Recipe creation."""
         ingredients = data.get('recipe_ingredients', [])
         if not ingredients and data.get('recipe_ingredients_raw'):
             ingredients = data['recipe_ingredients_raw'].split('\n')
@@ -88,20 +98,3 @@ class MealieService(BaseService):
             "recipeInstructions": [{"text": i} for i in instructions if i.strip()],
             "yield": data.get('yield', '1 serving')
         }
-            
-    async def create_food(self, data: Dict[str, Any]) -> bool:
-        """Helper to create a food item directly (Inventory mode)."""
-        headers = self._get_headers()
-        try:
-            payload = {
-                "name": data.get('name'),
-                "description": data.get('description'),
-                "extras": data.get('extras', {})
-            }
-            if data.get('id'): # Update existing
-                resp = requests.put(f"{self.api_url}/foods/{data['id']}", headers=headers, json=payload, timeout=5)
-            else: # Create new
-                resp = requests.post(f"{self.api_url}/foods", headers=headers, json=payload, timeout=5)
-            return resp.status_code in [200, 201]
-        except Exception:
-            return False

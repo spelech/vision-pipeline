@@ -24,7 +24,6 @@ class HomeboxService(BaseService):
         headers = self._get_headers()
         if not headers: return None
         try:
-            # 1. Search for existing location
             resp = requests.get(f"{self.api_url}/locations", headers=headers, params={"q": name}, timeout=5)
             resp.raise_for_status()
             locations = resp.json()
@@ -32,7 +31,6 @@ class HomeboxService(BaseService):
                 if loc['name'].lower() == name.lower():
                     return loc['id']
             
-            # 2. Create if not found
             resp = requests.post(f"{self.api_url}/locations", headers=headers, json={"name": name}, timeout=5)
             resp.raise_for_status()
             return resp.json()['id']
@@ -40,68 +38,79 @@ class HomeboxService(BaseService):
             logger.error(f"Homebox location error: {e}")
             return None
 
-    async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None) -> Dict[str, Any]:
+    async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
         headers = self._get_headers()
         if not headers:
             return {"success": False, "error": "No API Key"}
 
         try:
-            # Step 1: Create basic item
+            item_id = external_id
+            
+            # Check if item exists if external_id provided
+            if item_id:
+                check = requests.get(f"{self.api_url}/items/{item_id}", headers=headers, timeout=5)
+                if check.status_code == 404:
+                    item_id = None # Force recreation
+            
             location_id = None
             if data.get('location'):
                 location_id = self.find_or_create_location(data['location'])
 
-            create_payload = {
+            base_payload = {
                 "name": data.get('product_name') or data.get('name'),
                 "quantity": int(data.get('quantity', 1)),
                 "description": data.get('description', ''),
-                "locationId": location_id
-            }
-            
-            # Note: Homebox API often doesn't accept tagIds in create if they don't exist yet, 
-            # so we'll skip tags in step 1 or just pass them if they are IDs.
-            if data.get('tag_ids'):
-                create_payload['tagIds'] = data['tag_ids']
-
-            resp = requests.post(f"{self.api_url}/items", headers=headers, json=create_payload, timeout=5)
-            resp.raise_for_status()
-            item = resp.json()
-            item_id = item['id']
-
-            # Step 2: Update with extended metadata (Homebox v0.22+ pattern)
-            update_payload = {
+                "locationId": location_id,
                 "manufacturer": data.get('manufacturer') or data.get('brand') or "",
                 "modelNumber": data.get('model_number') or "",
                 "serialNumber": data.get('serial_number') or "",
                 "purchasePrice": float(data.get('purchase_price') or 0),
                 "notes": data.get('notes') or ""
             }
-            
-            # Also append technical details to description if needed, or put in notes
+
             if data.get('technical_details'):
-                if update_payload['notes']:
-                    update_payload['notes'] += f"\n\n--- Specs ---\n{data['technical_details']}"
+                if base_payload['notes']:
+                    base_payload['notes'] += f"\n\n--- Specs ---\n{data['technical_details']}"
                 else:
-                    update_payload['notes'] = f"--- Specs ---\n{data['technical_details']}"
+                    base_payload['notes'] = f"--- Specs ---\n{data['technical_details']}"
 
-            update_resp = requests.put(f"{self.api_url}/items/{item_id}", headers=headers, json=update_payload, timeout=5)
-            update_resp.raise_for_status()
+            if item_id:
+                # Update existing
+                resp = requests.put(f"{self.api_url}/items/{item_id}", headers=headers, json=base_payload, timeout=5)
+                resp.raise_for_status()
+            else:
+                # Create new
+                # Step 1: Create basic
+                resp = requests.post(f"{self.api_url}/items", headers=headers, json={
+                    "name": base_payload["name"],
+                    "quantity": base_payload["quantity"],
+                    "description": base_payload["description"],
+                    "locationId": base_payload["locationId"]
+                }, timeout=5)
+                resp.raise_for_status()
+                item = resp.json()
+                item_id = item['id']
+                
+                # Step 2: Update extended
+                requests.put(f"{self.api_url}/items/{item_id}", headers=headers, json=base_payload, timeout=5)
 
-            # Step 3: Upload attachment if image_path exists
+            # Upload attachment if image_path exists
             if image_path and os.path.exists(f"data/uploads/{image_path}"):
                 with open(f"data/uploads/{image_path}", "rb") as f:
                     files = {"file": (image_path, f, "image/jpeg")}
                     attach_data = {"type": "photo", "name": "Vision Capture"}
-                    # The endpoint might be /items/{id}/attachments
                     requests.post(f"{self.api_url}/items/{item_id}/attachments", headers=headers, files=files, data=attach_data, timeout=10)
 
-            return {"success": True, "item_id": item_id}
+            return {
+                "success": True, 
+                "item_id": item_id, 
+                "url": f"{self.api_url.replace('/api/v1', '')}/items/{item_id}" # Best guess at UI URL
+            }
         except Exception as e:
             logger.error(f"Homebox execution failed: {e}")
             return {"success": False, "error": str(e)}
 
     async def get_pre_enrichment(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Search for existing items to prevent duplicates."""
         headers = self._get_headers()
         if not headers: return {}
         name = data.get('product_name') or data.get('name')
@@ -114,20 +123,15 @@ class HomeboxService(BaseService):
             return {}
 
     def get_payload(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Return the combined payload for Homebox (Create + Update)."""
         return {
-            "step_1_create": {
-                "name": data.get('product_name') or data.get('name'),
-                "quantity": int(data.get('quantity', 1)),
-                "description": data.get('description', ''),
-                "location": data.get('location', 'pantry')
-            },
-            "step_2_update": {
-                "manufacturer": data.get('manufacturer') or data.get('brand') or "",
-                "modelNumber": data.get('model_number') or "",
-                "serialNumber": data.get('serial_number') or "",
-                "purchasePrice": float(data.get('purchase_price') or 0),
-                "notes": data.get('notes') or "",
-                "technical_details": data.get('technical_details', '')
-            }
+            "name": data.get('product_name') or data.get('name'),
+            "quantity": int(data.get('quantity', 1)),
+            "description": data.get('description', ''),
+            "location": data.get('location', 'pantry'),
+            "manufacturer": data.get('manufacturer') or data.get('brand') or "",
+            "modelNumber": data.get('model_number') or "",
+            "serialNumber": data.get('serial_number') or "",
+            "purchasePrice": float(data.get('purchase_price') or 0),
+            "notes": data.get('notes') or "",
+            "technical_details": data.get('technical_details', '')
         }

@@ -72,6 +72,22 @@ async def list_models():
     ]}
 
 
+
+@app.get("/config")
+async def get_config():
+    config_path = "config/user_config.json"
+    if not os.path.exists(config_path):
+        return {"success": False, "error": "Config not found"}
+    with open(config_path, "r") as f:
+        return json.load(f)
+
+@app.post("/config")
+async def update_config(data: Dict):
+    config_path = "config/user_config.json"
+    with open(config_path, "w") as f:
+        json.dump(data, f, indent=4)
+    return {"success": True}
+
 @app.get("/search")
 async def search_items(query: str, db: AsyncSession = Depends(get_db)):
     # Simple search for now, Postgres full-text would use plainto_tsquery
@@ -144,6 +160,7 @@ async def get_service_preview(service_name: str, data: Dict):
 
 # --- Single Identity ---
 
+
 @app.post("/identify")
 async def identify(
     file: UploadFile = File(...),
@@ -160,6 +177,11 @@ async def identify(
         pipeline_settings = json.loads(settings)
     except:
         pipeline_settings = {}
+    
+    try:
+        lasso_points = json.loads(lasso_polygon) if lasso_polygon else None
+    except:
+        lasso_points = None
         
     core_pipeline = get_pipeline(pipeline_id)
     sid = session_id or str(uuid.uuid4())
@@ -168,12 +190,19 @@ async def identify(
 
     try:
         content = await file.read()
+        raw_filename = f"raw_{uuid.uuid4()}.jpg"
+        masked_filename = f"masked_{uuid.uuid4()}.png"
+        
+        # Save raw image
+        with open(f"data/uploads/{raw_filename}", "wb") as f:
+            f.write(content)
+            
         img = Image.open(io.BytesIO(content))
         img = ImageOps.exif_transpose(img)
-        if rotation != 0: img = img.rotate(-rotation, expand=True)
-        if mirror: img = ImageOps.mirror(img)
-            
-        # Run blocking pipeline in a separate thread to keep the event loop free for log polling
+        # Note: Lasso is already applied on frontend, 'file' IS the masked image if lasso was used.
+        # However, we'll store the 'raw' for future re-edits.
+        
+        # Run blocking pipeline
         results = await run_in_threadpool(core_pipeline.run, img, text, pipeline_settings, log_it)
         
         # Service-specific pre-enrichment
@@ -181,18 +210,48 @@ async def identify(
         enrichment_tasks = [s.get_pre_enrichment(results['llm_output']) for s in SERVICES.values()]
         enrichments = await asyncio.gather(*enrichment_tasks)
         results["service_enrichments"] = {list(SERVICES.keys())[i]: enrichments[i] for i in range(len(enrichments))}
-        log_it("✨ UI updating with findings.")
+        
+        # Save to DB so it's searchable and manageable
+        async with AsyncSessionLocal() as db:
+            # Create a 'Single Capture' batch if none exists? Or just a default one.
+            stmt = select(Batch).where(Batch.name == "Single Captures")
+            res = await db.execute(stmt)
+            batch = res.scalar_one_or_none()
+            if not batch:
+                batch = Batch(name="Single Captures", status="completed")
+                db.add(batch)
+                await db.commit()
+                await db.refresh(batch)
+            
+            # Save masked image
+            img.save(f"data/uploads/{masked_filename}")
+            
+            new_item = Item(
+                batch_id=batch.id,
+                image_path=masked_filename,
+                raw_image_path=raw_filename,
+                lasso_polygon=lasso_points,
+                status="pending",
+                ai_output=results,
+                product_type="food" if results.get("llm_output", {}).get("is_food") else "product"
+            )
+            db.add(new_item)
+            await db.commit()
+            await db.refresh(new_item)
+            item_id = new_item.id
 
+        log_it("✨ UI updating with findings.")
         buf = io.BytesIO()
-        img.save(buf, format='JPEG')
+        img.save(buf, format='PNG')
         b64_img = base64.b64encode(buf.getvalue()).decode()
         
         session_logger.end_session(sid)
         return {
             "success": True,
             "session_id": sid,
+            "item_id": item_id,
             "results": results,
-            "ai_preview": f"data:image/jpeg;base64,{b64_img}"
+            "ai_preview": f"data:image/png;base64,{b64_img}"
         }
     except Exception as e:
         log_it(f"❌ Fatal Error: {str(e)}")
@@ -200,68 +259,82 @@ async def identify(
         session_logger.end_session(sid)
         return JSONResponse(status_code=500, content={"success": False, "error": str(e), "session_id": sid})
 
+
 # --- Execution Endpoints ---
+
 
 @app.post("/execute")
 async def execute_services(data: Dict):
-    """
-    Trigger multiple services concurrently for a given item or data object.
-    Payload: {"item_id": int, "service_names": ["homebox", "mealie"], "overrides": {}}
-    """
     item_id = data.get("item_id")
     service_names = data.get("service_names", [])
     overrides = data.get("overrides", {})
 
     final_data = overrides
     image_path = None
+    existing_mappings = {}
 
-    if item_id:
-        async with AsyncSessionLocal() as db:
+    async with AsyncSessionLocal() as db:
+        if item_id:
             res = await db.execute(select(Item).where(Item.id == item_id))
             item = res.scalar_one_or_none()
             if item:
                 image_path = item.image_path
                 if not final_data:
                     final_data = item.user_overrides or item.ai_output.get("llm_output", {})
-                    # Also include search results for services like PriceBuddy
                     if "searxng_results" in item.ai_output:
                         final_data["searxng_results"] = item.ai_output["searxng_results"]
+                
+                # Fetch existing mappings for upsert
+                map_res = await db.execute(select(ServiceMapping).where(ServiceMapping.item_id == item_id))
+                for m in map_res.scalars().all():
+                    existing_mappings[m.service_name] = m.external_id
 
     if not final_data:
         return {"success": False, "error": "No data to process"}
 
-    # Filter requested services
-    active_services = [SERVICES[name] for name in service_names if name in SERVICES]
-    
-    # Run concurrently
-    tasks = [s.execute(final_data, image_path=image_path) for s in active_services]
-    results = await asyncio.gather(*tasks)
-
-    # Map back to names
-    response = {service_names[i]: results[i] for i in range(len(results))}
-    
-    if item_id:
-        async with AsyncSessionLocal() as db:
-            await db.execute(update(Item).where(Item.id == item_id).values(status="uploaded"))
-            
-            # Save service mappings
-            for svc_name, res in response.items():
-                if res.get("success") and res.get("item_id"):
-                    # Use standard external_id key if present, or service-specific one
-                    ext_id = str(res.get("item_id"))
-                    ext_url = res.get("url") # Services should return the direct UI link if possible
-                    
+    results_map = {}
+    for name in service_names:
+        if name not in SERVICES: continue
+        svc = SERVICES[name]
+        ext_id = existing_mappings.get(name)
+        
+        # Execute (Create or Update)
+        res = await svc.execute(final_data, image_path=image_path, external_id=ext_id)
+        results_map[name] = res
+        
+        if res.get("success") and item_id:
+            async with AsyncSessionLocal() as db:
+                new_ext_id = str(res.get("item_id"))
+                ext_url = res.get("url")
+                
+                # Update existing mapping or create new
+                stmt = select(ServiceMapping).where(
+                    ServiceMapping.item_id == item_id, 
+                    ServiceMapping.service_name == name
+                )
+                m_res = await db.execute(stmt)
+                mapping = m_res.scalar_one_or_none()
+                
+                if mapping:
+                    mapping.external_id = new_ext_id
+                    mapping.external_url = ext_url
+                    mapping.last_sync_payload = final_data
+                    mapping.synced_at = datetime.utcnow()
+                else:
                     mapping = ServiceMapping(
                         item_id=item_id,
-                        service_name=svc_name,
-                        external_id=ext_id,
+                        service_name=name,
+                        external_id=new_ext_id,
                         external_url=ext_url,
                         last_sync_payload=final_data
                     )
                     db.add(mapping)
-            await db.commit()
+                
+                await db.execute(update(Item).where(Item.id == item_id).values(status="uploaded"))
+                await db.commit()
 
-    return {"success": True, "results": response}
+    return {"success": True, "results": results_map}
+
 
 # --- Batch Processing ---
 

@@ -11,11 +11,12 @@ class BaseService(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None) -> Dict[str, Any]:
+    async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Execute the service-specific logic.
         :param data: The extracted metadata from the core pipeline or user overrides.
         :param image_path: Path to the original image if needed for upload.
+        :param external_id: Optional ID to update instead of creating.
         :return: Result dict with success/failure and any relevant metadata.
         """
         pass

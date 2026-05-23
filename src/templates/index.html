@@ -29,7 +29,7 @@
         <div class="p-6 flex justify-between items-center glass border-b-0">
             <button @click="closePrecision()" class="text-white/60 hover:text-white font-bold text-sm uppercase tracking-widest">Cancel</button>
             <h2 class="text-xs font-black uppercase tracking-[0.3em]">Precision Lasso</h2>
-            <button @click="applyCrop()" class="bg-white text-black px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">Save Lasso</button>
+            <button @click="vibrate(50); applyCrop()" class="bg-white text-black px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">Save Lasso</button>
         </div>
         <div class="flex-1 relative overflow-hidden bg-black flex items-center justify-center" id="canvas-container">
             <canvas id="lasso-canvas" class="touch-none cursor-crosshair max-w-full max-h-full" @touchstart.prevent="startDraw" @touchmove.prevent="draw" @touchend.prevent="endDraw" @mousedown="startDraw" @mousemove="draw" @mouseup="endDraw" @mouseleave="endDraw"></canvas>
@@ -42,6 +42,7 @@
             <div class="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-lg"><span class="text-black text-[10px] font-black">V2</span></div>
             <h1 class="text-sm font-black tracking-tighter uppercase text-white">Vision Pipeline</h1>
         </div>
+        <button @click="showSettings = true" class="w-8 h-8 rounded-full glass flex items-center justify-center text-[10px] ml-4">⚙️</button>
         <div class="flex gap-1 bg-white/5 p-1 rounded-xl">
             <template x-for="tab in ['capture', 'batch', 'review', 'search']">
                 <button @click="activeTab = tab" 
@@ -64,10 +65,16 @@
                               class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm focus:ring-1 focus:ring-white/40 outline-none resize-none font-medium placeholder:text-white/20 h-20 transition-all text-white"></textarea>
                 </div>
                 
-                <button x-show="aiPreview && !results" @click="runIdentification()" 
-                        class="w-full btn-apple py-5 text-[10px] font-black uppercase tracking-[0.4em] shadow-xl shadow-white/5 active:scale-95 transition-all">
-                    Begin Identification
-                </button>
+                <div class="flex gap-3">
+                    <button x-show="aiPreview && !results" @click="runIdentification()" 
+                            class="flex-1 btn-apple py-5 text-[10px] font-black uppercase tracking-[0.4em] shadow-xl shadow-white/5 active:scale-95 transition-all">
+                        Begin Identification
+                    </button>
+                    <button x-show="results" @click="results = null; runIdentification()" 
+                            class="flex-1 glass-dark py-5 text-[10px] font-black uppercase tracking-widest text-blue-400 active:scale-95 transition-all rounded-[1.25rem]">
+                        Retry identification
+                    </button>
+                </div>
             </div>
 
             <!-- Viewfinder -->
@@ -445,6 +452,13 @@
     <script>
         function visionApp() {
             return {
+                                promptTemplates: [],
+                modelFavorites: [],
+                imageOptimization: { max_dimension: 1024, quality: 85 },
+                showSettings: false,
+                lastItemId: null,
+                lastResults: null,
+                vibrate(ms=50) { if (navigator.vibrate) navigator.vibrate(ms); },
                 activeTab: 'capture',
                 loading: false,
                 loadingStatus: 'Processing',
@@ -485,6 +499,7 @@
 
                 init() {
                     this.fetchPipelines();
+                    this.fetchConfig();
                     this.fetchLocations();
                     this.fetchQueue();
                     setInterval(() => {
@@ -545,6 +560,61 @@
                         const data = await response.json();
                         if (data.success) this.locations = data.locations;
                     } catch (e) {}
+                },
+
+                
+                async fetchConfig() {
+                    try {
+                        const resp = await fetch('/config');
+                        const data = await resp.json();
+                        this.promptTemplates = data.prompt_templates || [];
+                        this.modelFavorites = data.model_favorites || [];
+                        this.imageOptimization = data.image_optimization || { max_dimension: 1024, quality: 85 };
+                    } catch (e) {}
+                },
+
+                async saveConfig() {
+                    try {
+                        await fetch('/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                prompt_templates: this.promptTemplates,
+                                model_favorites: this.modelFavorites,
+                                image_optimization: this.imageOptimization
+                            })
+                        });
+                        this.notify('Settings Saved');
+                    } catch (e) {}
+                },
+
+                async preprocessImage(file) {
+                    return new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            let width = img.width;
+                            let height = img.height;
+                            const max = this.imageOptimization.max_dimension;
+                            
+                            if (width > height && width > max) {
+                                height = Math.round(height * (max / width));
+                                width = max;
+                            } else if (height > max) {
+                                width = Math.round(width * (max / height));
+                                height = max;
+                            }
+                            
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            canvas.toBlob((blob) => {
+                                resolve(blob);
+                            }, 'image/jpeg', this.imageOptimization.quality / 100);
+                        };
+                        img.src = URL.createObjectURL(file);
+                    });
                 },
 
                 async fetchQueue() {
@@ -875,7 +945,72 @@
             </div>
             <div class="p-6 border-t border-white/10 flex justify-end gap-4 bg-black/20">
                 <button @click="showPreviewModal = false" class="px-6 py-3 rounded-full font-black text-xs uppercase tracking-widest text-white/60 hover:bg-white/5">Cancel</button>
-                <button @click="confirmExecute()" class="btn-apple bg-white text-black px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest">Execute Services</button>
+                <button @click="vibrate(100); confirmExecute()" class="btn-apple bg-white text-black px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest">Execute Services</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Settings Drawer -->
+    <div x-show="showSettings" class="fixed inset-0 z-[800] bg-black/60 backdrop-blur-md" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:leave="transition ease-in duration-200" x-transition:leave-end="opacity-0">
+        <div class="absolute right-0 top-0 bottom-0 w-80 glass border-l border-white/10 flex flex-col" @click.away="showSettings = false" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="translate-x-full" x-transition:leave="transition ease-in duration-200" x-transition:leave-end="translate-x-full">
+            <div class="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
+                <h2 class="text-xs font-black uppercase tracking-widest">Global Settings</h2>
+                <button @click="showSettings = false" class="text-white/40 hover:text-white">✕</button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide">
+                <!-- Image Optimization -->
+                <section class="space-y-4">
+                    <label class="label-apple">Image Quality</label>
+                    <div class="glass p-4 rounded-2xl space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[10px] uppercase text-white/40">Max Edge (px)</span>
+                            <input type="number" x-model="imageOptimization.max_dimension" class="w-20 bg-black/40 border-none rounded-lg p-1 text-[10px] text-right">
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-[8px] uppercase font-black tracking-tighter">
+                                <span>Compression</span>
+                                <span x-text="imageOptimization.quality + '%'"></span>
+                            </div>
+                            <input type="range" min="10" max="100" x-model="imageOptimization.quality" class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Model Favorites -->
+                <section class="space-y-4">
+                    <label class="label-apple">AI Models</label>
+                    <div class="space-y-2">
+                        <template x-for="model in ['qwen/qwen2.5-vl-72b-instruct', 'google/gemini-2.0-flash-001', 'anthropic/claude-3.5-sonnet']" :key="model">
+                            <label class="glass p-3 rounded-xl flex items-center justify-between cursor-pointer hover:bg-white/5 transition-all">
+                                <span class="text-[8px] font-black uppercase truncate mr-2" x-text="model.split('/')[1]"></span>
+                                <input type="checkbox" :value="model" x-model="modelFavorites" class="ios-toggle scale-50 origin-right">
+                            </label>
+                        </template>
+                    </div>
+                </section>
+
+                <!-- Prompt Templates -->
+                <section class="space-y-4">
+                    <label class="label-apple">Prompt Templates</label>
+                    <div class="space-y-3">
+                        <template x-for="p in promptTemplates" :key="p.id">
+                            <div class="glass p-3 rounded-xl space-y-2">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[10px] font-black uppercase text-blue-400" x-text="p.name"></span>
+                                    <button @click="promptTemplates = promptTemplates.filter(x => x.id !== p.id)" class="text-red-500 text-[8px] uppercase font-black">Delete</button>
+                                </div>
+                                <p class="text-[8px] text-white/30 line-clamp-2" x-text="p.prompt"></p>
+                            </div>
+                        </template>
+                        <button @click="promptTemplates.push({id: Date.now(), name: 'New Template', prompt: ''})" class="w-full py-3 rounded-xl border border-dashed border-white/10 text-[8px] uppercase font-black text-white/30 hover:text-white transition-colors">+ Add Template</button>
+                    </div>
+                </section>
+            </div>
+            
+            <div class="p-6 border-t border-white/10">
+                <button @click="saveConfig(); showSettings = false" class="w-full btn-apple py-4 text-[10px] font-black uppercase tracking-widest">Apply Changes</button>
             </div>
         </div>
     </div>
