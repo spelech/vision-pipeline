@@ -17,11 +17,32 @@ from sqlalchemy import select, update, delete
 from PIL import Image, ImageOps
 
 from pipelines import get_pipeline as get_pipeline_factory, get_all_pipelines
-from database import init_db, AsyncSessionLocal, Batch, Item, ServiceMapping
+from database import init_db, AsyncSessionLocal, Batch, Item, ServiceMapping, ConfigSecret
 from services.homebox import HomeboxService
 from services.mealie import MealieService
 from services.enrichers import PriceBuddyService, ChangeDetectionService
 from logger import session_logger
+from cryptography.fernet import Fernet
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Get or create encryption key
+MASTER_KEY = os.getenv("ENCRYPTION_KEY")
+if not MASTER_KEY:
+    MASTER_KEY = Fernet.generate_key().decode()
+    env_path = ".env" if os.path.exists(".env") else "../.env"
+    with open(env_path, "a") as f:
+        f.write(f"\nENCRYPTION_KEY={MASTER_KEY}\n")
+    os.environ["ENCRYPTION_KEY"] = MASTER_KEY
+
+cipher = Fernet(MASTER_KEY.encode())
+
+def encrypt_secret(val: str) -> str:
+    return cipher.encrypt(val.encode()).decode()
+
+def decrypt_secret(val: str) -> str:
+    return cipher.decrypt(val.encode()).decode()
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
@@ -30,6 +51,15 @@ logger = logging.getLogger("VisionAPI")
 # --- Lifespan ---
 async def lifespan(app: FastAPI):
     await init_db()
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(ConfigSecret))
+        secrets = res.scalars().all()
+        for secret in secrets:
+            try:
+                os.environ[secret.key] = decrypt_secret(secret.encrypted_value)
+                logger.info(f"Loaded encrypted secret: {secret.key}")
+            except Exception as e:
+                logger.error(f"Failed to decrypt secret {secret.key}: {e}")
     yield
 
 # --- Setup ---
@@ -114,16 +144,49 @@ async def list_models():
 @app.get("/config")
 async def get_config():
     config_path = "config/user_config.json"
-    if not os.path.exists(config_path):
-        return {"success": False, "error": "Config not found"}
-    with open(config_path, "r") as f:
-        return json.load(f)
+    data = {}
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            data = json.load(f)
+
+    # Mask secrets - return only presence status
+    secrets_status = {}
+    for key in ["OPENROUTER_API_KEY", "SEARXNG_URL", "HOMEBOX_API_KEY", "MEALIE_API_TOKEN", "PRICEBUDDY_API_KEY", "CHANGEDETECTION_API_KEY"]:
+        val = os.getenv(key)
+        if val:
+            if "URL" in key: secrets_status[key] = f"{val[:15]}..."
+            else: secrets_status[key] = "********"
+        else:
+            secrets_status[key] = ""
+
+    data["secrets_status"] = secrets_status
+    return data
 
 @app.post("/config")
-async def update_config(data: Dict):
+async def update_config(data: Dict, db: AsyncSession = Depends(get_db)):
+    # Separate secrets from general config
+    keys_to_persist = ["prompt_templates", "model_favorites", "starred_models", "image_optimization", "custom_pipelines"]
+    config_to_save = {k: data[k] for k in keys_to_persist if k in data}
+
+    for key in ["OPENROUTER_API_KEY", "SEARXNG_URL", "HOMEBOX_API_KEY", "MEALIE_API_TOKEN", "PRICEBUDDY_API_KEY", "CHANGEDETECTION_API_KEY"]:
+        if key in data and data[key] and data[key] != "********":
+            os.environ[key] = data[key]
+            encrypted = encrypt_secret(data[key])
+            
+            # Upsert into database
+            res = await db.execute(select(ConfigSecret).where(ConfigSecret.key == key))
+            secret_obj = res.scalar_one_or_none()
+            if secret_obj:
+                secret_obj.encrypted_value = encrypted
+            else:
+                db.add(ConfigSecret(key=key, encrypted_value=encrypted))
+    await db.commit()
+
     config_path = "config/user_config.json"
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
     with open(config_path, "w") as f:
-        json.dump(data, f, indent=4)
+        json.dump(config_to_save, f, indent=4)
+
     return {"success": True}
 
 @app.get("/search")

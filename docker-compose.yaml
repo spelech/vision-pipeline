@@ -27,17 +27,8 @@ services:
       - ./config:/app/config
       - ./data:/app/data
     environment:
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - SEARXNG_URL=${SEARXNG_URL}
-      - HOMEBOX_URL=http://homebox:7745/api/v1
-      - HOMEBOX_USERNAME=${HOMEBOX_USERNAME}
-      - HOMEBOX_PASSWORD=${HOMEBOX_PASSWORD}
-      - HOMEBOX_API_KEY=${HOMEBOX_API_KEY}
-      - PRICEBUDDY_API_KEY=${PRICEBUDDY_API_KEY}
-      - CHANGEDETECTION_API_KEY=${CHANGEDETECTION_API_KEY}
-      - MEALIE_API_TOKEN=${MEALIE_API_TOKEN}
-      - MEALIE_URL=${MEALIE_URL}
       - DATABASE_URL=postgresql+asyncpg://vision:vision_pass@db:5432/vision_pipeline
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
     depends_on:
       - db
     restart: unless-stopped

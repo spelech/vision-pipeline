@@ -60,6 +60,12 @@ class ServiceMapping(Base):
 
     item = relationship("Item", back_populates="mappings")
 
+class ConfigSecret(Base):
+    __tablename__ = "config_secrets"
+    
+    key = Column(String, primary_key=True, index=True)
+    encrypted_value = Column(String)
+
 engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
