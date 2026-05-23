@@ -1,1 +1,52 @@
-.env\ndata/\n**/__pycache__/\n**/.nicegui/\n**/.pytest_cache/\n**/*.pyc\n**/*.db
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+
+# Data & Uploads
+data/
+uploads/
+*.db
+*.sqlite3
+
+# Environment & Secrets
+.env
+.env.local
+.env.*
+secrets.yml
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+.docker_logs/
+
+# Project Specific
+playwright/.nicegui/
+src/.nicegui/
+src/.pytest_cache/
