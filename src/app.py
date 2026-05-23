@@ -96,7 +96,7 @@ async def identify(
         results = core_pipeline.run_pipeline(img, text)
         
         # Service-specific pre-enrichment (duplicates, etc.)
-        enrichment_tasks = [s.get_pre-enrichment(results['llm_output']) for s in SERVICES.values()]
+        enrichment_tasks = [s.get_pre_enrichment(results['llm_output']) for s in SERVICES.values()]
         enrichments = await asyncio.gather(*enrichment_tasks)
         results["service_enrichments"] = {list(SERVICES.keys())[i]: enrichments[i] for i in range(len(enrichments))}
 
@@ -203,7 +203,7 @@ async def process_item_task(item_id: int):
             results = core_pipeline.run_pipeline(img, text_description=batch_text)
             
             # Service-specific pre-enrichment
-            enrichment_tasks = [s.get_pre-enrichment(results['llm_output']) for s in SERVICES.values()]
+            enrichment_tasks = [s.get_pre_enrichment(results['llm_output']) for s in SERVICES.values()]
             enrichments = await asyncio.gather(*enrichment_tasks)
             results["service_enrichments"] = {list(SERVICES.keys())[i]: enrichments[i] for i in range(len(enrichments))}
 

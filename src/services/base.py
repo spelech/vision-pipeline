@@ -21,7 +21,7 @@ class BaseService(ABC):
         pass
 
     @abstractmethod
-    async def get_pre-enrichment(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_pre_enrichment(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Perform any service-specific search or validation before execution.
         (e.g., searching for existing items in Homebox/Mealie).

@@ -25,7 +25,7 @@ class PriceBuddyService(BaseService):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def get_pre-enrichment(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_pre_enrichment(self, data: Dict[str, Any]) -> Dict[str, Any]:
         return {}
 
 class ChangeDetectionService(BaseService):
@@ -47,5 +47,5 @@ class ChangeDetectionService(BaseService):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def get_pre-enrichment(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_pre_enrichment(self, data: Dict[str, Any]) -> Dict[str, Any]:
         return {}

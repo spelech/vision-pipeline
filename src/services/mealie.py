@@ -49,7 +49,7 @@ class MealieService(BaseService):
             logger.error(f"Mealie execution failed: {e}")
             return {"success": False, "error": str(e)}
 
-    async def get_pre-enrichment(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_pre_enrichment(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Search for existing recipes or foods."""
         headers = self._get_headers()
         if not headers: return {}
