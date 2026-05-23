@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vision Pipeline 2.1.3</title>
+    <title>Vision Pipeline 2.1.7</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -50,7 +50,7 @@
     <nav class="fixed top-0 left-0 right-0 z-50 glass border-b border-white/5 px-6 py-4 flex justify-between items-center backdrop-blur-3xl">
         <div class="flex items-center gap-3">
             <div class="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-lg"><span class="text-black text-[10px] font-black">V2</span></div>
-            <h1 class="text-sm font-black tracking-tighter uppercase">Vision Pipeline</h1>
+            <h1 class="text-sm font-black tracking-tighter uppercase text-white">Vision Pipeline</h1>
         </div>
         <div class="flex gap-1 bg-white/5 p-1 rounded-xl">
             <template x-for="tab in ['capture', 'batch', 'review']">
@@ -66,36 +66,33 @@
         <!-- Tab: Single Capture -->
         <div x-show="activeTab === 'capture'" class="space-y-6" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 translate-y-12">
             
-            <!-- Context & Action Control -->
+            <!-- Guidance Control -->
             <div class="glass p-6 rounded-[2rem] space-y-5 border-white/10 bg-white/[0.04]">
                 <div class="space-y-3">
                     <label class="label-apple ml-1">AI Guidance / Notes</label>
                     <textarea x-model="textInfo" placeholder="e.g. This is a special limited edition variant..." 
-                              class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm focus:ring-1 focus:ring-white/40 outline-none resize-none font-medium placeholder:text-white/20 h-20 transition-all"></textarea>
+                              class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm focus:ring-1 focus:ring-white/40 outline-none resize-none font-medium placeholder:text-white/20 h-20 transition-all text-white"></textarea>
                 </div>
                 
                 <button x-show="aiPreview && !results" @click="runIdentification()" 
-                        class="w-full btn-apple py-5 text-[10px] font-black uppercase tracking-[0.4em] shadow-xl shadow-white/5">
+                        class="w-full btn-apple py-5 text-[10px] font-black uppercase tracking-[0.4em] shadow-xl shadow-white/5 active:scale-95 transition-all">
                     Begin Identification
                 </button>
             </div>
 
-            <!-- Viewfinder / Canvas -->
+            <!-- Viewfinder -->
             <div class="relative rounded-[2.5rem] overflow-hidden glass aspect-[4/5] shadow-2xl group border-white/10">
                 <template x-if="!aiPreview">
                     <div class="absolute inset-0 flex flex-col items-center justify-center space-y-6">
                         <div class="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center animate-pulse bg-white/[0.02]">
                             <span class="text-5xl opacity-40">📸</span>
                         </div>
-                        <div class="text-center space-y-1">
-                            <p class="text-white font-black text-xs uppercase tracking-[0.2em]">Capture or Upload</p>
-                        </div>
+                        <p class="text-white font-black text-xs uppercase tracking-[0.2em]">Capture or Upload</p>
                     </div>
                 </template>
                 
                 <div x-show="aiPreview" class="w-full h-full relative">
                     <img :src="aiPreview" class="w-full h-full object-cover">
-                    <!-- Overlays -->
                     <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
                     <div class="absolute top-6 left-6 flex flex-col gap-2">
                         <button @click="enterPrecision()" class="glass-dark px-4 py-2 rounded-full border border-white/10 active:scale-95 transition-all">
@@ -104,7 +101,6 @@
                     </div>
                 </div>
                 
-                <!-- Bottom Controls (Capture/New) -->
                 <div class="absolute bottom-8 left-0 right-0 flex justify-center px-8 gap-4">
                     <label class="cursor-pointer">
                         <input type="file" capture="environment" accept="image/*" class="hidden" @change="onFileSelected">
@@ -117,6 +113,7 @@
                 </div>
             </div>
 
+            <!-- Single Result Card -->
             <div x-show="results" class="space-y-6" x-transition:enter="transition ease-out duration-700" x-transition:enter-start="opacity-0 translate-y-20">
                 <div class="glass p-8 rounded-[3rem] shadow-2xl space-y-8 border-white/20 bg-white/[0.05]">
                     <div class="space-y-2">
@@ -127,19 +124,20 @@
                     <div class="grid grid-cols-2 gap-8">
                         <div class="space-y-2">
                             <label class="label-apple ml-2">Brand</label>
-                            <input type="text" x-model="form.brand" class="w-full bg-white/10 border border-white/10 rounded-2xl px-5 py-4 text-xs font-bold outline-none text-white focus:bg-white/15 transition-all">
+                            <input type="text" x-model="form.brand" class="w-full bg-white/10 border border-white/10 rounded-2xl px-5 py-4 text-xs font-bold outline-none text-white">
                         </div>
                         <div class="space-y-2">
                             <label class="label-apple ml-2">Category</label>
-                            <input type="text" x-model="form.category" class="w-full bg-white/10 border border-white/10 rounded-2xl px-5 py-4 text-xs font-bold outline-none text-white focus:bg-white/15 transition-all">
+                            <input type="text" x-model="form.category" class="w-full bg-white/10 border border-white/10 rounded-2xl px-5 py-4 text-xs font-bold outline-none text-white">
                         </div>
                     </div>
 
                     <div class="space-y-2">
                         <label class="label-apple ml-2">Summary</label>
-                        <textarea x-model="form.description" rows="2" class="w-full bg-white/10 border border-white/10 rounded-2xl px-6 py-5 text-sm font-medium outline-none resize-none text-white/90 focus:bg-white/15 transition-all"></textarea>
+                        <textarea x-model="form.description" rows="2" class="w-full bg-white/10 border border-white/10 rounded-2xl px-6 py-5 text-sm font-medium outline-none resize-none text-white/90"></textarea>
                     </div>
 
+                    <!-- Technical Section -->
                     <div x-data="{ open: false }" class="space-y-4">
                         <button @click="open = !open" class="flex items-center gap-3 label-apple hover:text-white transition-colors group">
                             <div class="w-6 h-6 rounded-full glass flex items-center justify-center group-hover:bg-white/20 transition-all">
@@ -156,45 +154,98 @@
                         </div>
                     </div>
 
+                    <!-- Workflows Section (1-Column Collapsible) -->
                     <div class="border-t border-white/10 pt-8 space-y-6">
                         <div class="flex justify-between items-center px-1">
-                            <h3 class="label-apple">Pipeline Execution</h3>
-                            <button @click="showPayload = !showPayload" class="text-[8px] font-black text-white/40 hover:text-white uppercase tracking-widest border border-white/20 px-3 py-1 rounded-full transition-all">Review Payload</button>
+                            <h3 class="label-apple text-white/40">Workflow Routing</h3>
+                            <div class="text-[9px] font-black text-blue-500 uppercase tracking-widest" x-text="selectedServices.length + ' Active'"></div>
                         </div>
 
-                        <div x-show="showPayload" x-transition class="bg-black/60 rounded-2xl p-6 border border-white/10 font-mono text-[9px] overflow-x-auto shadow-inner">
-                            <pre class="text-blue-300" x-text="JSON.stringify(form, null, 2)"></pre>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-1 gap-3">
                             <template x-for="svc in [
-                                {id: 'homebox', label: 'Homebox', icon: '📦'},
-                                {id: 'mealie', label: 'Mealie', icon: '🍎'},
-                                {id: 'pricebuddy', label: 'PriceBuddy', icon: '🏷️'},
-                                {id: 'changedetection', label: 'Tracker', icon: '🔔'}
-                            ]">
-                                <label class="flex items-center justify-between p-4 glass rounded-2xl cursor-pointer hover:bg-white/[0.08] transition-all group border-white/10"
-                                       :class="serviceResults[svc.id]?.success ? 'border-green-500 bg-green-500/10' : ''">
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-sm opacity-70 group-hover:opacity-100 transition-opacity" x-text="svc.icon"></span>
-                                        <span class="text-[10px] font-black uppercase tracking-tight text-white/80 group-hover:text-white" x-text="svc.label"></span>
+                                {id: 'homebox', label: 'Homebox', icon: '📦', sub: 'Inventory'},
+                                {id: 'mealie', label: 'Mealie', icon: '🍎', sub: 'Recipes'},
+                                {id: 'pricebuddy', label: 'PriceBuddy', icon: '🏷️', sub: 'Tracking'},
+                                {id: 'changedetection', label: 'Tracker', icon: '🔔', sub: 'Monitoring'}
+                            ]" :key="svc.id">
+                                <div class="glass rounded-[2rem] overflow-hidden border-white/10 transition-all"
+                                     :class="serviceResults[svc.id]?.success ? 'border-green-500 bg-green-500/5' : ''"
+                                     x-data="{ expanded: false }">
+                                    
+                                    <div class="flex items-center justify-between p-5 cursor-pointer hover:bg-white/[0.04]" @click="expanded = !expanded">
+                                        <div class="flex items-center gap-4">
+                                            <div class="w-12 h-12 rounded-2xl glass flex items-center justify-center text-xl shadow-inner" x-text="svc.icon"></div>
+                                            <div class="flex flex-col">
+                                                <span class="text-[11px] font-black uppercase tracking-wider text-white/90" x-text="svc.label"></span>
+                                                <span x-show="serviceResults[svc.id]?.success" class="text-[8px] font-black text-green-500 uppercase tracking-widest mt-0.5">Dispatched ✅</span>
+                                                <span x-show="!serviceResults[svc.id]" class="text-[8px] font-black text-white/20 uppercase tracking-widest mt-0.5" x-text="svc.sub"></span>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-4">
+                                            <div class="w-8 h-8 rounded-full glass flex items-center justify-center transition-transform duration-300" :class="expanded ? 'rotate-180 bg-white/10' : ''">
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M19 9l-7 7-7-7"></path></svg>
+                                            </div>
+                                            <input type="checkbox" :value="svc.id" x-model="selectedServices" class="ios-toggle scale-90" @click.stop>
+                                        </div>
                                     </div>
-                                    <div class="flex items-center gap-2">
-                                        <span x-show="serviceResults[svc.id]?.success" class="text-[10px] animate-bounce">✅</span>
-                                        <input type="checkbox" :value="svc.id" x-model="selectedServices" class="ios-toggle scale-75 origin-right">
+
+                                    <!-- Panel Expansion -->
+                                    <div x-show="expanded" x-transition class="p-8 pt-2 space-y-6 border-t border-white/5 bg-black/30">
+                                        <div class="space-y-4">
+                                            <template x-if="svc.id === 'homebox'">
+                                                <div class="grid grid-cols-2 gap-4">
+                                                    <div class="space-y-2">
+                                                        <label class="label-apple">Location</label>
+                                                        <select x-model="form.location" class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white outline-none">
+                                                            <template x-for="loc in locations">
+                                                                <option :value="loc.name" x-text="loc.name"></option>
+                                                            </template>
+                                                        </select>
+                                                    </div>
+                                                    <div class="grid grid-cols-2 gap-2">
+                                                        <div class="space-y-2">
+                                                            <label class="label-apple">Qty</label>
+                                                            <input type="number" x-model="form.quantity" class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white outline-none">
+                                                        </div>
+                                                        <div class="space-y-2">
+                                                            <label class="label-apple">Unit</label>
+                                                            <input type="text" x-model="form.unit" class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white outline-none">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </template>
+
+                                            <template x-if="svc.id === 'mealie'">
+                                                <div class="space-y-4">
+                                                    <div class="space-y-2">
+                                                        <label class="label-apple">Ingredients</label>
+                                                        <textarea x-model="form.recipe_ingredients_raw" rows="3" class="w-full bg-white/10 border border-white/10 rounded-xl px-5 py-4 text-[10px] font-mono text-white/80 outline-none h-32"></textarea>
+                                                    </div>
+                                                    <div class="space-y-2">
+                                                        <label class="label-apple">Instructions</label>
+                                                        <textarea x-model="form.recipe_instructions_raw" rows="3" class="w-full bg-white/10 border border-white/10 rounded-xl px-5 py-4 text-[10px] font-mono text-white/80 outline-none h-32"></textarea>
+                                                    </div>
+                                                </div>
+                                            </template>
+
+                                            <div class="bg-black/40 p-5 rounded-2xl border border-white/5 shadow-inner">
+                                                <span class="label-apple block mb-3">Payload Data</span>
+                                                <pre class="text-[9px] text-blue-300 font-mono overflow-x-auto whitespace-pre-wrap" x-text="JSON.stringify(form, null, 2)"></pre>
+                                            </div>
+                                        </div>
                                     </div>
-                                </label>
+                                </div>
                             </template>
                         </div>
 
-                        <div class="flex gap-4">
+                        <div class="flex gap-4 pt-4">
                             <button @click="triggerServices()" :disabled="executing"
-                                    class="flex-1 btn-apple py-6 text-[10px] font-black uppercase tracking-[0.4em] shadow-2xl active:scale-[0.98] transition-all disabled:opacity-30">
+                                    class="flex-1 btn-apple py-6 text-[10px] font-black uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all disabled:opacity-30">
                                 <span x-show="!executing">Execute Workflow</span>
                                 <div x-show="executing" class="w-6 h-6 border-2 border-black/10 border-t-black rounded-full animate-spin mx-auto"></div>
                             </button>
                             <button @click="runIdentification()" :disabled="executing"
-                                    class="glass px-8 rounded-[2rem] text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-white hover:bg-white/5 transition-all">
+                                    class="glass px-10 rounded-[2rem] text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-white hover:bg-white/5 transition-all">
                                 🔄 Rerun AI
                             </button>
                         </div>
@@ -211,9 +262,9 @@
                     <h2 class="text-3xl font-black tracking-tight uppercase">Bulk Import</h2>
                 </div>
                 <div class="space-y-4 text-left max-w-sm mx-auto">
-                    <label class="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] ml-4">Batch Context</label>
+                    <label class="label-apple ml-4">Batch Context</label>
                     <textarea x-model="textInfo" placeholder="Global tags or location context..." 
-                              class="w-full bg-white/5 border border-white/5 rounded-[2rem] px-8 py-7 text-sm focus:ring-2 focus:ring-white/10 outline-none resize-none font-medium h-32"></textarea>
+                              class="w-full bg-white/5 border border-white/5 rounded-[2rem] px-8 py-7 text-sm focus:ring-2 focus:ring-white/10 outline-none resize-none font-medium h-32 text-white"></textarea>
                 </div>
                 <label class="block cursor-pointer group">
                     <input type="file" multiple accept="image/*" class="hidden" @change="onBatchSelected">
@@ -245,7 +296,7 @@
                             <div class="p-8 flex-1 min-w-0 flex flex-col justify-center">
                                 <div class="flex justify-between items-start gap-4">
                                     <div class="truncate">
-                                        <input type="text" x-model="item.edit_data.product_name" class="bg-transparent border-none p-0 text-xl font-black focus:ring-0 w-full tracking-tight">
+                                        <input type="text" x-model="item.edit_data.product_name" class="bg-transparent border-none p-0 text-xl font-black focus:ring-0 w-full tracking-tight text-white">
                                         <div class="text-[9px] text-white/30 font-black uppercase mt-2" x-text="item.edit_data.brand || 'Asset'"></div>
                                     </div>
                                     <button @click="item.show_more = !item.show_more" class="glass p-3 rounded-2xl active:scale-90 transition-all">
@@ -256,11 +307,10 @@
                         </div>
 
                         <div x-show="item.show_more" class="p-10 bg-white/[0.01] space-y-10 border-t border-white/5" x-transition>
-                            <!-- Review Fields (Location, Qty) -->
                             <div class="grid grid-cols-2 gap-8">
                                 <div class="space-y-3">
                                     <label class="text-[8px] font-black text-white/20 uppercase tracking-[0.4em] ml-2">Fulfillment</label>
-                                    <select x-model="item.edit_data.location" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black outline-none focus:bg-white/10 transition-all">
+                                    <select x-model="item.edit_data.location" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black outline-none focus:bg-white/10 transition-all text-white">
                                         <template x-for="loc in locations">
                                             <option :value="loc.name" x-text="loc.name"></option>
                                         </template>
@@ -269,21 +319,21 @@
                                 <div class="grid grid-cols-2 gap-4">
                                     <div class="space-y-3">
                                         <label class="text-[8px] font-black text-white/20 uppercase tracking-[0.4em] ml-2">Unit</label>
-                                        <input type="text" x-model="item.edit_data.unit" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black outline-none">
+                                        <input type="text" x-model="item.edit_data.unit" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black outline-none text-white">
                                     </div>
                                     <div class="space-y-3">
                                         <label class="text-[8px] font-black text-white/20 uppercase tracking-[0.4em] ml-2">Qty</label>
-                                        <input type="number" x-model="item.edit_data.quantity" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black outline-none">
+                                        <input type="number" x-model="item.edit_data.quantity" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black outline-none text-white">
                                     </div>
                                 </div>
                             </div>
 
                             <div class="space-y-6">
                                 <label class="text-[8px] font-black text-white/20 uppercase tracking-[0.4em] ml-2">Workflow Routing</label>
-                                <div class="grid grid-cols-2 gap-3">
+                                <div class="grid grid-cols-1 gap-3">
                                     <template x-for="svc in ['homebox', 'mealie', 'pricebuddy', 'changedetection']">
                                         <label class="glass p-5 rounded-3xl flex items-center justify-between border-white/5 cursor-pointer hover:bg-white/5 transition-all">
-                                            <span class="text-[9px] font-black uppercase" x-text="svc"></span>
+                                            <span class="text-[9px] font-black uppercase text-white/70" x-text="svc"></span>
                                             <input type="checkbox" :value="svc" x-model="item.selected_services" class="ios-toggle scale-75 origin-right">
                                         </label>
                                     </template>
@@ -323,11 +373,11 @@
                 <div class="h-56 overflow-y-auto scrollbar-hide flex flex-col space-y-3" x-ref="overlayLog">
                     <template x-for="(log, i) in logs" :key="i">
                         <div class="terminal-text flex gap-4 transition-all duration-300">
-                            <span class="text-white/20 select-none tabular-nums" x-text="(i+1).toString().padStart(2, '0')"></span>
+                            <span class="text-white/10 select-none tabular-nums" x-text="(i+1).toString().padStart(2, '0')"></span>
                             <span :class="log.includes('❌') ? 'text-red-400' : (log.includes('✅') ? 'text-green-400' : 'text-white')" x-text="log"></span>
                         </div>
                     </template>
-                    <div x-show="logs.length === 0" class="terminal-text italic text-white/20 uppercase tracking-widest">Awaiting kernel boot...</div>
+                    <div x-show="logs.length === 0" class="terminal-text italic text-white/10 uppercase tracking-widest">Awaiting kernel boot...</div>
                 </div>
             </div>
         </div>
@@ -369,7 +419,8 @@
                     product_name: '', brand: '', manufacturer: '', model_number: '', serial_number: '',
                     category: '', description: '', technical_details: '', notes: '',
                     quantity: 1, unit: '', msrp: '', product_url: '',
-                    location: 'pantry', is_food: false, purchase_price: 0
+                    location: 'pantry', is_food: false, purchase_price: 0,
+                    recipe_ingredients_raw: '', recipe_instructions_raw: ''
                 },
 
                 init() {
@@ -410,7 +461,9 @@
                                     category: llm.category || '', description: llm.description || '',
                                     quantity: 1, unit: '', location: 'pantry', msrp: llm.msrp || '',
                                     product_url: llm.product_url || '',
-                                    purchase_price: parseFloat(llm.msrp?.replace(/[^0-9.]/g, '')) || 0
+                                    purchase_price: parseFloat(llm.msrp?.replace(/[^0-9.]/g, '')) || 0,
+                                    recipe_ingredients_raw: (llm.recipe_ingredients || []).join('\n'),
+                                    recipe_instructions_raw: (llm.recipe_instructions || []).join('\n')
                                 }
                             };
                         });
@@ -481,7 +534,9 @@
                                 manufacturer: llm.manufacturer || '', msrp: llm.msrp || '',
                                 model_number: llm.model_number || '', serial_number: llm.serial_number || '',
                                 technical_details: llm.technical_details || '', product_url: llm.product_url || '',
-                                location: 'pantry', is_food: llm.is_food, purchase_price: 0
+                                location: 'pantry', is_food: llm.is_food, purchase_price: 0,
+                                recipe_ingredients_raw: (llm.recipe_ingredients || []).join('\n'),
+                                recipe_instructions_raw: (llm.recipe_instructions || []).join('\n')
                             };
                             this.notify('Agent Task Complete');
                         } else {
