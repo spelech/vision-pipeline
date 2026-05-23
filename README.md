@@ -1,4 +1,4 @@
-# Vision Pipeline V3
+# Vision Pipeline v3.2.0
 
 An automated product identification and enrichment system that bridges physical items with digital home services.
 
