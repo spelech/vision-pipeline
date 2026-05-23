@@ -1,3 +1,5 @@
+# Vision Pipeline v3.3.0
+
 # Project Features
 
 This file tracks the current capabilities and planned enhancements for the Vision Pipeline.
