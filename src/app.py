@@ -5,6 +5,7 @@ import uuid
 import base64
 import logging
 import asyncio
+from datetime import datetime
 from typing import Optional, List, Dict
 from fastapi import FastAPI, UploadFile, File, Form, Request, BackgroundTasks, Depends
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -15,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from PIL import Image, ImageOps
 
-from pipelines import get_pipeline, get_all_pipelines
+from pipelines import get_pipeline as get_pipeline_factory, get_all_pipelines
 from database import init_db, AsyncSessionLocal, Batch, Item, ServiceMapping
 from services.homebox import HomeboxService
 from services.mealie import MealieService
@@ -33,7 +34,6 @@ async def lifespan(app: FastAPI):
 
 # --- Setup ---
 app = FastAPI(lifespan=lifespan)
-
 
 # Registry of available services
 SERVICES = {
@@ -56,9 +56,7 @@ async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
 
-# --- Core Endpoints ---
-
-
+# --- Pipeline Helpers ---
 
 def get_pipeline(pipeline_id: str):
     from pipelines import PIPELINE_REGISTRY, DefaultPipeline, ComposablePipeline
@@ -81,14 +79,13 @@ def get_pipeline(pipeline_id: str):
         
     return DefaultPipeline()
 
+# --- Endpoints ---
 
 @app.get("/pipelines")
 async def list_pipelines():
     from pipelines import get_all_pipelines
     try:
         base = get_all_pipelines()
-        logger.info(f"Base pipelines: {[p['id'] for p in base]}")
-        
         config_path = "config/user_config.json"
         custom = []
         if os.path.exists(config_path):
@@ -96,26 +93,18 @@ async def list_pipelines():
                 config = json.load(f)
                 custom = config.get("custom_pipelines", [])
         
-        logger.info(f"Custom pipelines: {[p['id'] for p in custom]}")
         return {"success": True, "pipelines": base + custom}
     except Exception as e:
         logger.error(f"Error listing pipelines: {e}")
         return {"success": False, "error": str(e)}
 
-            
-    return {"success": True, "pipelines": base}
-
-
 @app.get("/models")
 async def list_models():
-    # Placeholder for dynamic model fetching if needed
     return {"success": True, "models": [
         {"id": "qwen/qwen2.5-vl-72b-instruct", "name": "Qwen 2.5 VL 72B (OpenRouter)"},
-        {"id": "anthropic/gpt-4o-mini", "name": "GPT-4o Mini (Placeholder)"},
-        {"id": "anthropic/claude-3.5-sonnet", "name": "Claude 3.5 Sonnet (Placeholder)"}
+        {"id": "google/gemini-2.0-flash-001", "name": "Gemini 2.0 Flash (OpenRouter)"},
+        {"id": "anthropic/claude-3.5-sonnet", "name": "Claude 3.5 Sonnet (OpenRouter)"}
     ]}
-
-
 
 @app.get("/config")
 async def get_config():
@@ -134,10 +123,8 @@ async def update_config(data: Dict):
 
 @app.get("/search")
 async def search_items(query: str, db: AsyncSession = Depends(get_db)):
-    # Simple search for now, Postgres full-text would use plainto_tsquery
-    # We'll search product_name and brand in user_overrides or ai_output
-    # Using sqlalchemy ILIKE on the JSONB fields
     from sqlalchemy import or_
+    # Simple JSON search for product name and brand
     stmt = select(Item).where(
         or_(
             Item.user_overrides['product_name'].astext.ilike(f'%{query}%'),
@@ -149,10 +136,8 @@ async def search_items(query: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(stmt)
     items = result.scalars().all()
     
-    # Include mappings in results
     res = []
     for item in items:
-        # Load mappings manually since we didn't use joinedload
         stmt_map = select(ServiceMapping).where(ServiceMapping.item_id == item.id)
         map_res = await db.execute(stmt_map)
         mappings = map_res.scalars().all()
@@ -179,7 +164,6 @@ async def index(request: Request):
 
 @app.get("/locations")
 async def get_locations():
-    """Proxy for Homebox locations."""
     try:
         headers = SERVICES["homebox"]._get_headers()
         if not headers: return {"success": False, "error": "No API Key"}
@@ -195,15 +179,12 @@ async def get_session_logs(session_id: str):
 
 @app.post("/preview/{service_name}")
 async def get_service_preview(service_name: str, data: Dict):
-    """Return the formatted payload for a specific service."""
     if service_name not in SERVICES:
         return JSONResponse(status_code=404, content={"error": "Service not found"})
-    
     payload = SERVICES[service_name].get_payload(data)
     return {"service": service_name, "payload": payload}
 
-# --- Single Identity ---
-
+# --- Core Processing ---
 
 @app.post("/identify")
 async def identify(
@@ -216,7 +197,6 @@ async def identify(
     settings: str = Form("{}"),
     lasso_polygon: str = Form(None)
 ):
-    import json
     try:
         pipeline_settings = json.loads(settings)
     except:
@@ -237,27 +217,20 @@ async def identify(
         raw_filename = f"raw_{uuid.uuid4()}.jpg"
         masked_filename = f"masked_{uuid.uuid4()}.png"
         
-        # Save raw image
         with open(f"data/uploads/{raw_filename}", "wb") as f:
             f.write(content)
             
         img = Image.open(io.BytesIO(content))
         img = ImageOps.exif_transpose(img)
-        # Note: Lasso is already applied on frontend, 'file' IS the masked image if lasso was used.
-        # However, we'll store the 'raw' for future re-edits.
         
-        # Run blocking pipeline
         results = await run_in_threadpool(core_pipeline.run, img, text, pipeline_settings, log_it)
         
-        # Service-specific pre-enrichment
         log_it("🔌 Checking for existing entries in services...")
         enrichment_tasks = [s.get_pre_enrichment(results['llm_output']) for s in SERVICES.values()]
         enrichments = await asyncio.gather(*enrichment_tasks)
         results["service_enrichments"] = {list(SERVICES.keys())[i]: enrichments[i] for i in range(len(enrichments))}
         
-        # Save to DB so it's searchable and manageable
         async with AsyncSessionLocal() as db:
-            # Create a 'Single Capture' batch if none exists? Or just a default one.
             stmt = select(Batch).where(Batch.name == "Single Captures")
             res = await db.execute(stmt)
             batch = res.scalar_one_or_none()
@@ -267,7 +240,6 @@ async def identify(
                 await db.commit()
                 await db.refresh(batch)
             
-            # Save masked image
             img.save(f"data/uploads/{masked_filename}")
             
             new_item = Item(
@@ -303,10 +275,6 @@ async def identify(
         session_logger.end_session(sid)
         return JSONResponse(status_code=500, content={"success": False, "error": str(e), "session_id": sid})
 
-
-# --- Execution Endpoints ---
-
-
 @app.post("/execute")
 async def execute_services(data: Dict):
     item_id = data.get("item_id")
@@ -328,7 +296,6 @@ async def execute_services(data: Dict):
                     if "searxng_results" in item.ai_output:
                         final_data["searxng_results"] = item.ai_output["searxng_results"]
                 
-                # Fetch existing mappings for upsert
                 map_res = await db.execute(select(ServiceMapping).where(ServiceMapping.item_id == item_id))
                 for m in map_res.scalars().all():
                     existing_mappings[m.service_name] = m.external_id
@@ -342,7 +309,6 @@ async def execute_services(data: Dict):
         svc = SERVICES[name]
         ext_id = existing_mappings.get(name)
         
-        # Execute (Create or Update)
         res = await svc.execute(final_data, image_path=image_path, external_id=ext_id)
         results_map[name] = res
         
@@ -351,7 +317,6 @@ async def execute_services(data: Dict):
                 new_ext_id = str(res.get("item_id"))
                 ext_url = res.get("url")
                 
-                # Update existing mapping or create new
                 stmt = select(ServiceMapping).where(
                     ServiceMapping.item_id == item_id, 
                     ServiceMapping.service_name == name
@@ -378,7 +343,6 @@ async def execute_services(data: Dict):
                 await db.commit()
 
     return {"success": True, "results": results_map}
-
 
 # --- Batch Processing ---
 
@@ -413,7 +377,6 @@ async def batch_upload(
     return {"success": True, "batch_id": new_batch.id}
 
 async def process_item_task(item_id: int, pipeline_id: str = "default", settings_str: str = "{}"):
-    import json
     try:
         settings = json.loads(settings_str)
     except:
@@ -437,7 +400,6 @@ async def process_item_task(item_id: int, pipeline_id: str = "default", settings
             img = Image.open(full_path)
             results = await run_in_threadpool(core_pipeline.run, img, batch_text, settings, log_it)
             
-            # Service-specific pre-enrichment
             enrichment_tasks = [s.get_pre_enrichment(results['llm_output']) for s in SERVICES.values()]
             enrichments = await asyncio.gather(*enrichment_tasks)
             results["service_enrichments"] = {list(SERVICES.keys())[i]: enrichments[i] for i in range(len(enrichments))}
@@ -480,11 +442,11 @@ async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
     item = result.scalar_one_or_none()
     if item:
         if os.path.exists(f"data/uploads/{item.image_path}"): os.remove(f"data/uploads/{item.image_path}")
+        if item.raw_image_path and os.path.exists(f"data/uploads/{item.raw_image_path}"): 
+            os.remove(f"data/uploads/{item.raw_image_path}")
         await db.delete(item)
         await db.commit()
     return {"success": True}
-
-# --- Legacy Compatibility ---
 
 @app.post("/bulk-approve")
 async def bulk_approve(data: dict, db: AsyncSession = Depends(get_db)):
