@@ -16,6 +16,7 @@ services:
     build:
       context: ./src
     container_name: vision-pipeline
+    image: ghcr.io/spelech/vision-pipeline:latest
     networks:
       - default
       - net_webservices
@@ -45,6 +46,7 @@ services:
     build:
       context: ./playwright
     container_name: vision-playwright
+    image: ghcr.io/spelech/vision-playwright:latest
     networks:
       - default
     restart: unless-stopped

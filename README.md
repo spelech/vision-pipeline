@@ -35,6 +35,17 @@ HOMEBOX_API_KEY=your_key
 MEALIE_API_TOKEN=your_token
 ```
 
+### 🐳 Docker Images
+The system is automatically built and published to **GitHub Container Registry (GHCR)**:
+- **Main App**: `ghcr.io/spelech/vision-pipeline:latest`
+- **Playwright Scraper**: `ghcr.io/spelech/vision-playwright:latest`
+
+To pull the latest images:
+```bash
+docker pull ghcr.io/spelech/vision-pipeline:latest
+docker pull ghcr.io/spelech/vision-playwright:latest
+```
+
 ### 3. Build & Run
 ```bash
 docker compose up -d --build
