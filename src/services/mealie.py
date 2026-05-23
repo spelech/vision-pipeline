@@ -70,6 +70,24 @@ class MealieService(BaseService):
             }
         except Exception:
             return {}
+
+    def get_payload(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Return the payload for Mealie Recipe creation."""
+        ingredients = data.get('recipe_ingredients', [])
+        if not ingredients and data.get('recipe_ingredients_raw'):
+            ingredients = data['recipe_ingredients_raw'].split('\n')
+            
+        instructions = data.get('recipe_instructions', [])
+        if not instructions and data.get('recipe_instructions_raw'):
+            instructions = data['recipe_instructions_raw'].split('\n')
+
+        return {
+            "name": data.get('product_name') or data.get('name'),
+            "description": data.get('description', ''),
+            "recipeIngredients": [{"note": i} for i in ingredients if i.strip()],
+            "recipeInstructions": [{"text": i} for i in instructions if i.strip()],
+            "yield": data.get('yield', '1 serving')
+        }
             
     async def create_food(self, data: Dict[str, Any]) -> bool:
         """Helper to create a food item directly (Inventory mode)."""

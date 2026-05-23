@@ -7,8 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #050505; color: #fff; overflow-x: hidden; }
         [x-cloak] { display: none !important; }
@@ -23,9 +21,6 @@
         .terminal-text { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: rgba(255,255,255,0.85); }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .label-apple { font-size: 10px; font-weight: 800; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; letter-spacing: 0.15em; }
-        .cropper-view-box, .cropper-face { border-radius: 1.5rem; }
-        .cropper-line, .cropper-point { background-color: #fff; }
-        .cropper-bg { background-image: none; background-color: #000; }
     </style>
 </head>
 <body x-data="visionApp()" class="scrollbar-hide antialiased selection:bg-white/20">
@@ -36,13 +31,8 @@
             <h2 class="text-xs font-black uppercase tracking-[0.3em]">Precision Lasso</h2>
             <button @click="applyCrop()" class="bg-white text-black px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">Save Lasso</button>
         </div>
-        <div class="flex-1 relative overflow-hidden bg-black">
-            <img id="cropper-target" :src="rawImage" class="max-w-full">
-        </div>
-        <div class="p-8 glass flex justify-center gap-6">
-            <button @click="cropper.rotate(-90)" class="w-12 h-12 glass rounded-full flex items-center justify-center">🔄</button>
-            <button @click="cropper.zoom(0.1)" class="w-12 h-12 glass rounded-full flex items-center justify-center">➕</button>
-            <button @click="cropper.zoom(-0.1)" class="w-12 h-12 glass rounded-full flex items-center justify-center">➖</button>
+        <div class="flex-1 relative overflow-hidden bg-black flex items-center justify-center" id="canvas-container">
+            <canvas id="lasso-canvas" class="touch-none cursor-crosshair max-w-full max-h-full" @touchstart.prevent="startDraw" @touchmove.prevent="draw" @touchend.prevent="endDraw" @mousedown="startDraw" @mousemove="draw" @mouseup="endDraw" @mouseleave="endDraw"></canvas>
         </div>
     </div>
 
@@ -53,7 +43,7 @@
             <h1 class="text-sm font-black tracking-tighter uppercase text-white">Vision Pipeline</h1>
         </div>
         <div class="flex gap-1 bg-white/5 p-1 rounded-xl">
-            <template x-for="tab in ['capture', 'batch', 'review']">
+            <template x-for="tab in ['capture', 'batch', 'review', 'search']">
                 <button @click="activeTab = tab" 
                         :class="activeTab === tab ? 'bg-white/10 text-white shadow-sm' : 'text-white/30 hover:text-white'"
                         class="px-4 py-1.5 rounded-lg text-[10px] font-black transition-all uppercase tracking-widest" 
@@ -101,6 +91,60 @@
                     </div>
                 </div>
                 
+
+                <!-- Pipeline Settings -->
+                <div class="glass p-4 rounded-[2rem] mx-6 mb-4 mt-4">
+                    <h3 class="text-xs font-black uppercase tracking-widest mb-4">Pipeline Settings</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="label-apple block mb-2">Select Pipeline</label>
+                            <select x-model="selectedPipeline" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-white/30">
+                                <template x-for="p in pipelines" :key="p.id">
+                                    <option :value="p.id" x-text="p.name" class="bg-black text-white"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <template x-for="p in pipelines" :key="p.id">
+                            <div x-show="selectedPipeline === p.id" class="space-y-4">
+                                <template x-for="(schema, key) in p.schema" :key="key">
+                                    <div>
+                                        <label class="label-apple block mb-2" x-text="schema.label"></label>
+                                        <template x-if="schema.type === 'string' && schema.options">
+                                            <select x-model="pipelineSettings[key]" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-white/30">
+                                                <template x-for="opt in schema.options" :key="opt">
+                                                    <option :value="opt" x-text="opt" class="bg-black text-white"></option>
+                                                </template>
+                                            </select>
+                                        </template>
+                                        
+                                        <template x-if="schema.type === 'multiselect'">
+                                            <div class="flex flex-wrap gap-2">
+                                                <template x-for="opt in schema.options" :key="opt">
+                                                    <button 
+                                                        @click="
+                                                            if (!pipelineSettings[key]) pipelineSettings[key] = [...schema.default];
+                                                            if (pipelineSettings[key].includes(opt)) {
+                                                                pipelineSettings[key] = pipelineSettings[key].filter(i => i !== opt);
+                                                            } else {
+                                                                pipelineSettings[key].push(opt);
+                                                            }
+                                                        "
+                                                        class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all"
+                                                        :class="pipelineSettings[key] && pipelineSettings[key].includes(opt) ? 'bg-white text-black border-white' : 'border-white/10 text-white/40 hover:border-white/30'"
+                                                        x-text="opt"
+                                                    ></button>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template x-if="schema.type === 'textarea'">
+                                            <textarea x-model="pipelineSettings[key]" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-white/30 h-24" :placeholder="schema.default"></textarea>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
                 <div class="absolute bottom-8 left-0 right-0 flex justify-center px-8 gap-4">
                     <label class="cursor-pointer">
                         <input type="file" capture="environment" accept="image/*" class="hidden" @change="onFileSelected">
@@ -172,7 +216,7 @@
                                      :class="serviceResults[svc.id]?.success ? 'border-green-500 bg-green-500/5' : ''"
                                      x-data="{ expanded: false }">
                                     
-                                    <div class="flex items-center justify-between p-5 cursor-pointer hover:bg-white/[0.04]" @click="expanded = !expanded">
+                                    <div class="flex items-center justify-between p-5 cursor-pointer hover:bg-white/[0.04]" @click="expanded = !expanded; if(expanded) fetchServicePreview(svc.id)">
                                         <div class="flex items-center gap-4">
                                             <div class="w-12 h-12 rounded-2xl glass flex items-center justify-center text-xl shadow-inner" x-text="svc.icon"></div>
                                             <div class="flex flex-col">
@@ -196,7 +240,7 @@
                                                 <div class="grid grid-cols-2 gap-4">
                                                     <div class="space-y-2">
                                                         <label class="label-apple">Location</label>
-                                                        <select x-model="form.location" class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white outline-none">
+                                                        <select x-model="form.location" @change="fetchServicePreview('homebox')" class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white outline-none">
                                                             <template x-for="loc in locations">
                                                                 <option :value="loc.name" x-text="loc.name"></option>
                                                             </template>
@@ -205,11 +249,11 @@
                                                     <div class="grid grid-cols-2 gap-2">
                                                         <div class="space-y-2">
                                                             <label class="label-apple">Qty</label>
-                                                            <input type="number" x-model="form.quantity" class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white outline-none">
+                                                            <input type="number" x-model="form.quantity" @input="fetchServicePreview('homebox')" class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white outline-none">
                                                         </div>
                                                         <div class="space-y-2">
                                                             <label class="label-apple">Unit</label>
-                                                            <input type="text" x-model="form.unit" class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white outline-none">
+                                                            <input type="text" x-model="form.unit" @input="fetchServicePreview('homebox')" class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white outline-none">
                                                         </div>
                                                     </div>
                                                 </div>
@@ -219,18 +263,21 @@
                                                 <div class="space-y-4">
                                                     <div class="space-y-2">
                                                         <label class="label-apple">Ingredients</label>
-                                                        <textarea x-model="form.recipe_ingredients_raw" rows="3" class="w-full bg-white/10 border border-white/10 rounded-xl px-5 py-4 text-[10px] font-mono text-white/80 outline-none h-32"></textarea>
+                                                        <textarea x-model="form.recipe_ingredients_raw" @input="fetchServicePreview('mealie')" rows="3" class="w-full bg-white/10 border border-white/10 rounded-xl px-5 py-4 text-[10px] font-mono text-white/80 outline-none h-32"></textarea>
                                                     </div>
                                                     <div class="space-y-2">
                                                         <label class="label-apple">Instructions</label>
-                                                        <textarea x-model="form.recipe_instructions_raw" rows="3" class="w-full bg-white/10 border border-white/10 rounded-xl px-5 py-4 text-[10px] font-mono text-white/80 outline-none h-32"></textarea>
+                                                        <textarea x-model="form.recipe_instructions_raw" @input="fetchServicePreview('mealie')" rows="3" class="w-full bg-white/10 border border-white/10 rounded-xl px-5 py-4 text-[10px] font-mono text-white/80 outline-none h-32"></textarea>
                                                     </div>
                                                 </div>
                                             </template>
 
                                             <div class="bg-black/40 p-5 rounded-2xl border border-white/5 shadow-inner">
-                                                <span class="label-apple block mb-3">Payload Data</span>
-                                                <pre class="text-[9px] text-blue-300 font-mono overflow-x-auto whitespace-pre-wrap" x-text="JSON.stringify(form, null, 2)"></pre>
+                                                <div class="flex justify-between items-center mb-3">
+                                                    <span class="label-apple">Service Payload Preview</span>
+                                                    <span class="text-[8px] font-bold text-white/20 uppercase tracking-tighter">Live from Agent</span>
+                                                </div>
+                                                <pre class="text-[9px] text-blue-300 font-mono overflow-x-auto whitespace-pre-wrap" x-text="JSON.stringify(servicePreviews[svc.id] || {}, null, 2)"></pre>
                                             </div>
                                         </div>
                                     </div>
@@ -412,9 +459,22 @@
                 filterType: 'all',
                 selectedServices: ['homebox'],
                 serviceResults: {},
+                servicePreviews: {},
                 showPayload: false,
                 precisionMode: false,
-                cropper: null,
+                pipelines: [],
+                selectedPipeline: 'default',
+                pipelineSettings: {},
+                showPreviewModal: false,
+                previewData: '',
+                executeQueue: [],
+                searchQuery: "",
+                searchResults: [],
+                isSearching: false,
+                lassoPoints: [],
+                isDrawing: false,
+                canvasCtx: null,
+                sourceImage: null,
                 form: {
                     product_name: '', brand: '', manufacturer: '', model_number: '', serial_number: '',
                     category: '', description: '', technical_details: '', notes: '',
@@ -424,6 +484,7 @@
                 },
 
                 init() {
+                    this.fetchPipelines();
                     this.fetchLocations();
                     this.fetchQueue();
                     setInterval(() => {
@@ -435,6 +496,47 @@
                             if (el) el.scrollTop = el.scrollHeight;
                         });
                     });
+                    this.$watch('form', () => {
+                        // Refresh all visible previews
+                        Object.keys(this.servicePreviews).forEach(id => this.fetchServicePreview(id));
+                    }, { deep: true });
+                },
+
+                async fetchServicePreview(serviceId) {
+                    try {
+                        const response = await fetch(`/preview/${serviceId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.form)
+                        });
+                        const data = await response.json();
+                        if (data.payload) {
+                            this.servicePreviews[serviceId] = data.payload;
+                        }
+                    } catch (e) {}
+                },
+
+                async runSearch() {
+                    if (!this.searchQuery) {
+                        this.searchResults = [];
+                        return;
+                    }
+                    this.isSearching = true;
+                    try {
+                        const response = await fetch(`/search?query=${encodeURIComponent(this.searchQuery)}`);
+                        const data = await response.json();
+                        this.searchResults = data.items;
+                    } catch (e) {}
+                    this.isSearching = false;
+                },
+                async fetchPipelines() {
+                    try {
+                        const response = await fetch('/pipelines');
+                        const data = await response.json();
+                        if (data.success) {
+                            this.pipelines = data.pipelines;
+                        }
+                    } catch (e) {}
                 },
 
                 async fetchLocations() {
@@ -472,24 +574,132 @@
 
                 enterPrecision() {
                     this.precisionMode = true;
+                    this.lassoPoints = [];
                     this.$nextTick(() => {
-                        const img = document.getElementById('cropper-target');
-                        if (this.cropper) this.cropper.destroy();
-                        this.cropper = new Cropper(img, {
-                            viewMode: 1, autoCropArea: 0.8, restore: false, guides: true, center: true, highlight: false,
-                        });
+                        const canvas = document.getElementById('lasso-canvas');
+                        const container = document.getElementById('canvas-container');
+                        this.canvasCtx = canvas.getContext('2d');
+                        
+                        this.sourceImage = new Image();
+                        this.sourceImage.onload = () => {
+                            // Calculate display size maintaining aspect ratio
+                            const ratio = Math.min(container.clientWidth / this.sourceImage.width, container.clientHeight / this.sourceImage.height);
+                            canvas.width = this.sourceImage.width * ratio;
+                            canvas.height = this.sourceImage.height * ratio;
+                            this.redrawCanvas();
+                        };
+                        this.sourceImage.src = this.rawImage;
                     });
                 },
 
-                closePrecision() { this.precisionMode = false; if (this.cropper) this.cropper.destroy(); },
+                getPos(e) {
+                    const canvas = document.getElementById('lasso-canvas');
+                    const rect = canvas.getBoundingClientRect();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    return { x: clientX - rect.left, y: clientY - rect.top };
+                },
+
+                startDraw(e) {
+                    this.isDrawing = true;
+                    this.lassoPoints = [this.getPos(e)];
+                    this.redrawCanvas();
+                },
+
+                draw(e) {
+                    if (!this.isDrawing) return;
+                    this.lassoPoints.push(this.getPos(e));
+                    this.redrawCanvas();
+                },
+
+                endDraw() {
+                    this.isDrawing = false;
+                    this.redrawCanvas();
+                },
+
+                redrawCanvas() {
+                    const canvas = document.getElementById('lasso-canvas');
+                    this.canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+                    this.canvasCtx.drawImage(this.sourceImage, 0, 0, canvas.width, canvas.height);
+                    
+                    if (this.lassoPoints.length > 0) {
+                        this.canvasCtx.beginPath();
+                        this.canvasCtx.moveTo(this.lassoPoints[0].x, this.lassoPoints[0].y);
+                        for (let i = 1; i < this.lassoPoints.length; i++) {
+                            this.canvasCtx.lineTo(this.lassoPoints[i].x, this.lassoPoints[i].y);
+                        }
+                        if (!this.isDrawing && this.lassoPoints.length > 2) {
+                            this.canvasCtx.closePath();
+                            this.canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+                            this.canvasCtx.fill();
+                        }
+                        this.canvasCtx.strokeStyle = '#00FF00';
+                        this.canvasCtx.lineWidth = 2;
+                        this.canvasCtx.stroke();
+                    }
+                },
+
+                closePrecision() { this.precisionMode = false; },
 
                 applyCrop() {
-                    const canvas = this.cropper.getCroppedCanvas({ maxWidth: 2048, maxHeight: 2048 });
-                    canvas.toBlob((blob) => {
+                    if (this.lassoPoints.length < 3) {
+                        this.closePrecision();
+                        return;
+                    }
+                    
+                    const canvas = document.getElementById('lasso-canvas');
+                    const scaleX = this.sourceImage.width / canvas.width;
+                    const scaleY = this.sourceImage.height / canvas.height;
+                    
+                    const offscreen = document.createElement('canvas');
+                    offscreen.width = this.sourceImage.width;
+                    offscreen.height = this.sourceImage.height;
+                    const ctx = offscreen.getContext('2d');
+                    
+                    // Draw clipping mask
+                    ctx.beginPath();
+                    ctx.moveTo(this.lassoPoints[0].x * scaleX, this.lassoPoints[0].y * scaleY);
+                    for (let i = 1; i < this.lassoPoints.length; i++) {
+                        ctx.lineTo(this.lassoPoints[i].x * scaleX, this.lassoPoints[i].y * scaleY);
+                    }
+                    ctx.closePath();
+                    ctx.clip();
+                    
+                    // Draw original image inside mask
+                    ctx.drawImage(this.sourceImage, 0, 0);
+                    
+                    // Create bounding box to crop the final transparent PNG
+                    let minX = this.sourceImage.width, minY = this.sourceImage.height, maxX = 0, maxY = 0;
+                    for (let p of this.lassoPoints) {
+                        const px = p.x * scaleX;
+                        const py = p.y * scaleY;
+                        if (px < minX) minX = px;
+                        if (py < minY) minY = py;
+                        if (px > maxX) maxX = px;
+                        if (py > maxY) maxY = py;
+                    }
+                    
+                    // Add some padding
+                    const padding = 20;
+                    minX = Math.max(0, minX - padding);
+                    minY = Math.max(0, minY - padding);
+                    maxX = Math.min(this.sourceImage.width, maxX + padding);
+                    maxY = Math.min(this.sourceImage.height, maxY + padding);
+                    
+                    const cropWidth = maxX - minX;
+                    const cropHeight = maxY - minY;
+                    
+                    const finalCanvas = document.createElement('canvas');
+                    finalCanvas.width = cropWidth;
+                    finalCanvas.height = cropHeight;
+                    const finalCtx = finalCanvas.getContext('2d');
+                    finalCtx.drawImage(offscreen, minX, minY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+                    
+                    finalCanvas.toBlob((blob) => {
                         this.aiPreview = URL.createObjectURL(blob);
                         this.currentFile = blob;
                         this.closePrecision();
-                    }, 'image/jpeg', 0.9);
+                    }, 'image/png');
                 },
 
                 async onFileSelected(e) {
@@ -612,5 +822,63 @@
             }
         }
     </script>
+
+
+        <!-- Search Tab -->
+        <div x-show="activeTab === 'search'" class="space-y-6 pt-24 pb-32 px-6">
+            <div class="glass p-6 rounded-[2.5rem]">
+                <h2 class="text-xs font-black uppercase tracking-[0.3em] mb-6">Archive Search</h2>
+                <div class="relative">
+                    <input type="text" x-model="searchQuery" @keyup.enter="runSearch()" placeholder="Search product name or brand..." class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 pl-12 text-sm focus:outline-none focus:border-white/30">
+                    <span class="absolute left-5 top-5 opacity-40">🔍</span>
+                    <button @click="runSearch()" class="absolute right-4 top-2 bg-white text-black px-4 py-2 rounded-xl font-black text-[10px] uppercase">Search</button>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <template x-for="item in searchResults" :key="item.id">
+                    <div class="glass p-4 rounded-[2rem] flex items-center gap-4">
+                        <img :src="'/uploads/' + item.image_path" class="w-16 h-16 rounded-2xl object-cover bg-black">
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-sm font-bold truncate" x-text="item.product_name"></h3>
+                            <p class="text-[10px] uppercase tracking-widest text-white/40" x-text="item.brand"></p>
+                            <div class="flex gap-2 mt-2">
+                                <template x-for="m in item.mappings" :key="m.service">
+                                    <a :href="m.url" target="_blank" class="px-2 py-1 rounded-md bg-white/10 text-[8px] font-black uppercase tracking-tighter" x-text="m.service"></a>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[8px] text-white/30 uppercase" x-text="new Date(item.created_at).toLocaleDateString()"></p>
+                            <button @click="activeTab = 'review'; searchQuery = ''; fetchQueue()" class="mt-2 text-[10px] font-black uppercase text-blue-400">Details</button>
+                        </div>
+                    </div>
+                </template>
+                
+                <template x-if="searchResults.length === 0 && searchQuery && !isSearching">
+                    <div class="text-center py-20 opacity-30">
+                        <p class="text-xs uppercase font-black tracking-widest">No results found</p>
+                    </div>
+                </template>
+            </div>
+        </div>
+    <!-- Pre-flight Preview Modal -->
+    <div x-show="showPreviewModal" class="fixed inset-0 z-[700] bg-black/80 flex items-center justify-center p-4 backdrop-blur-md" x-cloak x-transition>
+        <div class="glass w-full max-w-lg rounded-[2rem] overflow-hidden flex flex-col max-h-full">
+            <div class="p-6 border-b border-white/10 flex justify-between items-center">
+                <h2 class="font-black tracking-widest uppercase text-sm">Review Payload</h2>
+                <button @click="showPreviewModal = false" class="w-8 h-8 rounded-full glass-dark flex items-center justify-center text-xs">✕</button>
+            </div>
+            <div class="p-6 overflow-y-auto">
+                <textarea x-model="previewData" class="w-full h-96 bg-black/50 border border-white/10 rounded-xl p-4 text-xs font-mono text-green-400 focus:outline-none focus:border-white/30"></textarea>
+                <p class="text-white/50 text-[10px] mt-4 uppercase tracking-widest text-center">Edit JSON above before execution if necessary</p>
+            </div>
+            <div class="p-6 border-t border-white/10 flex justify-end gap-4 bg-black/20">
+                <button @click="showPreviewModal = false" class="px-6 py-3 rounded-full font-black text-xs uppercase tracking-widest text-white/60 hover:bg-white/5">Cancel</button>
+                <button @click="confirmExecute()" class="btn-apple bg-white text-black px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest">Execute Services</button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

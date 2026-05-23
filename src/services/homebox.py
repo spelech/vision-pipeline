@@ -112,3 +112,22 @@ class HomeboxService(BaseService):
             return {"existing_items": resp.json().get('items', [])}
         except Exception:
             return {}
+
+    def get_payload(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Return the combined payload for Homebox (Create + Update)."""
+        return {
+            "step_1_create": {
+                "name": data.get('product_name') or data.get('name'),
+                "quantity": int(data.get('quantity', 1)),
+                "description": data.get('description', ''),
+                "location": data.get('location', 'pantry')
+            },
+            "step_2_update": {
+                "manufacturer": data.get('manufacturer') or data.get('brand') or "",
+                "modelNumber": data.get('model_number') or "",
+                "serialNumber": data.get('serial_number') or "",
+                "purchasePrice": float(data.get('purchase_price') or 0),
+                "notes": data.get('notes') or "",
+                "technical_details": data.get('technical_details', '')
+            }
+        }

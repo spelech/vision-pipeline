@@ -27,3 +27,11 @@ class BaseService(ABC):
         (e.g., searching for existing items in Homebox/Mealie).
         """
         pass
+
+    @abstractmethod
+    def get_payload(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Return the exact payload that will be sent to the service's API.
+        Used for UI previews.
+        """
+        pass

@@ -14,8 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from PIL import Image, ImageOps
 
-from pipeline import VisionPipeline
-from database import init_db, AsyncSessionLocal, Batch, Item
+from pipelines import get_pipeline, get_all_pipelines
+from database import init_db, AsyncSessionLocal, Batch, Item, ServiceMapping
 from services.homebox import HomeboxService
 from services.mealie import MealieService
 from services.enrichers import PriceBuddyService, ChangeDetectionService
@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
 
 # --- Setup ---
 app = FastAPI(lifespan=lifespan)
-core_pipeline = VisionPipeline()
+
 
 # Registry of available services
 SERVICES = {
@@ -56,6 +56,58 @@ async def get_db():
         yield session
 
 # --- Core Endpoints ---
+
+
+@app.get("/pipelines")
+async def list_pipelines():
+    return {"success": True, "pipelines": get_all_pipelines()}
+
+@app.get("/models")
+async def list_models():
+    # Placeholder for dynamic model fetching if needed
+    return {"success": True, "models": [
+        {"id": "qwen/qwen2.5-vl-72b-instruct", "name": "Qwen 2.5 VL 72B (OpenRouter)"},
+        {"id": "anthropic/gpt-4o-mini", "name": "GPT-4o Mini (Placeholder)"},
+        {"id": "anthropic/claude-3.5-sonnet", "name": "Claude 3.5 Sonnet (Placeholder)"}
+    ]}
+
+
+@app.get("/search")
+async def search_items(query: str, db: AsyncSession = Depends(get_db)):
+    # Simple search for now, Postgres full-text would use plainto_tsquery
+    # We'll search product_name and brand in user_overrides or ai_output
+    # Using sqlalchemy ILIKE on the JSONB fields
+    from sqlalchemy import or_
+    stmt = select(Item).where(
+        or_(
+            Item.user_overrides['product_name'].astext.ilike(f'%{query}%'),
+            Item.ai_output['llm_output']['product_name'].astext.ilike(f'%{query}%'),
+            Item.user_overrides['brand'].astext.ilike(f'%{query}%'),
+            Item.ai_output['llm_output']['brand'].astext.ilike(f'%{query}%')
+        )
+    ).order_by(Item.created_at.desc())
+    result = await db.execute(stmt)
+    items = result.scalars().all()
+    
+    # Include mappings in results
+    res = []
+    for item in items:
+        # Load mappings manually since we didn't use joinedload
+        stmt_map = select(ServiceMapping).where(ServiceMapping.item_id == item.id)
+        map_res = await db.execute(stmt_map)
+        mappings = map_res.scalars().all()
+        
+        item_dict = {
+            "id": item.id,
+            "status": item.status,
+            "image_path": item.image_path,
+            "product_name": (item.user_overrides or item.ai_output.get("llm_output", {})).get("product_name"),
+            "brand": (item.user_overrides or item.ai_output.get("llm_output", {})).get("brand"),
+            "created_at": item.created_at,
+            "mappings": [{"service": m.service_name, "external_id": m.external_id, "url": m.external_url} for m in mappings]
+        }
+        res.append(item_dict)
+    return {"items": res}
 
 @app.get("/health")
 def health():
@@ -81,6 +133,15 @@ async def get_locations():
 async def get_session_logs(session_id: str):
     return {"logs": session_logger.get_logs(session_id)}
 
+@app.post("/preview/{service_name}")
+async def get_service_preview(service_name: str, data: Dict):
+    """Return the formatted payload for a specific service."""
+    if service_name not in SERVICES:
+        return JSONResponse(status_code=404, content={"error": "Service not found"})
+    
+    payload = SERVICES[service_name].get_payload(data)
+    return {"service": service_name, "payload": payload}
+
 # --- Single Identity ---
 
 @app.post("/identify")
@@ -89,8 +150,18 @@ async def identify(
     text: Optional[str] = Form(None),
     rotation: int = Form(0),
     mirror: bool = Form(False),
-    session_id: str = Form(None)
+    session_id: str = Form(None),
+    pipeline_id: str = Form("default"),
+    settings: str = Form("{}"),
+    lasso_polygon: str = Form(None)
 ):
+    import json
+    try:
+        pipeline_settings = json.loads(settings)
+    except:
+        pipeline_settings = {}
+        
+    core_pipeline = get_pipeline(pipeline_id)
     sid = session_id or str(uuid.uuid4())
     session_logger.start_session(sid)
     def log_it(msg): session_logger.log(sid, msg)
@@ -103,7 +174,7 @@ async def identify(
         if mirror: img = ImageOps.mirror(img)
             
         # Run blocking pipeline in a separate thread to keep the event loop free for log polling
-        results = await run_in_threadpool(core_pipeline.run_pipeline, img, text, log_it)
+        results = await run_in_threadpool(core_pipeline.run, img, text, pipeline_settings, log_it)
         
         # Service-specific pre-enrichment
         log_it("🔌 Checking for existing entries in services...")
@@ -152,6 +223,9 @@ async def execute_services(data: Dict):
                 image_path = item.image_path
                 if not final_data:
                     final_data = item.user_overrides or item.ai_output.get("llm_output", {})
+                    # Also include search results for services like PriceBuddy
+                    if "searxng_results" in item.ai_output:
+                        final_data["searxng_results"] = item.ai_output["searxng_results"]
 
     if not final_data:
         return {"success": False, "error": "No data to process"}
@@ -169,6 +243,22 @@ async def execute_services(data: Dict):
     if item_id:
         async with AsyncSessionLocal() as db:
             await db.execute(update(Item).where(Item.id == item_id).values(status="uploaded"))
+            
+            # Save service mappings
+            for svc_name, res in response.items():
+                if res.get("success") and res.get("item_id"):
+                    # Use standard external_id key if present, or service-specific one
+                    ext_id = str(res.get("item_id"))
+                    ext_url = res.get("url") # Services should return the direct UI link if possible
+                    
+                    mapping = ServiceMapping(
+                        item_id=item_id,
+                        service_name=svc_name,
+                        external_id=ext_id,
+                        external_url=ext_url,
+                        last_sync_payload=final_data
+                    )
+                    db.add(mapping)
             await db.commit()
 
     return {"success": True, "results": response}
@@ -180,6 +270,8 @@ async def batch_upload(
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     text: Optional[str] = Form(None),
+    pipeline_id: str = Form("default"),
+    settings: str = Form("{}"),
     db: AsyncSession = Depends(get_db)
 ):
     new_batch = Batch(description=text)
@@ -199,11 +291,17 @@ async def batch_upload(
         db.add(new_item)
         await db.commit()
         await db.refresh(new_item)
-        background_tasks.add_task(process_item_task, new_item.id)
+        background_tasks.add_task(process_item_task, new_item.id, pipeline_id, settings)
         
     return {"success": True, "batch_id": new_batch.id}
 
-async def process_item_task(item_id: int):
+async def process_item_task(item_id: int, pipeline_id: str = "default", settings_str: str = "{}"):
+    import json
+    try:
+        settings = json.loads(settings_str)
+    except:
+        settings = {}
+    core_pipeline = get_pipeline(pipeline_id)
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Item).where(Item.id == item_id))
         item = result.scalar_one_or_none()
@@ -220,7 +318,7 @@ async def process_item_task(item_id: int):
         try:
             full_path = f"data/uploads/{item.image_path}"
             img = Image.open(full_path)
-            results = await run_in_threadpool(core_pipeline.run_pipeline, img, batch_text, log_it)
+            results = await run_in_threadpool(core_pipeline.run, img, batch_text, settings, log_it)
             
             # Service-specific pre-enrichment
             enrichment_tasks = [s.get_pre_enrichment(results['llm_output']) for s in SERVICES.values()]
@@ -256,7 +354,7 @@ async def update_item_data(item_id: int, data: dict, db: AsyncSession = Depends(
 async def rerun_item(item_id: int, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     await db.execute(update(Item).where(Item.id == item_id).values(status="processing"))
     await db.commit()
-    background_tasks.add_task(process_item_task, item_id)
+    background_tasks.add_task(process_item_task, item_id, "default", "{}")
     return {"success": True}
 
 @app.delete("/items/{item_id}")

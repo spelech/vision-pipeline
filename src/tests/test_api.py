@@ -1,7 +1,19 @@
 import pytest
-from httpx import ASGITransport, AsyncClient
-from app import app, pipeline
 import io
+import json
+import uuid
+import base64
+import os
+from unittest.mock import AsyncMock, MagicMock, patch
+
+# Mock StaticFiles and os.makedirs before importing app
+with patch("os.makedirs"):
+    with patch("os.path.exists", return_value=True):
+        with patch("fastapi.staticfiles.StaticFiles", return_value=MagicMock()):
+            from app import app, SERVICES
+from pipelines import get_pipeline
+
+from httpx import ASGITransport, AsyncClient
 from PIL import Image
 
 @pytest.mark.asyncio
@@ -13,65 +25,135 @@ async def test_health_endpoint():
 
 @pytest.mark.asyncio
 async def test_identify_endpoint():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        img = Image.new('RGB', (100, 100), color=(73, 109, 137))
-        buf = io.BytesIO()
-        img.save(buf, format='JPEG')
-        img_bytes = buf.getvalue()
-        files = {'file': ('test.jpg', img_bytes, 'image/jpeg')}
-        data = {'text': 'test product', 'rotation': 0, 'mirror': False}
-        response = await ac.post("/identify", data=data, files=files)
-        assert response.status_code == 200
-        assert response.json()["success"] is True
+    # Mock core_pipeline.run_pipeline
+    mock_results = {
+        "barcode": "123456",
+        "llm_output": {"product_name": "Test Product", "is_food": False},
+        "searxng_results": []
+    }
+    
+    mock_pipeline = MagicMock()
+    mock_pipeline.run.return_value = mock_results
+    with patch('app.get_pipeline', return_value=mock_pipeline):
+        # Mock services pre_enrichment
+        for svc in SERVICES.values():
+            svc.get_pre_enrichment = AsyncMock(return_value={})
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            img = Image.new('RGB', (100, 100), color=(73, 109, 137))
+            buf = io.BytesIO()
+            img.save(buf, format='JPEG')
+            img_bytes = buf.getvalue()
+            
+            files = {'file': ('test.jpg', img_bytes, 'image/jpeg')}
+            data = {'text': 'test context', 'rotation': 0, 'mirror': False}
+            
+            response = await ac.post("/identify", data=data, files=files)
+            
+            assert response.status_code == 200
+            res_json = response.json()
+            assert res_json["success"] is True
+            assert res_json["results"]["llm_output"]["product_name"] == "Test Product"
+            assert "ai_preview" in res_json
 
 @pytest.mark.asyncio
-async def test_add_to_homebox_endpoint(mocker):
-    # Mock the homebox adapter methods
-    mocker.patch.object(pipeline.homebox, 'find_or_create_location', return_value="loc-123")
-    mocker.patch.object(pipeline.homebox, 'create_item', return_value={"id": "item-123"})
-    
+async def test_get_locations_endpoint():
+    # Mock Homebox headers and requests.get
+    with patch.object(SERVICES["homebox"], '_get_headers', return_value={"Authorization": "Bearer test"}):
+        with patch('requests.get') as mock_get:
+            mock_get.return_value.json.return_value = [{"id": "loc1", "name": "Pantry"}]
+            mock_get.return_value.status_code = 200
+            
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                response = await ac.get("/locations")
+                assert response.status_code == 200
+                assert response.json()["success"] is True
+                assert response.json()["locations"][0]["name"] == "Pantry"
+
+@pytest.mark.asyncio
+async def test_preview_endpoint():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        payload = {
-            "name": "Test Item",
-            "description": "Test Desc",
-            "location": "Pantry",
-            "quantity": 5,
-            "unit": "pcs"
-        }
-        response = await ac.post("/add-to-homebox", json=payload)
+        data = {"product_name": "Test"}
+        response = await ac.post("/preview/homebox", json=data)
         assert response.status_code == 200
-        assert response.json()["success"] == {"id": "item-123"}
+        assert "payload" in response.json()
         
-        # Verify mock calls
-        pipeline.homebox.find_or_create_location.assert_called_once_with("Pantry")
-        pipeline.homebox.create_item.assert_called_once_with(
-            "Test Item", "Test Desc", location_id="loc-123", quantity=5, unit="pcs"
-        )
+        # Test non-existent service
+        response = await ac.post("/preview/invalid", json=data)
+        assert response.status_code == 404
 
 @pytest.mark.asyncio
-async def test_add_food_to_mealie_endpoint(mocker):
-    mocker.patch.object(pipeline.mealie, 'create_food', return_value={"id": "food-123"})
+async def test_execute_endpoint():
+    # Mock execution for homebox
+    mock_item = MagicMock()
+    mock_item.image_path = "test.jpg"
+    mock_item.ai_output = {"llm_output": {"product_name": "Test"}}
+    mock_item.user_overrides = None
     
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        payload = {
-            "name": "Apple",
-            "description": "Fresh apple",
-            "extras": {"in_stock": "true"}
-        }
-        response = await ac.post("/add-food-to-mealie", json=payload)
-        assert response.status_code == 200
-        assert response.json()["success"] == {"id": "food-123"}
+    with patch("app.AsyncSessionLocal") as mock_session_factory:
+        mock_session = AsyncMock()
+        mock_session_factory.return_value.__aenter__.return_value = mock_session
+        
+        # Mock database query
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_item
+        mock_session.execute.return_value = mock_result
+        
+        # Mock service execution
+        SERVICES["homebox"].execute = AsyncMock(return_value={"success": True, "item_id": "hb-123"})
+        
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            payload = {"item_id": 1, "service_names": ["homebox"]}
+            response = await ac.post("/execute", json=payload)
+            
+            assert response.status_code == 200
+            assert response.json()["results"]["homebox"]["success"] is True
 
 @pytest.mark.asyncio
-async def test_add_to_mealie_shopping_list_endpoint(mocker):
-    mocker.patch.object(pipeline.mealie, 'add_shopping_list_item', return_value={"id": "sl-123"})
-    
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        payload = {
-            "name": "Milk",
-            "quantity": 2,
-            "note": "Whole milk"
-        }
-        response = await ac.post("/add-to-mealie-shopping-list", json=payload)
-        assert response.status_code == 200
-        assert response.json()["success"] == {"id": "sl-123"}
+async def test_batch_upload_endpoint():
+    with patch("app.AsyncSessionLocal") as mock_session_factory:
+        mock_session = AsyncMock()
+        mock_session_factory.return_value.__aenter__.return_value = mock_session
+        
+        # Mock background task to avoid actually running it
+        with patch("app.process_item_task", AsyncMock()):
+            # Mock open() for file writing
+            with patch("builtins.open", MagicMock()):
+                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                    img = Image.new('RGB', (10, 10))
+                    buf = io.BytesIO()
+                    img.save(buf, format='JPEG')
+                    
+                    files = [
+                        ('files', ('img1.jpg', buf.getvalue(), 'image/jpeg'))
+                    ]
+                    data = {'text': 'Batch Desc'}
+                    
+                    response = await ac.post("/batch-upload", data=data, files=files)
+                    assert response.status_code == 200
+                    assert response.json()["success"] is True
+
+@pytest.mark.asyncio
+async def test_bulk_approve_endpoint():
+    with patch("app.AsyncSessionLocal") as mock_session_factory:
+        mock_session = AsyncMock()
+        mock_session_factory.return_value.__aenter__.return_value = mock_session
+        
+        mock_item = MagicMock()
+        mock_item.id = 1
+        mock_item.product_type = "product"
+        mock_item.image_path = "test.jpg"
+        mock_item.ai_output = {"llm_output": {"name": "Test"}}
+        
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_item
+        mock_session.execute.return_value = mock_result
+        
+        # Mock execute_services internally or the SERVICES themselves
+        SERVICES["homebox"].execute = AsyncMock(return_value={"success": True})
+        
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            payload = {"item_ids": [1]}
+            response = await ac.post("/bulk-approve", json=payload)
+            assert response.status_code == 200
+            assert 1 in response.json()["success"]

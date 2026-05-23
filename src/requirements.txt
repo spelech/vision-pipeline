@@ -10,3 +10,5 @@ python-dotenv
 opencv-python-headless
 sqlalchemy
 aiosqlite
+asyncpg
+psycopg2-binary
