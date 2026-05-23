@@ -9,6 +9,7 @@ from fastapi import FastAPI, UploadFile, File, Form, Request, BackgroundTasks, D
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from PIL import Image, ImageOps
@@ -101,7 +102,8 @@ async def identify(
         if rotation != 0: img = img.rotate(-rotation, expand=True)
         if mirror: img = ImageOps.mirror(img)
             
-        results = core_pipeline.run_pipeline(img, text, log_cb=log_it)
+        # Run blocking pipeline in a separate thread to keep the event loop free for log polling
+        results = await run_in_threadpool(core_pipeline.run_pipeline, img, text, log_it)
         
         # Service-specific pre-enrichment
         log_it("🔌 Checking for existing entries in services...")
@@ -122,7 +124,7 @@ async def identify(
             "ai_preview": f"data:image/jpeg;base64,{b64_img}"
         }
     except Exception as e:
-        log_it(f"❌ Error: {str(e)}")
+        log_it(f"❌ Fatal Error: {str(e)}")
         logger.error(f"Identification failed: {e}", exc_info=True)
         session_logger.end_session(sid)
         return JSONResponse(status_code=500, content={"success": False, "error": str(e), "session_id": sid})
@@ -218,7 +220,7 @@ async def process_item_task(item_id: int):
         try:
             full_path = f"data/uploads/{item.image_path}"
             img = Image.open(full_path)
-            results = core_pipeline.run_pipeline(img, text_description=batch_text, log_cb=log_it)
+            results = await run_in_threadpool(core_pipeline.run_pipeline, img, batch_text, log_it)
             
             # Service-specific pre-enrichment
             enrichment_tasks = [s.get_pre_enrichment(results['llm_output']) for s in SERVICES.values()]
