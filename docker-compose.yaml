@@ -1,0 +1,30 @@
+services:
+  vision-pipeline:
+    build:
+      context: ./src
+    container_name: vision-pipeline
+    networks:
+      - default
+      - net_webservices
+    ports:
+      - "8460:8501"
+    volumes:
+      - ./src:/app
+      - ./config:/app/config
+      - ./data:/app/data
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - SEARXNG_URL=${SEARXNG_URL}
+      - HOMEBOX_URL=http://homebox:7745/api/v1
+      - HOMEBOX_USERNAME=${HOMEBOX_USERNAME}
+      - HOMEBOX_PASSWORD=${HOMEBOX_PASSWORD}
+      - HOMEBOX_API_KEY=${HOMEBOX_API_KEY}
+      - PRICEBUDDY_API_KEY=${PRICEBUDDY_API_KEY}
+      - CHANGEDETECTION_API_KEY=${CHANGEDETECTION_API_KEY}
+      - MEALIE_API_TOKEN=${MEALIE_API_TOKEN}
+      - MEALIE_URL=${MEALIE_URL}
+    restart: unless-stopped
+
+networks:
+  net_webservices:
+    external: true

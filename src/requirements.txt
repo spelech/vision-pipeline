@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+python-multipart
+jinja2
+requests
+openai
+pyzbar
+pillow
+python-dotenv
+opencv-python-headless
+sqlalchemy
+aiosqlite

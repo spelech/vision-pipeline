@@ -1,0 +1,1 @@
+.env\ndata/\n**/__pycache__/\n**/.nicegui/\n**/.pytest_cache/\n**/*.pyc\n**/*.db

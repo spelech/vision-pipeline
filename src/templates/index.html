@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vision Pipeline</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #ef4444;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-screen font-sans" x-data="visionApp()">
+    
+    <!-- Sidebar -->
+    <div x-show="sidebarOpen" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="-translate-x-full"
+         x-transition:enter-end="translate-x-0"
+         x-transition:leave="transition ease-in duration-300"
+         x-transition:leave-start="translate-x-0"
+         x-transition:leave-end="-translate-x-full"
+         class="fixed inset-0 z-50 overflow-hidden" x-cloak>
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="sidebarOpen = false"></div>
+        <div class="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 shadow-xl p-6">
+            <h2 class="text-xl font-bold mb-6 flex items-center gap-2">
+                <span class="text-red-500">⚙️</span> Settings
+            </h2>
+            
+            <div class="space-y-6">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Device Preset</label>
+                    <select x-model="preset" @change="applyPreset()" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+                        <option value="Manual">Manual</option>
+                        <option value="Front">Phone (Front Portrait)</option>
+                        <option value="Back">Phone (Back Portrait)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Manual Rotation: <span x-text="rotation + '°'"></span></label>
+                    <input type="range" min="0" max="270" step="90" x-model="rotation" class="w-full accent-red-500">
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium">Mirror Image</span>
+                    <button @click="mirror = !mirror" :class="mirror ? 'bg-red-500' : 'bg-slate-700'" class="w-12 h-6 rounded-full transition-colors relative">
+                        <div :class="mirror ? 'translate-x-7' : 'translate-x-1'" class="absolute top-1 w-4 h-4 bg-white rounded-full transition-transform"></div>
+                    </button>
+                </div>
+
+                <button @click="clearResults()" class="w-full mt-10 py-2 border border-slate-700 rounded-lg text-sm hover:bg-slate-800 transition-colors">
+                    Reset UI
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
+        <div class="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
+            <h1 class="text-lg font-bold tracking-tight">Vision Pipeline</h1>
+            <button @click="sidebarOpen = true" class="p-2 hover:bg-slate-800 rounded-lg">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+        </div>
+        
+        <!-- Tab Bar -->
+        <div class="max-w-2xl mx-auto px-4 flex gap-8">
+            <button @click="activeTab = 'capture'" :class="activeTab === 'capture' ? 'text-red-500 border-b-2 border-red-500' : 'text-slate-500 hover:text-slate-300'" class="py-2 text-sm font-bold uppercase tracking-widest transition-all">Capture</button>
+            <button @click="activeTab = 'batch'" :class="activeTab === 'batch' ? 'text-red-500 border-b-2 border-red-500' : 'text-slate-500 hover:text-slate-300'" class="py-2 text-sm font-bold uppercase tracking-widest transition-all">Batch</button>
+            <button @click="activeTab = 'review'" :class="activeTab === 'review' ? 'text-red-500 border-b-2 border-red-500' : 'text-slate-500 hover:text-slate-300'" class="py-2 text-sm font-bold uppercase tracking-widest transition-all flex items-center gap-2">
+                Review 
+                <span x-show="queue.length > 0" class="bg-red-500 text-white text-[10px] px-1.5 rounded-full" x-text="queue.length"></span>
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-xl mx-auto p-4 space-y-6 pb-32">
+        
+        <!-- Tab: Capture -->
+        <div x-show="activeTab === 'capture'" class="space-y-6" x-transition>
+            <!-- Capture Card -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                <div class="flex flex-col items-center gap-4 text-center">
+                    <p class="text-xs font-bold text-slate-500 tracking-[0.2em] uppercase">Ready to Identify</p>
+                    <label class="w-full aspect-[4/3] bg-red-500/10 border-4 border-dashed border-red-500/30 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-red-500/20 transition-all active:scale-95">
+                        <input type="file" id="file_input" accept="image/*" capture="environment" class="hidden" @change="onFileSelected">
+                        <div class="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center shadow-lg shadow-red-500/40 mb-4">
+                            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        </div>
+                        <span class="text-xl font-black text-red-500 uppercase tracking-wider">Take Photo</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Single Result Review (Copied from previous version) -->
+            <div x-show="results && !loading" class="space-y-6">
+                <!-- Image Preview -->
+                <div class="rounded-xl overflow-hidden border border-slate-800 bg-slate-900 shadow-lg">
+                    <img :src="aiPreview" class="w-full">
+                </div>
+                
+                <!-- Review Form -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+                    <!-- Standard Fields -->
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-start gap-4">
+                            <div class="flex-1">
+                                <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Product Name</label>
+                                <input type="text" x-model="form.product_name" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                            </div>
+                            <div class="w-24">
+                                <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Confidence</label>
+                                <div class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-center font-black" 
+                                     :class="results.llm_output.confidence_score > 0.8 ? 'text-green-500' : 'text-orange-500'"
+                                     x-text="Math.round(results.llm_output.confidence_score * 100) + '%'"></div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Brand</label>
+                                <input type="text" x-model="form.brand" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Category</label>
+                                <input type="text" x-model="form.category" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Location</label>
+                                <select x-model="form.location" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                                    <template x-for="loc in locations">
+                                        <option :value="loc.name" x-text="loc.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div class="flex gap-2 items-end">
+                                <div class="flex-1">
+                                    <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Qty</label>
+                                    <input type="number" x-model="form.quantity" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                                </div>
+                                <div class="flex-1">
+                                    <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Unit</label>
+                                    <input type="text" x-model="form.unit" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Description</label>
+                            <textarea x-model="form.description" rows="2" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-red-500 outline-none resize-none"></textarea>
+                        </div>
+
+                        <!-- Technical Details Toggle -->
+                        <div x-data="{ open: false }" class="border-t border-slate-800 pt-4">
+                            <button @click="open = !open" class="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase hover:text-white transition-colors">
+                                <svg class="w-3 h-3 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"></path></svg>
+                                Technical Details & Specs
+                            </button>
+                            
+                            <div x-show="open" x-transition class="space-y-4 mt-4">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Manufacturer</label>
+                                        <input type="text" x-model="form.manufacturer" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">MSRP</label>
+                                        <input type="text" x-model="form.msrp" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Model #</label>
+                                        <input type="text" x-model="form.model_number" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Serial #</label>
+                                        <input type="text" x-model="form.serial_number" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Technical Details</label>
+                                    <textarea x-model="form.technical_details" rows="3" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-[10px] font-mono focus:ring-1 focus:ring-red-500 outline-none resize-none"></textarea>
+                                </div>
+                                <div>
+                                    <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Product Link</label>
+                                    <input type="text" x-model="form.product_url" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Food Specifics (Instructions) -->
+                        <div x-show="form.is_food" class="border-t border-slate-800 pt-4 space-y-4">
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Instructions</label>
+                                <textarea x-model="form.recipe_instructions_raw" rows="3" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-[10px] font-mono focus:ring-1 focus:ring-red-500 outline-none resize-none"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+                        <button @click="addToHomebox()" class="bg-red-600 p-3 rounded-xl font-bold text-[10px] shadow-lg shadow-red-500/20 active:scale-95 transition-all">📦 BOX</button>
+                        <button @click="addFoodToMealie()" class="bg-blue-600 p-3 rounded-xl font-bold text-[10px] shadow-lg shadow-blue-500/20 active:scale-95 transition-all">🍎 FOOD</button>
+                        <button @click="addMealieShoppingList()" class="bg-orange-600 p-3 rounded-xl font-bold text-[10px] shadow-lg shadow-orange-500/20 active:scale-95 transition-all">🛒 SHOP</button>
+                        <button @click="addToMealie()" class="bg-emerald-600 p-3 rounded-xl font-bold text-[10px] shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">🍳 RECIPE</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Batch Upload -->
+        <div x-show="activeTab === 'batch'" class="space-y-6" x-transition>
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+                <div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Supplemental Context (Applies to all images)</label>
+                    <textarea x-model="textInfo" rows="3" placeholder="e.g. These are items for the guest bathroom, mostly toiletries..." 
+                              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 transition-all resize-none"></textarea>
+                </div>
+                
+                <div class="bg-slate-800/50 border border-slate-700 rounded-2xl p-8 border-dashed border-2 text-center">
+                    <label class="cursor-pointer group">
+                        <input type="file" multiple accept="image/*" class="hidden" @change="onBatchSelected">
+                        <div class="text-4xl mb-4 group-hover:scale-110 transition-transform">📂</div>
+                        <h3 class="text-xl font-bold">Select Images</h3>
+                        <p class="text-slate-500 text-sm mt-2">Pick multiple photos from your library</p>
+                        <div class="mt-6 inline-block bg-red-600 px-8 py-3 rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-red-500/20 active:scale-95 transition-all">Upload Batch</div>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Review Queue -->
+        <div x-show="activeTab === 'review'" class="space-y-6" x-transition>
+            <div class="flex justify-between items-center px-1">
+                <div class="flex gap-2">
+                    <button @click="filterType = 'all'" :class="filterType === 'all' ? 'bg-slate-800 text-white' : 'text-slate-500'" class="text-[10px] font-bold uppercase px-3 py-1 rounded-full">All</button>
+                    <button @click="filterType = 'food'" :class="filterType === 'food' ? 'bg-blue-900/50 text-blue-400' : 'text-slate-500'" class="text-[10px] font-bold uppercase px-3 py-1 rounded-full">Food</button>
+                    <button @click="filterType = 'product'" :class="filterType === 'product' ? 'bg-red-900/50 text-red-400' : 'text-slate-500'" class="text-[10px] font-bold uppercase px-3 py-1 rounded-full">Products</button>
+                </div>
+                <button @click="fetchQueue()" class="p-2 text-slate-500 hover:text-white">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
+            </div>
+
+            <!-- Empty State -->
+            <div x-show="filteredQueue.length === 0" class="text-center py-20 opacity-20">
+                <p class="font-medium">No items pending review</p>
+            </div>
+
+            <!-- Queue Items -->
+            <div class="space-y-6">
+                <template x-for="item in filteredQueue" :key="item.id">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl"
+                         :class="item.is_approved ? 'ring-2 ring-green-500/50' : ''">
+                        <div class="flex flex-col">
+                            <!-- Header Info -->
+                            <div class="flex flex-col sm:flex-row border-b border-slate-800">
+                                <!-- Image Thumb -->
+                                <div class="w-full sm:w-48 h-48 bg-black flex-shrink-0 relative">
+                                    <img :src="'/uploads/' + item.image_path" class="w-full h-full object-cover">
+                                    <div x-show="item.status === 'processing'" class="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center">
+                                        <div class="w-8 h-8 border-4 border-red-500/20 border-t-red-500 rounded-full animate-spin mb-2"></div>
+                                        <span class="text-[10px] font-black text-white uppercase tracking-widest">Processing...</span>
+                                    </div>
+                                    <div x-show="item.status === 'error'" class="absolute inset-0 bg-red-950/80 flex flex-col items-center justify-center p-2 text-center">
+                                        <span class="text-xs font-bold text-white mb-1">Processing Failed</span>
+                                        <span class="text-[9px] text-red-200 line-clamp-3" x-text="item.error"></span>
+                                        <button @click="rerunItem(item.id)" class="mt-2 bg-white text-red-900 px-3 py-1 rounded font-bold text-[9px] uppercase">Retry</button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Basic Info -->
+                                <div class="p-4 flex-1 space-y-3">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex-1">
+                                            <label class="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Product Name</label>
+                                            <input type="text" x-model="item.edit_data.product_name" 
+                                                   class="bg-transparent font-bold text-lg w-full border-b border-slate-800 focus:border-red-500/50 focus:outline-none py-1">
+                                        </div>
+                                        <div class="flex flex-col items-end gap-2 ml-4">
+                                            <span :class="item.product_type === 'food' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'" 
+                                                  class="text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded border"
+                                                  x-text="item.product_type"></span>
+                                            <div class="flex items-center gap-1">
+                                                <span class="text-[10px] font-bold text-slate-500" x-text="item.ai_output?.llm_output?.confidence_score ? Math.round(item.ai_output.llm_output.confidence_score * 100) + '%' : ''"></span>
+                                                <div class="w-1.5 h-1.5 rounded-full" :class="item.ai_output?.llm_output?.confidence_score > 0.8 ? 'bg-green-500' : 'bg-orange-500'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Brand / Manufacturer</label>
+                                            <input type="text" x-model="item.edit_data.brand" class="bg-transparent text-sm w-full border-b border-slate-800 focus:border-red-500/50 focus:outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Category</label>
+                                            <input type="text" x-model="item.edit_data.category" class="bg-transparent text-sm w-full border-b border-slate-800 focus:border-red-500/50 focus:outline-none">
+                                        </div>
+                                    </div>
+
+                                    <div class="flex justify-between items-center pt-2">
+                                        <div class="flex gap-4">
+                                            <button @click="item.show_more = !item.show_more" class="text-[10px] font-bold text-slate-500 hover:text-white uppercase tracking-widest flex items-center gap-1">
+                                                <svg class="w-3 h-3 transition-transform" :class="item.show_more ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"></path></svg>
+                                                Details
+                                            </button>
+                                            <button @click="rerunItem(item.id)" class="text-[10px] font-bold text-blue-500 hover:text-blue-400 uppercase tracking-widest flex items-center gap-1">
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                                Rerun
+                                            </button>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button @click="discardItem(item.id)" class="p-2 text-slate-600 hover:text-red-500 transition-colors">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            </button>
+                                            <button @click="approveItem(item)" 
+                                                    :class="item.is_approved ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'"
+                                                    class="px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95">
+                                                <span x-text="item.is_approved ? '✓ Approved' : 'Accept'"></span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Expanded Details -->
+                            <div x-show="item.show_more" x-transition class="p-4 bg-black/20 space-y-4 border-b border-slate-800">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div class="space-y-4">
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label class="text-[9px] font-black text-slate-500 uppercase">Quantity</label>
+                                                <input type="number" x-model="item.edit_data.quantity" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                                            </div>
+                                            <div>
+                                                <label class="text-[9px] font-black text-slate-500 uppercase">Unit</label>
+                                                <input type="text" x-model="item.edit_data.unit" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] font-black text-slate-500 uppercase">Location</label>
+                                            <select x-model="item.edit_data.location" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-red-500 outline-none">
+                                                <template x-for="loc in locations">
+                                                    <option :value="loc.name" x-text="loc.name"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="text-[9px] font-black text-slate-500 uppercase">Description</label>
+                                            <textarea x-model="item.edit_data.description" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs resize-none focus:ring-1 focus:ring-red-500 outline-none"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="text-[9px] font-black text-slate-500 uppercase">Manufacturer</label>
+                                        <input type="text" x-model="item.edit_data.manufacturer" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-red-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="text-[9px] font-black text-slate-500 uppercase">MSRP / Price</label>
+                                        <input type="text" x-model="item.edit_data.msrp" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-red-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="text-[9px] font-black text-slate-500 uppercase">Product Link</label>
+                                        <input type="text" x-model="item.edit_data.product_url" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-red-500 outline-none">
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-[9px] font-black text-slate-500 uppercase">Model #</label>
+                                        <input type="text" x-model="item.edit_data.model_number" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-red-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="text-[9px] font-black text-slate-500 uppercase">Serial #</label>
+                                        <input type="text" x-model="item.edit_data.serial_number" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-red-500 outline-none">
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="text-[9px] font-black text-slate-500 uppercase">Technical Specs / Details</label>
+                                    <textarea x-model="item.edit_data.technical_details" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px] font-mono resize-none focus:ring-1 focus:ring-red-500 outline-none"></textarea>
+                                </div>
+
+                                <!-- Food Specifics in Review -->
+                                <div x-show="item.product_type === 'food'" class="pt-2 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-[9px] font-black text-slate-500 uppercase">Ingredients</label>
+                                        <textarea x-model="item.edit_data.recipe_ingredients_raw" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px] font-mono resize-none focus:ring-1 focus:ring-red-500 outline-none"></textarea>
+                                    </div>
+                                    <div>
+                                        <label class="text-[9px] font-black text-slate-500 uppercase">Instructions</label>
+                                        <textarea x-model="item.edit_data.recipe_instructions_raw" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px] font-mono resize-none focus:ring-1 focus:ring-red-500 outline-none"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Progress Overlay (Capture Tab) -->
+        <div x-show="loading" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center" x-cloak>
+            <div class="spinner mb-4"></div>
+            <p class="text-red-500 font-bold animate-pulse" x-text="loadingStatus"></p>
+        </div>
+
+    </main>
+
+    <!-- Bulk Action Bar -->
+    <div x-show="activeTab === 'review' && approvedIds.length > 0" 
+         x-transition:enter="transition ease-out duration-300 translate-y-full"
+         x-transition:enter-end="translate-y-0"
+         class="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-red-500/30 p-4 z-50 shadow-2xl" x-cloak>
+        <div class="max-w-xl mx-auto flex justify-between items-center">
+            <div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-widest">Bulk Action</div>
+                <div class="text-sm font-black text-white"><span x-text="approvedIds.length"></span> Items Ready</div>
+            </div>
+            <button @click="bulkUpload()" :disabled="adding"
+                    class="bg-red-600 hover:bg-red-500 text-white px-8 py-3 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-red-500/20 disabled:bg-slate-700">
+                <template x-if="!adding"><span>Upload All</span></template>
+                <template x-if="adding">
+                    <div class="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                </template>
+            </button>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="fixed bottom-4 left-4 right-4 z-[60] pointer-events-none space-y-2">
+        <template x-for="t in toasts">
+            <div x-show="t.show" x-transition class="bg-slate-800 text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-3 pointer-events-auto">
+                <div x-show="t.type === 'success'" class="w-2 h-2 bg-green-500 rounded-full"></div>
+                <div x-show="t.type === 'error'" class="w-2 h-2 bg-red-500 rounded-full"></div>
+                <span x-text="t.msg" class="text-sm font-medium"></span>
+            </div>
+        </template>
+    </div>
+
+    <script>
+        function visionApp() {
+            return {
+                activeTab: 'capture',
+                sidebarOpen: false,
+                loading: false,
+                loadingStatus: 'IDENTIFYING...',
+                adding: false,
+                results: null,
+                aiPreview: null,
+                textInfo: '',
+                queue: [],
+                filterType: 'all',
+                form: {
+                    product_name: '', brand: '', manufacturer: '', model_number: '', serial_number: '',
+                    category: '', description: '', technical_details: '', notes: '',
+                    quantity: 1, unit: '', msrp: '', product_url: '',
+                    location: 'pantry', is_food: false, 
+                    recipe_ingredients_raw: '', recipe_instructions_raw: '',
+                    purchase_price: 0
+                },
+                rotation: parseInt(localStorage.getItem('vision_rotation')) || 0,
+                mirror: localStorage.getItem('vision_mirror') === 'true',
+                preset: localStorage.getItem('vision_preset') || 'Manual',
+                toasts: [],
+                locations: [],
+
+                init() {
+                    this.$watch('rotation', val => localStorage.setItem('vision_rotation', val));
+                    this.$watch('mirror', val => localStorage.setItem('vision_mirror', val));
+                    this.$watch('preset', val => localStorage.setItem('vision_preset', val));
+                    this.fetchLocations();
+                    this.fetchQueue();
+                    
+                    // Auto-refresh queue if items are processing
+                    setInterval(() => {
+                        if (this.queue.some(i => i.status === 'processing')) {
+                            this.fetchQueue();
+                        }
+                    }, 5000);
+                },
+
+                get filteredQueue() {
+                    if (this.filterType === 'all') return this.queue;
+                    return this.queue.filter(i => i.product_type === this.filterType);
+                },
+
+                get approvedIds() {
+                    return this.queue.filter(i => i.is_approved).map(i => i.id);
+                },
+
+                async fetchLocations() {
+                    try {
+                        const response = await fetch('/locations');
+                        const data = await response.json();
+                        if (data.success) this.locations = data.locations;
+                    } catch (err) { console.error(err); }
+                },
+
+                async fetchQueue() {
+                    try {
+                        const response = await fetch('/queue?status=pending');
+                        const data = await response.json();
+                        const procResponse = await fetch('/queue?status=processing');
+                        const procData = await procResponse.json();
+                        
+                        this.queue = [...procData.items, ...data.items].map(i => {
+                            const llm = i.ai_output?.llm_output || {};
+                            let parsedQty = 1; let parsedUnit = '';
+                            if (llm.quantity_info) {
+                                const match = llm.quantity_info.match(/^(\d+)\s*(.*)$/);
+                                if (match) { parsedQty = parseInt(match[1]); parsedUnit = match[2].trim(); }
+                                else { parsedUnit = llm.quantity_info; }
+                            }
+                            return {
+                                ...i,
+                                is_approved: false,
+                                show_more: false,
+                                edit_data: i.user_overrides || {
+                                    product_name: llm.product_name || '',
+                                    brand: llm.brand || '',
+                                    manufacturer: llm.manufacturer || llm.brand || '',
+                                    model_number: llm.model_number || '',
+                                    serial_number: llm.serial_number || '',
+                                    category: llm.category || '',
+                                    description: llm.description || '',
+                                    technical_details: llm.technical_details || '',
+                                    notes: llm.notes || '',
+                                    quantity: parsedQty,
+                                    unit: parsedUnit,
+                                    msrp: llm.msrp || '',
+                                    product_url: llm.product_url || '',
+                                    location: 'pantry',
+                                    purchase_price: parseFloat(llm.msrp?.replace(/[^0-9.]/g, '')) || 0,
+                                    recipe_ingredients_raw: (llm.recipe_ingredients || []).join('\n'),
+                                    recipe_instructions_raw: (llm.recipe_instructions || []).join('\n')
+                                }
+                            };
+                        });
+                    } catch (err) { console.error(err); }
+                },
+
+                async onBatchSelected(e) {
+                    const files = e.target.files;
+                    if (!files.length) return;
+                    
+                    this.notify(`Uploading ${files.length} images...`);
+                    const formData = new FormData();
+                    for (let i = 0; i < files.length; i++) {
+                        formData.append('files', files[i]);
+                    }
+                    if (this.textInfo) {
+                        formData.append('text', this.textInfo);
+                    }
+
+                    try {
+                        const response = await fetch('/batch-upload', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const data = await response.json();
+                        if (data.success) {
+                            this.notify('Batch uploaded. Processing in background.');
+                            this.activeTab = 'review';
+                            this.fetchQueue();
+                        }
+                    } catch (err) {
+                        this.notify('Batch upload failed', 'error');
+                    } finally {
+                        e.target.value = '';
+                    }
+                },
+
+                async rerunItem(id) {
+                    try {
+                        await fetch(`/items/${id}/rerun`, { method: 'POST' });
+                        this.notify('Re-processing started');
+                        this.fetchQueue();
+                    } catch (err) { this.notify('Rerun failed', 'error'); }
+                },
+
+                approveItem(item) {
+                    item.is_approved = !item.is_approved;
+                    if (item.is_approved) {
+                        fetch(`/items/${item.id}/update`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ user_overrides: item.edit_data })
+                        }).catch(err => console.error(err));
+                    }
+                },
+
+                async discardItem(id) {
+                    if (!confirm('Discard this item?')) return;
+                    try {
+                        await fetch(`/items/${id}`, { method: 'DELETE' });
+                        this.queue = this.queue.filter(i => i.id !== id);
+                        this.notify('Item discarded');
+                    } catch (err) { this.notify('Discard failed', 'error'); }
+                },
+
+                async bulkUpload() {
+                    this.adding = true;
+                    try {
+                        const response = await fetch('/bulk-approve', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ item_ids: this.approvedIds })
+                        });
+                        const data = await response.json();
+                        this.notify(`Batch complete: ${data.success.length} saved, ${data.failed.length} failed`);
+                        this.fetchQueue();
+                    } catch (err) {
+                        this.notify('Bulk action failed', 'error');
+                    } finally {
+                        this.adding = false;
+                    }
+                },
+
+                async onFileSelected(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    this.loading = true;
+                    this.loadingStatus = 'IDENTIFYING...';
+                    this.results = null;
+
+                    try {
+                        const compressedBlob = await this.compressImage(file);
+                        const formData = new FormData();
+                        formData.append('file', compressedBlob, 'image.jpg');
+                        formData.append('text', this.textInfo);
+                        formData.append('rotation', this.rotation);
+                        formData.append('mirror', this.mirror);
+
+                        const response = await fetch('/identify', { method: 'POST', body: formData });
+                        const data = await response.json();
+
+                        if (data.success) {
+                            this.results = data.results;
+                            this.aiPreview = data.ai_preview;
+                            const llm = data.results.llm_output;
+                            
+                            let parsedQty = 1; let parsedUnit = '';
+                            if (llm.quantity_info) {
+                                const match = llm.quantity_info.match(/^(\d+)\s*(.*)$/);
+                                if (match) { parsedQty = parseInt(match[1]); parsedUnit = match[2].trim(); }
+                                else { parsedUnit = llm.quantity_info; }
+                            }
+
+                            this.form = {
+                                product_name: llm.product_name, brand: llm.brand, 
+                                manufacturer: llm.manufacturer || llm.brand || '',
+                                model_number: llm.model_number || '',
+                                serial_number: llm.serial_number || '',
+                                category: llm.category,
+                                description: llm.description, 
+                                technical_details: llm.technical_details || '',
+                                notes: llm.notes || '',
+                                quantity: parsedQty, unit: parsedUnit,
+                                msrp: llm.msrp || '', product_url: llm.product_url || '',
+                                purchase_price: parseFloat(llm.msrp?.replace(/[^0-9.]/g, '')) || 0,
+                                location: 'pantry', is_food: llm.is_food,
+                                recipe_ingredients_raw: (llm.recipe_ingredients || []).join('\n'),
+                                recipe_instructions_raw: (llm.recipe_instructions || []).join('\n')
+                            };
+                            this.notify('Identify Complete');
+                        }
+                    } catch (err) { this.notify('Error identifying', 'error'); }
+                    finally { this.loading = false; e.target.value = ''; }
+                },
+
+                async addToHomebox() {
+                    this.adding = true;
+                    try {
+                        const response = await fetch('/add-to-homebox', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ...this.form })
+                        });
+                        const data = await response.json();
+                        if (data.success) this.notify('Stored in Homebox');
+                        else this.notify('Failed to store', 'error');
+                    } catch (err) { this.notify('Add error', 'error'); }
+                    finally { this.adding = false; }
+                },
+                
+                async addFoodToMealie(existingFood = null) {
+                    this.adding = true;
+                    try {
+                        const payload = {
+                            name: existingFood ? existingFood.name : this.form.product_name,
+                            description: existingFood ? existingFood.description : this.form.description,
+                            extras: { in_stock: "true", location: this.form.location, last_updated: new Date().toISOString().split('T')[0] }
+                        };
+                        if (existingFood) payload.id = existingFood.id;
+                        const response = await fetch('/add-food-to-mealie', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                        const data = await response.json();
+                        if (data.success) this.notify(existingFood ? 'Food Updated' : 'Food Created');
+                        else this.notify('Failed to save food', 'error');
+                    } catch (err) { this.notify('Food error', 'error'); }
+                    finally { this.adding = false; }
+                },
+
+                async addMealieShoppingList() {
+                    this.adding = true;
+                    try {
+                        const payload = { name: this.form.product_name, quantity: this.form.quantity, note: this.form.brand };
+                        const response = await fetch('/add-to-mealie-shopping-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                        const data = await response.json();
+                        if (data.success) this.notify('Added to Shopping List');
+                        else this.notify('Failed to add', 'error');
+                    } catch (err) { this.notify('Shopping List error', 'error'); }
+                    finally { this.adding = false; }
+                },
+
+                async addToMealie() {
+                    this.adding = true;
+                    try {
+                        const payload = {
+                            name: this.form.product_name, description: this.form.description,
+                            recipeIngredients: this.form.recipe_ingredients_raw.split('\n').filter(i => i.trim()).map(i => ({ note: i })),
+                            recipeInstructions: this.form.recipe_instructions_raw.split('\n').filter(i => i.trim()).map(i => ({ text: i })),
+                            yield: this.form.quantity_info
+                        };
+                        const response = await fetch('/add-to-mealie', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                        const data = await response.json();
+                        if (data.success) this.notify('Stored in Mealie');
+                        else this.notify('Failed to store', 'error');
+                    } catch (err) { this.notify('Mealie error', 'error'); }
+                    finally { this.adding = false; }
+                },
+
+                async notify(msg, type = 'success') {
+                    const id = Date.now();
+                    this.toasts.push({ id, msg, type, show: true });
+                    setTimeout(() => {
+                        const t = this.toasts.find(x => x.id === id);
+                        if (t) t.show = false;
+                    }, 3000);
+                },
+
+                async compressImage(file) {
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                const canvas = document.createElement('canvas');
+                                const MAX_WIDTH = 1600; const MAX_HEIGHT = 1600;
+                                let width = img.width; let height = img.height;
+                                if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } }
+                                else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+                                canvas.width = width; canvas.height = height;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0, width, height);
+                                canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.8);
+                            };
+                            img.src = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                },
+
+                clearResults() { this.results = null; this.aiPreview = null; this.sidebarOpen = false; this.notify('UI Reset'); }
+            }
+        }
+    </script>
+</body>
+</html>
