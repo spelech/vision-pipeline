@@ -48,7 +48,9 @@
                 <h1 class="text-lg font-black tracking-widest uppercase text-white leading-none" x-text="activeTab"></h1>
             </div>
         </div>
-        
+        <div class="flex items-center gap-4">
+             <div x-show="loading" class="w-6 h-6 border-2 border-white/10 border-t-white rounded-full animate-spin"></div>
+        </div>
     </nav>
 
     <!-- Side Navigation Menu -->
@@ -58,7 +60,7 @@
                 <h2 class="text-[11px] font-black uppercase tracking-[0.3em] opacity-40">System Menu</h2>
                 <button @click="showMenu = false" class="text-white/40 hover:text-white text-xl">✕</button>
             </div>
-            <div class="flex-1 p-8 space-y-4 overflow-y-auto no-scrollbar">
+            <div class="flex-1 p-6 space-y-3 overflow-y-auto no-scrollbar">
                 <template x-for="tab in ['capture', 'batch', 'review', 'search', 'pipelines', 'settings']">
                     <button @click="activeTab = tab; showMenu = false" 
                             class="w-full text-left px-8 py-5 rounded-2xl text-sm font-black uppercase tracking-widest transition-all flex items-center gap-5"
@@ -69,34 +71,31 @@
                 </template>
             </div>
             <div class="p-10 border-t border-white/10 text-center">
-                <p class="text-[9px] font-black uppercase tracking-[0.4em] opacity-20">Vision Pipeline v3.1.0</p>
+                <p class="text-[9px] font-black uppercase tracking-[0.4em] opacity-20">Vision Pipeline v3.1.5</p>
             </div>
         </div>
     </div>
 
     <main class="pt-28 pb-32 px-6 w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <!-- Tab: Single Capture -->
-        <div x-show="activeTab === 'capture'" class="lg:col-span-7 space-y-8" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 translate-y-12">
-            
-            <!-- Top Controls -->
+        
+        <!-- Tab: Single Capture (Column 1) -->
+        <div x-show="activeTab === 'capture'" class="lg:col-span-7 space-y-8" x-transition>
+            <!-- 1. Top Controls -->
             <div class="space-y-6">
-                <!-- Pipeline & Model Selection -->
-                <div class="grid grid-cols-1 gap-4">
-                    <div class="glass p-5 rounded-3xl space-y-2">
-                        <label class="label-apple ml-1">Pipeline</label>
-                        <div class="relative">
-                            <select x-model="selectedPipeline" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm font-bold focus:outline-none appearance-none">
-                                <template x-for="p in pipelines" :key="p.id">
-                                    <option :value="p.id" x-text="p.name" class="bg-black text-white" :class="p.invalid_model ? 'text-red-400' : ''"></option>
-                                </template>
-                            </select>
-                            <span class="absolute right-5 top-5 opacity-20 pointer-events-none text-[10px]">▼</span>
-                        </div>
-                    </div>
+                <!-- Pipeline Selection -->
+                <div class="glass p-6 rounded-3xl space-y-2">
+                    <label class="label-apple ml-1">Active Pipeline</label>
+                    <div class="relative">
+                        <select x-model="selectedPipeline" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm font-bold focus:outline-none appearance-none">
+                            <template x-for="p in pipelines" :key="p.id">
+                                <option :value="p.id" x-text="p.name" class="bg-black text-white"></option>
+                            </template>
+                        </select>
+                        <span class="absolute right-5 top-5 opacity-20 pointer-events-none text-[10px]">▼</span>
                     </div>
                 </div>
 
-                <!-- Capture Buttons -->
+                <!-- Capture Grid -->
                 <div class="grid grid-cols-2 gap-4">
                     <label class="cursor-pointer">
                         <input type="file" capture="environment" accept="image/*" class="hidden" @change="onFileSelected">
@@ -115,7 +114,7 @@
                 </div>
             </div>
 
-            <!-- Viewfinder (Smaller) -->
+            <!-- 2. Viewfinder (Visible only after capture) -->
             <div x-show="aiPreview" class="relative rounded-[3rem] overflow-hidden glass aspect-video shadow-2xl border-white/10 max-w-2xl mx-auto">
                 <img :src="aiPreview" class="w-full h-full object-cover">
                 <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
@@ -127,25 +126,30 @@
                 </div>
             </div>
 
-            <!-- Guidance & Trigger -->
+            <!-- 3. Guidance & Identification Execution -->
             <div class="glass p-8 rounded-[2.5rem] space-y-6 border-white/10 bg-white/[0.02]">
                 <div class="space-y-3">
                     <label class="label-apple ml-1">AI Guidance / Notes</label>
                     <textarea x-model="textInfo" placeholder="Context for the AI..." 
-                              class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:ring-1 focus:ring-white/40 outline-none resize-none h-20 transition-all text-white"></textarea>
+                              class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:ring-1 focus:ring-white/40 outline-none resize-none h-24 transition-all text-white"></textarea>
                 </div>
                 
                 <div class="flex gap-4">
                     <button x-show="aiPreview && !results" @click="runIdentification()" 
                             :disabled="isPipelineInvalid()"
-                            class="flex-1 btn-apple py-6 text-[10px] font-black uppercase tracking-[0.4em] shadow-xl disabled:opacity-30"
-                            :class="isPipelineInvalid() ? 'grayscale' : ''">
+                            class="flex-1 btn-apple py-6 text-[10px] font-black uppercase tracking-[0.4em] shadow-xl disabled:opacity-30">
                         <span x-text="isPipelineInvalid() ? 'Model Unavailable' : 'Begin Identification'"></span>
                     </button>
                 </div>
             </div>
+
+            <!-- 4. Result Card (Mobile Only - hidden on large desktop sidebar) -->
+            <div x-show="results" class="lg:hidden space-y-6" x-transition>
+                <!-- Reuse of the result card below -->
+            </div>
         </div>
-        <!-- Desktop Results Sidebar -->
+
+        <!-- Desktop Results Sidebar (Column 2) -->
         <div x-show="activeTab === 'capture'" class="hidden lg:block lg:col-span-5 space-y-6 sticky top-28 h-fit">
             <div x-show="!results" class="glass p-16 rounded-[3.5rem] text-center opacity-20 border-dashed border-2">
                 <p class="text-[10px] font-black uppercase tracking-[0.4em]">Identification data will appear here</p>
@@ -243,7 +247,7 @@
             </label>
         </div>
 
-        <!-- Tab: Processing Review -->
+        <!-- Tab: Review Queue -->
         <div x-show="activeTab === 'review'" class="lg:col-span-12 w-full max-w-5xl mx-auto space-y-8" x-transition>
             <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
                 <h1 class="text-5xl font-black tracking-tighter">Review Queue</h1>
@@ -264,15 +268,12 @@
                         </select>
                     </div>
                 </div>
-                <div class="flex gap-2 bg-white/5 p-1 rounded-2xl">
-                    <button @click="filterType = 'all'" :class="filterType === 'all' ? 'bg-white text-black' : 'text-white/40'" class="px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">All</button>
-                    <button @click="filterType = 'food'" :class="filterType === 'food' ? 'bg-white text-black' : 'text-white/40'" class="px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Food</button>
-                </div>
             </div>
 
             <div class="space-y-6">
                 <template x-for="item in filteredQueue" :key="item.id">
                     <div class="glass rounded-[3rem] overflow-hidden group border-white/5 hover:border-white/20 transition-all shadow-2xl">
+                        <!-- Item Card Header -->
                         <div class="flex flex-col sm:flex-row min-h-[160px]">
                             <div class="w-full sm:w-56 h-56 sm:h-auto relative flex-shrink-0">
                                 <img :src="'/uploads/' + item.image_path" class="w-full h-full object-cover">
@@ -293,6 +294,7 @@
                             </div>
                         </div>
 
+                        <!-- Item Card Expanded Details -->
                         <div x-show="item.show_more" class="p-12 bg-white/[0.01] space-y-12 border-t border-white/10" x-transition>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
                                 <div class="space-y-4">
@@ -315,20 +317,8 @@
                                 </div>
                             </div>
 
-                            <div class="space-y-6">
-                                <label class="label-apple ml-2">Final Dispatch Routing</label>
-                                <div class="grid grid-cols-1 gap-4">
-                                    <template x-for="svc in ['homebox', 'mealie', 'pricebuddy', 'changedetection']">
-                                        <label class="glass p-6 rounded-[2rem] flex items-center justify-between border-white/5 cursor-pointer hover:bg-white/5 transition-all">
-                                            <span class="text-[11px] font-black uppercase text-white/70" x-text="svc"></span>
-                                            <input type="checkbox" :value="svc" x-model="item.selected_services" class="ios-toggle">
-                                        </label>
-                                    </template>
-                                </div>
-                            </div>
-
                             <div class="flex flex-col sm:flex-row gap-6 pt-6">
-                                <button @click="triggerServices(item)" :disabled="item.executing" 
+                                <button @click="previewAndExecute(item.id)" :disabled="item.executing" 
                                         class="flex-1 btn-apple py-8 text-[11px] font-black uppercase tracking-[0.5em] shadow-2xl">
                                     <span x-show="!item.executing">Process Entry</span>
                                     <div x-show="item.executing" class="w-8 h-8 border-3 border-black/10 border-t-black rounded-full animate-spin mx-auto"></div>
@@ -347,7 +337,7 @@
                 <h2 class="text-[11px] font-black uppercase tracking-[0.5em] mb-4 text-white/30">Archive Retrieval</h2>
                 <div class="flex flex-col sm:flex-row gap-5">
                     <div class="relative flex-1">
-                        <input type="text" x-model="searchQuery" @keyup.enter="runSearch()" placeholder="Search metadata archives..." class="w-full bg-white/5 border border-white/10 rounded-[1.75rem] p-6 pl-16 text-sm focus:outline-none focus:border-blue-500/50 transition-all">
+                        <input type="text" x-model="searchQuery" @keyup.enter="runSearch()" placeholder="Search metadata archives (use % as wildcard)..." class="w-full bg-white/5 border border-white/10 rounded-[1.75rem] p-6 pl-16 text-sm focus:outline-none focus:border-blue-500/50 transition-all">
                         <span class="absolute left-6 top-6 text-2xl opacity-40">🔍</span>
                     </div>
                     <button @click="runSearch()" class="btn-apple px-12 py-6 text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all">Search</button>
@@ -366,13 +356,6 @@
                                     <a :href="m.url" target="_blank" class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-colors" x-text="m.service"></a>
                                 </template>
                             </div>
-                        <div class="pt-4 border-t border-white/5 space-y-3">
-                            <span class="text-[9px] font-black uppercase text-white/30">Add Custom Model ID</span>
-                            <div class="flex gap-2">
-                                <input type="text" x-model="newModelId" placeholder="e.g. anthropic/claude-3-opus" class="flex-1 bg-black/40 border border-white/10 rounded-xl p-3 text-[10px] focus:outline-none">
-                                <button @click="if(newModelId) { modelFavorites.push(newModelId); newModelId = ''; saveConfig(); }" class="btn-apple px-4 rounded-xl text-[10px] font-black uppercase">Add</button>
-                            </div>
-                        </div>
                         </div>
                         <div class="flex flex-col items-center sm:items-end gap-3 flex-shrink-0">
                             <p class="text-[10px] text-white/20 font-black uppercase tracking-tighter" x-text="new Date(item.created_at).toLocaleDateString()"></p>
@@ -380,88 +363,7 @@
                         </div>
                     </div>
                 </template>
-                
-                <template x-if="searchResults.length === 0 && searchQuery && !isSearching">
-                    <div class="text-center py-32 opacity-20 border-2 border-dashed border-white/5 rounded-[3.5rem]">
-                        <p class="text-xs uppercase font-black tracking-[0.3em]">No results found in data lake</p>
-                    </div>
-                </template>
             </div>
-        </div>
-
-        
-        <!-- Tab: Settings -->
-        <div x-show="activeTab === 'settings'" class="lg:col-span-12 w-full max-w-4xl mx-auto space-y-12 pt-8 pb-32" x-transition>
-            <div class="text-center space-y-2">
-                <h2 class="text-[11px] font-black uppercase tracking-[0.5em] text-blue-400">Environment Configuration</h2>
-                <h1 class="text-5xl font-black tracking-tighter">System Settings</h1>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <!-- Neural Optimization -->
-                <section class="space-y-6">
-                    <label class="label-apple">Image Processing</label>
-                    <div class="glass p-8 rounded-[2.5rem] space-y-8">
-                        <div class="flex justify-between items-center">
-                            <span class="text-[11px] font-black uppercase text-white/40 tracking-widest">Res Limit (px)</span>
-                            <input type="number" x-model="imageOptimization.max_dimension" class="w-24 bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-center font-bold">
-                        </div>
-                        <div class="space-y-4">
-                            <div class="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                                <span>JPEG Quality</span>
-                                <span class="text-blue-400" x-text="imageOptimization.quality + '%'"></span>
-                            </div>
-                            <input type="range" min="10" max="100" x-model="imageOptimization.quality" class="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white">
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Model Management -->
-                <section class="space-y-6">
-                    <label class="label-apple">AI Model Core</label>
-                    <div class="glass p-8 rounded-[2.5rem] space-y-6">
-                        <div class="space-y-4">
-                            <span class="text-[9px] font-black uppercase text-white/30">Available Models (Favs)</span>
-                            <div class="space-y-2">
-                                <template x-for="m in ['qwen/qwen2.5-vl-72b-instruct', 'google/gemini-2.0-flash-001', 'anthropic/claude-3.5-sonnet', 'openai/gpt-4o-mini']" :key="m">
-                                    <label class="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer">
-                                        <span class="text-[10px] font-black uppercase tracking-tighter" x-text="m.split('/')[1]"></span>
-                                        <input type="checkbox" :value="m" x-model="modelFavorites" class="ios-toggle scale-75">
-                                    </label>
-                                </template>
-                            </div>
-                        <div class="pt-4 border-t border-white/5 space-y-3">
-                            <span class="text-[9px] font-black uppercase text-white/30">Add Custom Model ID</span>
-                            <div class="flex gap-2">
-                                <input type="text" x-model="newModelId" placeholder="e.g. anthropic/claude-3-opus" class="flex-1 bg-black/40 border border-white/10 rounded-xl p-3 text-[10px] focus:outline-none">
-                                <button @click="if(newModelId) { modelFavorites.push(newModelId); newModelId = ''; saveConfig(); }" class="btn-apple px-4 rounded-xl text-[10px] font-black uppercase">Add</button>
-                            </div>
-                        </div>
-                        </div>
-                        <button @click="saveConfig()" class="w-full py-3 rounded-2xl bg-white text-black text-[10px] font-black uppercase tracking-widest">Save Changes</button>
-                    </div>
-                </section>
-            </div>
-
-            <!-- Prompt Templates Section -->
-            <section class="space-y-6">
-                <label class="label-apple">Contextual Templates</label>
-                <div class="grid grid-cols-1 gap-8">
-                    <template x-for="p in promptTemplates" :key="p.id">
-                        <div class="glass p-8 rounded-[2.5rem] space-y-6 bg-white/[0.01] group border-white/5">
-                            <div class="flex justify-between items-center">
-                                <input type="text" x-model="p.name" class="bg-transparent border-none p-0 text-sm font-black uppercase text-blue-400 focus:ring-0 tracking-widest">
-                                <button @click="promptTemplates = promptTemplates.filter(x => x.id !== p.id)" class="text-red-500/30 hover:text-red-500 text-xs">✕</button>
-                            </div>
-                            <textarea x-model="p.prompt" class="w-full h-96 bg-black/60 border border-white/10 rounded-2xl p-5 text-xs font-mono text-white/60 focus:outline-none focus:border-blue-500/30 leading-relaxed"></textarea>
-                        </div>
-                    </template>
-                    <button @click="promptTemplates.push({id: Date.now(), name: 'NEW TEMPLATE', prompt: ''})" class="h-full py-16 rounded-[2.5rem] border-2 border-dashed border-white/10 text-xs font-black uppercase tracking-[0.4em] text-white/20 hover:text-white hover:bg-white/[0.02] transition-all flex flex-col items-center justify-center gap-4">
-                        <span class="text-4xl">+</span>
-                        <span>New Template</span>
-                    </button>
-                </div>
-            </section>
         </div>
 
         <!-- Tab: Pipelines -->
@@ -478,12 +380,6 @@
             </div>
 
             <div class="grid grid-cols-1 gap-10">
-                <template x-if="pipelines.length === 0">
-                    <div class="py-40 text-center opacity-20 border-2 border-dashed border-white/10 rounded-[4rem]">
-                        <p class="text-sm font-black uppercase tracking-[0.4em]">Handshaking with Node Registry...</p>
-                    </div>
-                </template>
-
                 <template x-for="p in pipelines" :key="p.id">
                     <div class="glass p-12 rounded-[4rem] space-y-12 group hover:border-white/20 transition-all shadow-2xl relative overflow-hidden border-2 border-white/5">
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
@@ -494,15 +390,14 @@
                                 </div>
                                 <p class="text-[11px] uppercase font-black tracking-[0.3em] text-white/20" x-text="p.id === 'default' ? 'Immutable Core Sequence' : 'User Defined Flow'"></p>
                             </div>
-                            
+                            <div class="flex items-center gap-5">
                                 <template x-if="modelFavorites.length > 0 && !modelFavorites.includes(p.schema.vision_model?.default)">
                                     <div class="flex items-center gap-2 text-red-400">
                                         <span class="text-xs">⚠️</span>
-                                        <span class="text-[8px] font-black uppercase tracking-widest">Model Unavailable - Update Required</span>
+                                        <span class="text-[8px] font-black uppercase tracking-widest">Model Unavailable</span>
                                     </div>
                                 </template>
-                            <div class="flex gap-5 w-full md:w-auto">
-                                <button @click="editPipeline(p)" class="flex-1 md:flex-none btn-apple px-10 py-4 rounded-[1.25rem] text-[10px] font-black uppercase tracking-widest shadow-xl">Configure Sequence</button>
+                                <button @click="editPipeline(p)" class="btn-apple px-10 py-4 rounded-[1.25rem] text-[10px] font-black uppercase tracking-widest shadow-xl">Configure Sequence</button>
                                 <button x-show="p.id.startsWith('custom-')" @click="deletePipeline(p.id)" class="glass-dark px-6 py-4 rounded-[1.25rem] text-red-500/60 hover:text-red-500 transition-all hover:bg-red-500/5">✕</button>
                             </div>
                         </div>
@@ -523,6 +418,53 @@
                                     </div>
                                 </template>
                             </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Tab: Settings -->
+        <div x-show="activeTab === 'settings'" class="lg:col-span-12 w-full max-w-5xl mx-auto space-y-12 pt-8 pb-32" x-transition>
+            <div class="text-center space-y-2">
+                <h2 class="text-[11px] font-black uppercase tracking-[0.5em] text-blue-400">Environment Configuration</h2>
+                <h1 class="text-5xl font-black tracking-tighter">System Settings</h1>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Image Optimization -->
+                <section class="space-y-6 text-center md:text-left">
+                    <label class="label-apple">Image Processing</label>
+                    <div class="glass p-8 rounded-[2.5rem] space-y-8 bg-black/20">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[11px] font-black uppercase text-white/40 tracking-widest">Res Limit (px)</span>
+                            <input type="number" x-model="imageOptimization.max_dimension" class="w-24 bg-black/60 border border-white/10 rounded-xl p-3 text-sm text-center font-bold">
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                                <span>JPEG Quality</span>
+                                <span class="text-blue-400" x-text="imageOptimization.quality + '%'"></span>
+                            </div>
+                            <input type="range" min="10" max="100" x-model="imageOptimization.quality" class="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Model Management -->
+                <section class="space-y-6">
+                    <label class="label-apple">AI Model Core</label>
+                    <div class="glass p-8 rounded-[2.5rem] space-y-6 bg-black/20">
+                        <div class="space-y-4">
+                            <span class="text-[9px] font-black uppercase text-white/30">Available Models (Favs)</span>
+                            <div class="space-y-2 max-h-64 overflow-y-auto no-scrollbar">
+                                <template x-for="m in modelFavorites" :key="m">
+                                    <div class="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
+                                        <span class="text-[10px] font-black uppercase tracking-tighter truncate mr-2" x-text="m.split('/')[1]"></span>
+                                        <button @click="modelFavorites = modelFavorites.filter(x => x !== m); saveConfig();" class="text-red-500/40 hover:text-red-500 text-[8px] uppercase font-black">✕</button>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
                         <div class="pt-4 border-t border-white/5 space-y-3">
                             <span class="text-[9px] font-black uppercase text-white/30">Add Custom Model ID</span>
                             <div class="flex gap-2">
@@ -530,90 +472,55 @@
                                 <button @click="if(newModelId) { modelFavorites.push(newModelId); newModelId = ''; saveConfig(); }" class="btn-apple px-4 rounded-xl text-[10px] font-black uppercase">Add</button>
                             </div>
                         </div>
-                        </div>
                     </div>
-                </template>
+                </section>
+            </div>
+
+            <!-- Prompt Templates Section -->
+            <section class="space-y-8">
+                <label class="label-apple">Contextual Prompt Engineering</label>
+                <div class="grid grid-cols-1 gap-10">
+                    <template x-for="p in promptTemplates" :key="p.id">
+                        <div class="glass p-10 rounded-[3rem] space-y-8 bg-white/[0.01] group border-white/5 border-2 hover:border-blue-500/20 transition-all shadow-2xl">
+                            <div class="flex justify-between items-center border-b border-white/5 pb-6">
+                                <input type="text" x-model="p.name" class="bg-transparent border-none p-0 text-xl font-black uppercase text-blue-400 focus:ring-0 tracking-[0.2em] w-3/4">
+                                <button @click="promptTemplates = promptTemplates.filter(x => x.id !== p.id); saveConfig();" class="text-red-500/40 hover:text-red-500 text-xs font-black uppercase tracking-widest transition-colors">Delete Asset</button>
+                            </div>
+                            <div class="space-y-4">
+                                <span class="text-[9px] font-black uppercase tracking-widest text-white/20">System Instructions</span>
+                                <textarea x-model="p.prompt" class="w-full h-[32rem] bg-black/60 border border-white/10 rounded-[2rem] p-8 text-[13px] font-mono text-white/80 focus:outline-none focus:border-blue-500/40 leading-relaxed shadow-inner no-scrollbar"></textarea>
+                            </div>
+                        </div>
+                    </template>
+                    <button @click="promptTemplates.push({id: Date.now(), name: 'NEW TEMPLATE', prompt: ''})" class="w-full py-20 rounded-[3rem] border-2 border-dashed border-white/10 text-xs font-black uppercase tracking-[0.5em] text-white/20 hover:text-white hover:bg-white/[0.02] transition-all flex flex-col items-center justify-center gap-6">
+                        <span class="text-5xl">+</span>
+                        <span>Initialize New Template</span>
+                    </button>
+                </div>
+            </section>
+            
+            <div class="pt-12 border-t border-white/10 text-center">
+                <button @click="saveConfig()" class="btn-apple px-20 py-8 text-[11px] font-black uppercase tracking-[0.5em] shadow-2xl active:scale-95 transition-all">Persist System Config</button>
             </div>
         </div>
     </main>
 
-    <!-- Global Loading Overlay -->
-    <div x-show="loading && !precisionMode" class="fixed inset-0 z-[500] bg-black/90 backdrop-blur-3xl flex flex-col items-center justify-center p-8" x-transition>
-        <div class="w-full max-w-sm space-y-16 flex flex-col items-center">
-            <div class="w-32 h-32 border-4 border-white/5 border-t-white rounded-full animate-spin shadow-[0_0_100px_rgba(255,255,255,0.2)]"></div>
-            
-            <div class="text-center space-y-3">
-                <p class="text-[11px] font-black uppercase tracking-[1.5em] text-white/40 ml-[1.5em]" x-text="loadingStatus"></p>
-                <p class="text-[10px] font-black text-white/60 uppercase tracking-[0.4em] animate-pulse">Running Neural Agent</p>
-            </div>
-
-            <div class="w-full glass rounded-[3rem] p-10 border border-white/20 space-y-6 shadow-2xl bg-black/60">
-                <div class="flex justify-between items-center border-b border-white/10 pb-6">
-                    <span class="label-apple text-[10px]">Kernel Stream</span>
-                    <span class="text-[10px] font-mono text-white/20 animate-pulse" x-text="Math.floor(Date.now()/1000)"></span>
-                </div>
-                <div class="h-72 overflow-y-auto no-scrollbar flex flex-col space-y-4" x-ref="overlayLog">
-                    <template x-for="(log, i) in logs" :key="i">
-                        <div class="terminal-text flex gap-5 transition-all duration-300">
-                            <span class="text-white/10 select-none tabular-nums" x-text="(i+1).toString().padStart(2, '0')"></span>
-                            <span :class="log.includes('❌') ? 'text-red-400' : (log.includes('✅') ? 'text-green-400' : 'text-white/90')" x-text="log"></span>
-                        </div>
-                    </template>
-                    <div x-show="logs.length === 0" class="terminal-text italic text-white/10 uppercase tracking-widest text-center py-10">Initializing context...</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toasts -->
-    <div class="fixed bottom-12 left-0 right-0 z-[1200] flex flex-col items-center gap-4 pointer-events-none px-8">
-        <template x-for="toast in toasts" :key="toast.id">
-            <div x-show="toast.show" 
-                 x-transition:enter="transition cubic-bezier(0.17, 0.67, 0.83, 0.67) duration-500"
-                 x-transition:enter-start="opacity-0 translate-y-20 scale-90"
-                 class="glass-dark px-12 py-6 rounded-full text-[11px] font-black shadow-2xl border border-white/10 uppercase tracking-widest flex items-center gap-4"
-                 :class="toast.type === 'error' ? 'text-red-400 border-red-500/20' : 'text-white border-white/10'">
-                <span x-text="toast.type === 'error' ? '⚠️' : '⚡'"></span>
-                <span x-text="toast.msg"></span>
-            </div>
-        </template>
-    </div>
-
-    <!-- Pre-flight Preview Modal -->
-    <div x-show="showPreviewModal" class="fixed inset-0 z-[1100] bg-black/80 flex items-center justify-center p-6 backdrop-blur-2xl" x-cloak x-transition>
-        <div class="glass w-full max-w-2xl rounded-[4rem] overflow-hidden flex flex-col max-h-full border-2 border-white/10 shadow-[0_0_80px_rgba(0,0,0,0.5)]">
-            <div class="p-10 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
-                <h2 class="font-black tracking-[0.4em] uppercase text-xs opacity-50">Payload Review</h2>
-                <button @click="showPreviewModal = false" class="w-12 h-12 rounded-2xl glass-dark flex items-center justify-center text-lg active:scale-90 transition-all">✕</button>
-            </div>
-            <div class="p-10 overflow-y-auto no-scrollbar space-y-6">
-                <textarea x-model="previewData" class="w-full h-[32rem] bg-black/60 border border-white/10 rounded-[2rem] p-8 text-[13px] font-mono text-green-400 focus:outline-none focus:border-blue-500/40 leading-relaxed shadow-inner"></textarea>
-                <p class="text-white/30 text-[10px] font-black uppercase tracking-[0.3em] text-center">Verify JSON syntax before service injection</p>
-            </div>
-            <div class="p-10 border-t border-white/10 flex flex-col sm:flex-row gap-5 bg-black/40">
-                <button @click="showPreviewModal = false" class="flex-1 px-10 py-6 rounded-[1.5rem] font-black text-xs uppercase tracking-widest text-white/40 hover:bg-white/5 active:scale-95 transition-all">Cancel</button>
-                <button @click="vibrate(100); confirmExecute()" class="flex-[2] btn-apple py-6 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all">Confirm Execution</button>
-            </div>
-        </div>
-    </div>
-
-
-    <!-- Pipeline Edit Modal -->
+    <!-- Global Modals (Pipeline Edit, Preview) -->
     <div x-show="editingPipeline" class="fixed inset-0 z-[1200] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl" x-cloak x-transition>
         <template x-if="editingPipeline">
-            <div class="glass w-full max-w-4xl rounded-[4rem] overflow-hidden flex flex-col max-h-full border-2 border-white/10 shadow-2xl">
+            <div class="glass w-full max-w-4xl rounded-[4rem] overflow-hidden flex flex-col max-h-full border-2 border-white/10 shadow-2xl shadow-blue-500/10">
                 <div class="p-12 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
                     <div class="space-y-1">
                         <h2 class="font-black tracking-[0.5em] uppercase text-[10px] opacity-40">Neural Configuration</h2>
-                        <h3 class="text-3xl font-black tracking-tighter" x-text="editingPipeline ? editingPipeline.name : ''"></h3>
+                        <h3 class="text-3xl font-black tracking-tighter text-blue-400" x-text="editingPipeline.name"></h3>
                     </div>
                     <button @click="editingPipeline = null" class="w-16 h-16 rounded-[1.5rem] glass-dark flex items-center justify-center text-xl active:scale-90 transition-all">✕</button>
                 </div>
                 
                 <div class="p-12 overflow-y-auto no-scrollbar space-y-12">
                     <div class="space-y-4">
-                        <label class="label-apple ml-2">Pipeline Nomenclature</label>
-                        <input type="text" x-model="editingPipeline.name" class="w-full bg-white/5 border border-white/10 rounded-[2rem] p-7 text-lg font-black tracking-tight focus:outline-none focus:border-blue-500/50 shadow-inner">
+                        <label class="label-apple ml-2">Pipeline Identification</label>
+                        <input type="text" x-model="editingPipeline.name" class="w-full bg-white/5 border border-white/10 rounded-[2rem] p-7 text-lg font-black tracking-tight focus:outline-none focus:border-blue-500/50 shadow-inner text-white">
                     </div>
 
                     <div class="space-y-8">
@@ -630,7 +537,7 @@
                                         }
                                     "
                                     class="p-6 rounded-[2rem] border-2 transition-all text-[11px] font-black uppercase tracking-widest flex flex-col items-center gap-3 shadow-xl"
-                                    :class="editingPipeline.schema.active_nodes.default.includes(node) ? 'bg-white text-black border-white scale-105' : 'glass-dark border-white/10 text-white/30'"
+                                    :class="editingPipeline.schema.active_nodes.default.includes(node) ? 'bg-white text-black border-white scale-105 shadow-white/10' : 'glass-dark border-white/10 text-white/30'"
                                 >
                                     <span class="text-2xl" x-text="node === 'barcode' ? '🔍' : (node === 'vision' ? '🤖' : (node === 'search' ? '🌐' : (node === 'scrape' ? '🕸️' : '🧠')))"></span>
                                     <span x-text="node"></span>
@@ -639,27 +546,51 @@
                         </div>
                     </div>
 
-                    <div class="space-y-10">
-                        <label class="label-apple ml-2">Node Instruction sets</label>
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div class="space-y-4">
-                                <span class="text-[10px] font-black uppercase tracking-widest text-white/30 ml-4">Vision Node Prompt</span>
-                                <textarea x-model="editingPipeline.schema.vision_prompt.default" class="w-full h-64 bg-black/60 border border-white/10 rounded-[2.5rem] p-8 text-[12px] font-mono text-white/70 focus:outline-none focus:border-blue-500/50 leading-relaxed no-scrollbar shadow-inner"></textarea>
+                    <div class="space-y-10 pt-4 border-t border-white/5">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                            <div class="space-y-5">
+                                <label class="label-apple ml-4">Vision Model (Default)</label>
+                                <div class="relative">
+                                    <select x-model="editingPipeline.schema.vision_model.default" class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-sm font-black focus:outline-none appearance-none text-white">
+                                        <template x-for="m in modelFavorites" :key="m">
+                                            <option :value="m" x-text="m.split('/')[1]" class="bg-black text-white"></option>
+                                        </template>
+                                    </select>
+                                    <span class="absolute right-6 top-6 opacity-20 pointer-events-none">▼</span>
+                                </div>
                             </div>
-                            <div class="space-y-4">
-                                <span class="text-[10px] font-black uppercase tracking-widest text-white/30 ml-4">Refinement Node Prompt</span>
-                                <textarea x-model="editingPipeline.schema.refine_prompt.default" class="w-full h-64 bg-black/60 border border-white/10 rounded-[2.5rem] p-8 text-[12px] font-mono text-white/70 focus:outline-none focus:border-blue-500/50 leading-relaxed no-scrollbar shadow-inner"></textarea>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                            <div class="space-y-5">
+                                <span class="label-apple ml-4">Vision Node Prompt</span>
+                                <textarea x-model="editingPipeline.schema.vision_prompt.default" class="w-full h-80 bg-black/60 border border-white/10 rounded-[2.5rem] p-8 text-[12px] font-mono text-white/70 focus:outline-none focus:border-blue-500/50 leading-relaxed no-scrollbar shadow-inner"></textarea>
+                            </div>
+                            <div class="space-y-5">
+                                <span class="label-apple ml-4">Refinement Node Prompt</span>
+                                <textarea x-model="editingPipeline.schema.refine_prompt.default" class="w-full h-80 bg-black/60 border border-white/10 rounded-[2.5rem] p-8 text-[12px] font-mono text-white/70 focus:outline-none focus:border-blue-500/50 leading-relaxed no-scrollbar shadow-inner"></textarea>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="p-12 border-t border-white/10 flex flex-col sm:flex-row gap-6 bg-black/40">
-                    <button @click="editingPipeline = null" class="flex-1 px-10 py-7 rounded-[2rem] font-black text-xs uppercase tracking-widest text-white/40 hover:bg-white/5 transition-all">Abort Changes</button>
-                    <button @click="savePipelineChanges()" class="flex-[2] btn-apple py-7 rounded-[2rem] font-black text-xs uppercase tracking-[0.5em] shadow-2xl active:scale-95 transition-all">Apply to Registry</button>
+                    <button @click="editingPipeline = null" class="flex-1 px-10 py-7 rounded-[2.25rem] font-black text-xs uppercase tracking-widest text-white/40 hover:bg-white/5 transition-all">Discard Changes</button>
+                    <button @click="savePipelineChanges()" class="flex-[2] btn-apple py-7 rounded-[2.25rem] font-black text-xs uppercase tracking-[0.5em] shadow-2xl active:scale-95 transition-all">Sync to Registry</button>
                 </div>
             </div>
         </template>
+    </div>
+
+    <!-- Global Loading Overlay -->
+    <div x-show="loading && !precisionMode" class="fixed inset-0 z-[1500] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-8" x-transition>
+        <div class="w-full max-w-sm space-y-16 flex flex-col items-center">
+            <div class="w-32 h-32 border-4 border-white/5 border-t-white rounded-full animate-spin shadow-[0_0_100px_rgba(255,255,255,0.2)]"></div>
+            <div class="text-center space-y-3">
+                <p class="text-[11px] font-black uppercase tracking-[1.5em] text-white/40 ml-[1.5em]" x-text="loadingStatus"></p>
+                <p class="text-[10px] font-black text-white/60 uppercase tracking-[0.4em] animate-pulse">Running Neural Agent</p>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -679,15 +610,10 @@
                 queue: [],
                 toasts: [],
                 filterType: 'all',
+                sortBy: 'newest',
                 locations: [],
                 selectedServices: ['homebox'],
                 serviceResults: {},
-                servicePreviews: {},
-                showPayload: false,
-                precisionMode: false,
-                pipelines: [],
-                selectedPipeline: 'default',
-                pipelineSettings: {},
                 showPreviewModal: false,
                 previewData: '',
                 executeQueue: [],
@@ -704,16 +630,6 @@
                 newModelId: "",
                 imageOptimization: { max_dimension: 1024, quality: 85 },
                 showSettings: false,
-                lastItemId: null,
-                                sortBy: 'newest',
-                isPipelineInvalid() {
-                    const p = this.pipelines.find(x => x.id === this.selectedPipeline);
-                    if (!p) return false;
-                    // Check if model in schema is in modelFavorites
-                    const model = this.pipelineSettings.vision_model || p.schema.vision_model?.default;
-                    if (model && this.modelFavorites.length > 0 && !this.modelFavorites.includes(model)) return true;
-                    return false;
-                },
                 vibrate(ms=50) { if (navigator.vibrate) navigator.vibrate(ms); },
 
                 init() {
@@ -721,15 +637,7 @@
                     this.fetchConfig();
                     this.fetchLocations();
                     this.fetchQueue();
-                    setInterval(() => {
-                        if (this.queue.some(i => i.status === 'processing')) this.fetchQueue();
-                    }, 5000);
-                    this.$watch('logs', () => {
-                        this.$nextTick(() => {
-                            const el = this.$refs.overlayLog;
-                            if (el) el.scrollTop = el.scrollHeight;
-                        });
-                    });
+                    setInterval(() => { if (this.queue.some(i => i.status === 'processing')) this.fetchQueue(); }, 5000);
                 },
 
                 async fetchConfig() {
@@ -753,7 +661,7 @@
                                 image_optimization: this.imageOptimization
                             })
                         });
-                        this.notify('Settings Saved');
+                        this.notify('Settings Persisted');
                     } catch (e) {}
                 },
 
@@ -762,35 +670,21 @@
                         const img = new Image();
                         img.onload = () => {
                             const canvas = document.createElement('canvas');
-                            let width = img.width;
-                            let height = img.height;
+                            let width = img.width; let height = img.height;
                             const max = this.imageOptimization.max_dimension;
-                            
-                            if (width > height && width > max) {
-                                height = Math.round(height * (max / width));
-                                width = max;
-                            } else if (height > max) {
-                                width = Math.round(width * (max / height));
-                                height = max;
-                            }
-                            
-                            canvas.width = width;
-                            canvas.height = height;
+                            if (width > height && width > max) { height = Math.round(height * (max / width)); width = max; }
+                            else if (height > max) { width = Math.round(width * (max / height)); height = max; }
+                            canvas.width = width; canvas.height = height;
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0, width, height);
-                            canvas.toBlob((blob) => {
-                                resolve(blob);
-                            }, 'image/jpeg', this.imageOptimization.quality / 100);
+                            canvas.toBlob((blob) => resolve(blob), 'image/jpeg', this.imageOptimization.quality / 100);
                         };
                         img.src = URL.createObjectURL(file);
                     });
                 },
 
                 async runSearch() {
-                    if (!this.searchQuery) {
-                        this.searchResults = [];
-                        return;
-                    }
+                    if (!this.searchQuery) { this.searchResults = []; return; }
                     this.isSearching = true;
                     try {
                         const response = await fetch(`/search?query=${encodeURIComponent(this.searchQuery)}`);
@@ -844,16 +738,32 @@
                     } catch (e) {}
                 },
 
+                filteredQueue() {
+                    let items = this.queue.filter(i => {
+                        if (this.filterType === 'all') return true;
+                        return i.product_type === this.filterType;
+                    });
+                    if (this.sortBy === 'newest') items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                    else items.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                    return items;
+                },
+
+                isPipelineInvalid() {
+                    const p = this.pipelines.find(x => x.id === this.selectedPipeline);
+                    if (!p) return false;
+                    const model = p.schema.vision_model?.default;
+                    if (model && this.modelFavorites.length > 0 && !this.modelFavorites.includes(model)) return true;
+                    return false;
+                },
+
                 enterPrecision() {
-                    this.precisionMode = true;
-                    this.lassoPoints = [];
+                    this.precisionMode = true; this.lassoPoints = [];
                     this.$nextTick(() => {
                         const canvas = document.getElementById('lasso-canvas');
-                        const container = document.getElementById('canvas-container');
                         this.canvasCtx = canvas.getContext('2d');
                         this.sourceImage = new Image();
                         this.sourceImage.onload = () => {
-                            const ratio = Math.min(container.clientWidth / this.sourceImage.width, container.clientHeight / this.sourceImage.height);
+                            const ratio = Math.min(window.innerWidth / this.sourceImage.width, window.innerHeight / this.sourceImage.height);
                             canvas.width = this.sourceImage.width * ratio;
                             canvas.height = this.sourceImage.height * ratio;
                             this.redrawCanvas();
@@ -870,68 +780,35 @@
                     return { x: clientX - rect.left, y: clientY - rect.top };
                 },
 
-                startDraw(e) {
-                    this.isDrawing = true;
-                    this.lassoPoints = [this.getPos(e)];
-                    this.redrawCanvas();
-                },
-
-                draw(e) {
-                    if (!this.isDrawing) return;
-                    this.lassoPoints.push(this.getPos(e));
-                    this.redrawCanvas();
-                },
-
-                endDraw() {
-                    this.isDrawing = false;
-                    this.redrawCanvas();
-                },
+                startDraw(e) { this.isDrawing = true; this.lassoPoints = [this.getPos(e)]; this.redrawCanvas(); },
+                draw(e) { if (!this.isDrawing) return; this.lassoPoints.push(this.getPos(e)); this.redrawCanvas(); },
+                endDraw() { this.isDrawing = false; this.redrawCanvas(); },
 
                 redrawCanvas() {
                     const canvas = document.getElementById('lasso-canvas');
                     if (!canvas || !this.canvasCtx) return;
                     this.canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
                     this.canvasCtx.drawImage(this.sourceImage, 0, 0, canvas.width, canvas.height);
-                    
                     if (this.lassoPoints.length > 0) {
-                        this.canvasCtx.beginPath();
-                        this.canvasCtx.moveTo(this.lassoPoints[0].x, this.lassoPoints[0].y);
-                        for (let i = 1; i < this.lassoPoints.length; i++) {
-                            this.canvasCtx.lineTo(this.lassoPoints[i].x, this.lassoPoints[i].y);
-                        }
-                        if (!this.isDrawing && this.lassoPoints.length > 2) {
-                            this.canvasCtx.closePath();
-                            this.canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.2)';
-                            this.canvasCtx.fill();
-                        }
-                        this.canvasCtx.strokeStyle = '#00FF00';
-                        this.canvasCtx.lineWidth = 2;
-                        this.canvasCtx.stroke();
+                        this.canvasCtx.beginPath(); this.canvasCtx.moveTo(this.lassoPoints[0].x, this.lassoPoints[0].y);
+                        for (let i = 1; i < this.lassoPoints.length; i++) this.canvasCtx.lineTo(this.lassoPoints[i].x, this.lassoPoints[i].y);
+                        if (!this.isDrawing && this.lassoPoints.length > 2) { this.canvasCtx.closePath(); this.canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.2)'; this.canvasCtx.fill(); }
+                        this.canvasCtx.strokeStyle = '#00FF00'; this.canvasCtx.lineWidth = 2; this.canvasCtx.stroke();
                     }
                 },
 
                 closePrecision() { this.precisionMode = false; },
 
                 applyCrop() {
-                    if (this.lassoPoints.length < 3) {
-                        this.closePrecision();
-                        return;
-                    }
+                    if (this.lassoPoints.length < 3) { this.closePrecision(); return; }
                     const canvas = document.getElementById('lasso-canvas');
-                    const scaleX = this.sourceImage.width / canvas.width;
-                    const scaleY = this.sourceImage.height / canvas.height;
+                    const scaleX = this.sourceImage.width / canvas.width; const scaleY = this.sourceImage.height / canvas.height;
                     const offscreen = document.createElement('canvas');
-                    offscreen.width = this.sourceImage.width;
-                    offscreen.height = this.sourceImage.height;
+                    offscreen.width = this.sourceImage.width; offscreen.height = this.sourceImage.height;
                     const ctx = offscreen.getContext('2d');
-                    ctx.beginPath();
-                    ctx.moveTo(this.lassoPoints[0].x * scaleX, this.lassoPoints[0].y * scaleY);
-                    for (let i = 1; i < this.lassoPoints.length; i++) {
-                        ctx.lineTo(this.lassoPoints[i].x * scaleX, this.lassoPoints[i].y * scaleY);
-                    }
-                    ctx.closePath();
-                    ctx.clip();
-                    ctx.drawImage(this.sourceImage, 0, 0);
+                    ctx.beginPath(); ctx.moveTo(this.lassoPoints[0].x * scaleX, this.lassoPoints[0].y * scaleY);
+                    for (let i = 1; i < this.lassoPoints.length; i++) ctx.lineTo(this.lassoPoints[i].x * scaleX, this.lassoPoints[i].y * scaleY);
+                    ctx.closePath(); ctx.clip(); ctx.drawImage(this.sourceImage, 0, 0);
                     
                     let minX = this.sourceImage.width, minY = this.sourceImage.height, maxX = 0, maxY = 0;
                     for (let p of this.lassoPoints) {
@@ -943,50 +820,27 @@
                     minX = Math.max(0, minX - padding); minY = Math.max(0, minY - padding);
                     maxX = Math.min(this.sourceImage.width, maxX + padding); maxY = Math.min(this.sourceImage.height, maxY + padding);
                     
-                    const cropWidth = maxX - minX; const cropHeight = maxY - minY;
                     const finalCanvas = document.createElement('canvas');
-                    finalCanvas.width = cropWidth; finalCanvas.height = cropHeight;
+                    finalCanvas.width = maxX - minX; finalCanvas.height = maxY - minY;
                     const finalCtx = finalCanvas.getContext('2d');
-                    finalCtx.drawImage(offscreen, minX, minY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-                    
-                    finalCanvas.toBlob((blob) => {
-                        this.aiPreview = URL.createObjectURL(blob);
-                        this.currentFile = blob;
-                        this.closePrecision();
-                    }, 'image/png');
+                    finalCtx.drawImage(offscreen, minX, minY, finalCanvas.width, finalCanvas.height, 0, 0, finalCanvas.width, finalCanvas.height);
+                    finalCanvas.toBlob((blob) => { this.aiPreview = URL.createObjectURL(blob); this.currentFile = blob; this.closePrecision(); }, 'image/png');
                 },
 
                 async onFileSelected(e) {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    this.results = null;
-                    this.currentFile = file;
-                    this.rawImage = URL.createObjectURL(file);
-                    this.aiPreview = this.rawImage;
+                    const file = e.target.files[0]; if (!file) return;
+                    this.results = null; this.currentFile = file;
+                    this.rawImage = URL.createObjectURL(file); this.aiPreview = this.rawImage;
                 },
 
                 async runIdentification() {
                     if (!this.currentFile) return;
-                    this.vibrate(100);
-                    this.loading = true;
-                    this.logs = [];
-                    this.serviceResults = {};
-                    
+                    this.vibrate(100); this.loading = true; this.logs = [];
                     const sessionId = 'sid-' + Math.random().toString(36).slice(2, 10);
-                    const logInterval = setInterval(async () => {
-                        try {
-                            const resp = await fetch(`/logs/${sessionId}`);
-                            const data = await resp.json();
-                            this.logs = data.logs || [];
-                        } catch (e) {}
-                    }, 400);
-
                     const optimizedFile = await this.preprocessImage(this.currentFile);
                     const formData = new FormData();
-                    formData.append('file', optimizedFile, 'capture.jpg');
-                    formData.append('text', this.textInfo);
-                    formData.append('session_id', sessionId);
-                    formData.append('pipeline_id', this.selectedPipeline);
+                    formData.append('file', optimizedFile, 'capture.jpg'); formData.append('text', this.textInfo);
+                    formData.append('session_id', sessionId); formData.append('pipeline_id', this.selectedPipeline);
                     formData.append('settings', JSON.stringify(this.pipelineSettings));
                     if (this.lassoPoints.length > 0) formData.append('lasso_polygon', JSON.stringify(this.lassoPoints));
                     
@@ -994,76 +848,51 @@
                         const response = await fetch('/identify', { method: 'POST', body: formData });
                         const data = await response.json();
                         if (data.success) {
-                            this.results = data.results;
-                            this.aiPreview = data.ai_preview;
+                            this.results = data.results; this.aiPreview = data.ai_preview;
                             const llm = data.results.llm_output;
                             this.form = {
-                                product_name: llm.product_name, brand: llm.brand, 
-                                category: llm.category, description: llm.description,
-                                manufacturer: llm.manufacturer || '', msrp: llm.msrp || '',
-                                model_number: llm.model_number || '', serial_number: llm.serial_number || '',
-                                technical_details: llm.technical_details || '', product_url: llm.product_url || '',
-                                location: 'pantry', is_food: llm.is_food, purchase_price: 0,
-                                recipe_ingredients_raw: (llm.recipe_ingredients || []).join('\n'),
+                                product_name: llm.product_name, brand: llm.brand, category: llm.category,
+                                description: llm.description, manufacturer: llm.manufacturer || '',
+                                msrp: llm.msrp || '', model_number: llm.model_number || '',
+                                serial_number: llm.serial_number || '', technical_details: llm.technical_details || '',
+                                product_url: llm.product_url || '', location: 'pantry', is_food: llm.is_food,
+                                purchase_price: 0, recipe_ingredients_raw: (llm.recipe_ingredients || []).join('\n'),
                                 recipe_instructions_raw: (llm.recipe_instructions || []).join('\n')
                             };
-                            this.notify('Agent Task Complete');
-                        } else {
-                            this.notify(data.error || 'Agent Error', 'error');
-                        }
-                    } catch (e) { this.notify('Identification Timeout', 'error'); }
-                    finally { 
-                        setTimeout(() => clearInterval(logInterval), 3000);
-                        this.loading = false; 
-                    }
+                        } else { this.notify(data.error, 'error'); }
+                    } catch (e) { this.notify('Timeout', 'error'); }
+                    finally { this.loading = false; }
                 },
 
                 previewAndExecute(itemId) {
-                    const item = this.queue.find(i => i.id === itemId);
-                    if (!item || item.selected_services.length === 0) return;
+                    const item = this.queue.find(i => i.id === itemId); if (!item) return;
                     const payloadPreview = { item_id: itemId, service_names: item.selected_services, overrides: item.edit_data };
                     this.previewData = JSON.stringify(payloadPreview, null, 2);
-                    this.executeQueue = [payloadPreview];
-                    this.showPreviewModal = true;
+                    this.executeQueue = [payloadPreview]; this.showPreviewModal = true;
                 },
 
                 async confirmExecute() {
-                    this.vibrate(100);
-                    this.showPreviewModal = false;
+                    this.vibrate(100); this.showPreviewModal = false;
                     for (const payload of this.executeQueue) {
                         const item = this.queue.find(i => i.id === payload.item_id);
                         if (item) item.executing = true;
                         try {
-                            const response = await fetch('/execute', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: this.previewData
-                            });
-                            if (item && response.ok) this.queue = this.queue.filter(i => i.id !== payload.item_id);
-                        } catch (e) {}
-                        finally { if (item) item.executing = false; }
+                            await fetch('/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: this.previewData });
+                            this.queue = this.queue.filter(i => i.id !== payload.item_id);
+                        } catch (e) {} finally { if (item) item.executing = false; }
                     }
                     this.executeQueue = [];
                 },
 
                 async triggerServices() {
-                    this.vibrate(100);
-                    this.executing = true;
+                    this.vibrate(100); this.executing = true;
                     try {
                         const response = await fetch('/execute', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                item_id: this.results ? this.results.item_id : null,
-                                service_names: this.selectedServices,
-                                overrides: this.form
-                            })
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ item_id: this.results?.item_id, service_names: this.selectedServices, overrides: this.form })
                         });
                         const data = await response.json();
-                        if (data.success) {
-                            this.notify('Pipeline Dispatched');
-                            this.serviceResults = data.results;
-                        }
+                        if (data.success) { this.notify('Pipeline Dispatched'); this.serviceResults = data.results; }
                     } catch (e) { this.notify('Network Failure', 'error'); }
                     finally { this.executing = false; }
                 },
@@ -1073,7 +902,7 @@
                     this.loading = true; this.loadingStatus = 'Batch Upload';
                     const formData = new FormData();
                     for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
-                    if (this.textInfo) formData.append('text', this.textInfo);
+                    formData.append('pipeline_id', this.selectedPipeline);
                     try {
                         const response = await fetch('/batch-upload', { method: 'POST', body: formData });
                         const data = await response.json();
@@ -1096,12 +925,11 @@
                         schema: {
                             active_nodes: { default: ['barcode', 'vision', 'refine'], options: ['barcode', 'vision', 'search', 'scrape', 'refine'], type: 'multiselect', label: 'Nodes' },
                             vision_prompt: { type: 'textarea', label: 'Vision Prompt', default: '' },
-                            refine_prompt: { type: 'textarea', label: 'Refine Prompt', default: '' }
+                            refine_prompt: { type: 'textarea', label: 'Refine Prompt', default: '' },
+                            vision_model: { type: 'string', label: 'Vision Model', default: 'qwen/qwen2.5-vl-72b-instruct' }
                         }
                     };
-                    this.pipelines.push(newP);
-                    this.notify('Skeleton Initialised');
-                    this.editPipeline(newP);
+                    this.pipelines.push(newP); this.editPipeline(newP);
                 },
 
                 editPipeline(p) { this.editingPipeline = JSON.parse(JSON.stringify(p)); },
@@ -1111,29 +939,24 @@
                     const idx = this.pipelines.findIndex(p => p.id === this.editingPipeline.id);
                     if (idx !== -1) this.pipelines[idx] = this.editingPipeline; else this.pipelines.push(this.editingPipeline);
                     const custom = this.pipelines.filter(p => p.id.startsWith('custom-'));
-                    const configResp = await fetch('/config');
-                    const configData = await configResp.json();
+                    const configResp = await fetch('/config'); const configData = await configResp.json();
                     configData.custom_pipelines = custom;
                     await fetch('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(configData) });
-                    this.editingPipeline = null;
-                    this.notify('Registry Updated');
-                    this.fetchPipelines();
+                    this.editingPipeline = null; this.notify('Registry Updated'); this.fetchPipelines();
                 },
 
                 async deletePipeline(id) {
-                    if(!confirm('Decommission pipeline?')) return;
+                    if(!confirm('Decommission?')) return;
                     this.pipelines = this.pipelines.filter(p => p.id !== id);
                     const custom = this.pipelines.filter(p => p.id.startsWith('custom-'));
-                    const configResp = await fetch('/config');
-                    const configData = await configResp.json();
+                    const configResp = await fetch('/config'); const configData = await configResp.json();
                     configData.custom_pipelines = custom;
                     await fetch('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(configData) });
-                    this.notify('Pipeline Deleted');
+                    this.notify('Deleted');
                 },
 
                 notify(msg, type = 'success') {
-                    const id = Date.now();
-                    this.toasts.push({ id, msg, type, show: true });
+                    const id = Date.now(); this.toasts.push({ id, msg, type, show: true });
                     setTimeout(() => { const t = this.toasts.find(x => x.id === id); if (t) t.show = false; }, 4000);
                 }
             }
