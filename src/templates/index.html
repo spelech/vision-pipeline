@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vision Pipeline 2.1.2</title>
+    <title>Vision Pipeline 2.1.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -22,7 +22,7 @@
         .btn-apple:active { transform: scale(0.96); opacity: 0.9; }
         .terminal-text { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: rgba(255,255,255,0.6); }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .cropper-view-box, .cropper-face { border-radius: 0; }
+        .cropper-view-box, .cropper-face { border-radius: 1.5rem; }
         .cropper-line, .cropper-point { background-color: #fff; }
         .cropper-bg { background-image: none; background-color: #000; }
     </style>
@@ -32,8 +32,8 @@
     <div x-show="precisionMode" class="fixed inset-0 z-[600] bg-black flex flex-col" x-cloak x-transition>
         <div class="p-6 flex justify-between items-center glass border-b-0">
             <button @click="closePrecision()" class="text-white/60 hover:text-white font-bold text-sm uppercase tracking-widest">Cancel</button>
-            <h2 class="text-xs font-black uppercase tracking-[0.3em]">Precision Mode</h2>
-            <button @click="applyCrop()" class="bg-white text-black px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">Identify Selection</button>
+            <h2 class="text-xs font-black uppercase tracking-[0.3em]">Precision Lasso</h2>
+            <button @click="applyCrop()" class="bg-white text-black px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">Save Lasso</button>
         </div>
         <div class="flex-1 relative overflow-hidden bg-black">
             <img id="cropper-target" :src="rawImage" class="max-w-full">
@@ -65,7 +65,21 @@
         <!-- Tab: Single Capture -->
         <div x-show="activeTab === 'capture'" class="space-y-6" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 translate-y-12">
             
-            <!-- Viewfinder -->
+            <!-- Context & Action Control -->
+            <div class="glass p-6 rounded-[2rem] space-y-5 border-white/5 bg-white/[0.01]">
+                <div class="space-y-3">
+                    <label class="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] ml-1">AI Guidance / Notes</label>
+                    <textarea x-model="textInfo" placeholder="e.g. This is a special limited edition variant..." 
+                              class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-xs focus:ring-1 focus:ring-white/20 outline-none resize-none font-medium placeholder:text-white/10 h-20 transition-all"></textarea>
+                </div>
+                
+                <button x-show="aiPreview && !results" @click="runIdentification()" 
+                        class="w-full btn-apple py-5 text-[10px] font-black uppercase tracking-[0.4em] shadow-xl shadow-white/5">
+                    Begin Identification
+                </button>
+            </div>
+
+            <!-- Viewfinder / Canvas -->
             <div class="relative rounded-[2.5rem] overflow-hidden glass aspect-[4/5] shadow-2xl group border-white/10">
                 <template x-if="!aiPreview">
                     <div class="absolute inset-0 flex flex-col items-center justify-center space-y-6">
@@ -73,23 +87,27 @@
                             <span class="text-5xl opacity-40">📸</span>
                         </div>
                         <div class="text-center space-y-1">
-                            <p class="text-white font-black text-xs uppercase tracking-[0.2em]">Ready to Identify</p>
-                            <p class="text-white/20 text-[10px] font-bold uppercase tracking-widest">Awaiting Input</p>
+                            <p class="text-white font-black text-xs uppercase tracking-[0.2em]">Capture or Upload</p>
                         </div>
                     </div>
                 </template>
                 
                 <div x-show="aiPreview" class="w-full h-full relative">
-                    <img :src="aiPreview" class="w-full h-full object-cover cursor-crosshair" @click="enterPrecision()">
-                    <div class="absolute top-6 left-6 glass-dark px-4 py-2 rounded-full border border-white/10">
-                        <span class="text-[9px] font-black uppercase tracking-widest text-white/60">Tap to Lasso</span>
+                    <img :src="aiPreview" class="w-full h-full object-cover">
+                    <!-- Overlays -->
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+                    <div class="absolute top-6 left-6 flex flex-col gap-2">
+                        <button @click="enterPrecision()" class="glass-dark px-4 py-2 rounded-full border border-white/10 active:scale-95 transition-all">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-white/60">✏️ Precision Lasso</span>
+                        </button>
                     </div>
                 </div>
                 
+                <!-- Bottom Controls (Capture/New) -->
                 <div class="absolute bottom-8 left-0 right-0 flex justify-center px-8 gap-4">
                     <label class="cursor-pointer">
                         <input type="file" capture="environment" accept="image/*" class="hidden" @change="onFileSelected">
-                        <div class="bg-white text-black px-12 py-5 rounded-[2rem] font-black uppercase tracking-widest text-[10px] shadow-2xl active:scale-95 transition-all">Capture</div>
+                        <div class="bg-white text-black px-10 py-5 rounded-[2rem] font-black uppercase tracking-widest text-[10px] shadow-2xl active:scale-95 transition-all">New Photo</div>
                     </label>
                     <label class="cursor-pointer">
                         <input type="file" accept="image/*" class="hidden" @change="onFileSelected">
@@ -98,17 +116,7 @@
                 </div>
             </div>
 
-            <!-- Context Input (Repositioned for better flow) -->
-            <div class="glass p-6 rounded-[2rem] space-y-3 border-white/5 bg-white/[0.01]">
-                <div class="flex justify-between items-center px-1">
-                    <label class="text-[9px] font-black text-white/20 uppercase tracking-[0.3em]">Supplemental Context</label>
-                    <button x-show="textInfo" @click="textInfo = ''" class="text-[8px] font-black text-white/10 hover:text-white uppercase tracking-widest">Clear</button>
-                </div>
-                <textarea x-model="textInfo" placeholder="e.g. This is for the master bathroom..." 
-                          class="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-4 text-xs focus:ring-1 focus:ring-white/20 outline-none resize-none font-medium placeholder:text-white/10 h-20 transition-all"></textarea>
-            </div>
-
-            <!-- Single Result Card -->
+            <!-- Single Result Card (Result Panel) -->
             <div x-show="results" class="space-y-6" x-transition:enter="transition ease-out duration-700" x-transition:enter-start="opacity-0 translate-y-20">
                 <div class="glass p-8 rounded-[3rem] shadow-2xl space-y-8 border-white/10 bg-white/[0.01]">
                     <div class="space-y-2">
@@ -119,17 +127,17 @@
                     <div class="grid grid-cols-2 gap-8">
                         <div class="space-y-2">
                             <label class="text-[9px] font-black text-white/20 uppercase tracking-widest ml-2">Brand</label>
-                            <input type="text" x-model="form.brand" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-xs font-bold outline-none focus:bg-white/10 transition-all">
+                            <input type="text" x-model="form.brand" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-xs font-bold outline-none">
                         </div>
                         <div class="space-y-2">
                             <label class="text-[9px] font-black text-white/20 uppercase tracking-widest ml-2">Category</label>
-                            <input type="text" x-model="form.category" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-xs font-bold outline-none focus:bg-white/10 transition-all">
+                            <input type="text" x-model="form.category" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-xs font-bold outline-none">
                         </div>
                     </div>
 
                     <div class="space-y-2">
-                        <label class="text-[9px] font-black text-white/20 uppercase tracking-widest ml-2">Brief Summary</label>
-                        <textarea x-model="form.description" rows="2" class="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-5 text-sm font-medium outline-none resize-none focus:bg-white/10 transition-all"></textarea>
+                        <label class="text-[9px] font-black text-white/20 uppercase tracking-widest ml-2">Summary</label>
+                        <textarea x-model="form.description" rows="2" class="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-5 text-sm font-medium outline-none resize-none"></textarea>
                     </div>
 
                     <div x-data="{ open: false }" class="space-y-4">
@@ -137,21 +145,21 @@
                             <div class="w-6 h-6 rounded-full glass flex items-center justify-center group-hover:bg-white/10 transition-all">
                                 <svg class="w-2.5 h-2.5 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M19 9l-7 7-7-7"></path></svg>
                             </div>
-                            Technical Specifications
+                            Technical Details & Metadata
                         </button>
                         <div x-show="open" x-transition class="grid grid-cols-1 gap-4 mt-2">
                             <div class="grid grid-cols-2 gap-4">
                                 <input type="text" x-model="form.manufacturer" placeholder="Manufacturer" class="bg-white/5 border border-white/5 rounded-xl px-5 py-3 text-[10px] font-bold outline-none">
                                 <input type="text" x-model="form.msrp" placeholder="MSRP" class="bg-white/5 border border-white/5 rounded-xl px-5 py-3 text-[10px] font-bold outline-none">
                             </div>
-                            <textarea x-model="form.technical_details" placeholder="Technical Specs (Dimensions, Material, etc.)" class="bg-white/5 border border-white/5 rounded-xl px-5 py-4 text-[10px] font-mono outline-none resize-none h-24"></textarea>
+                            <textarea x-model="form.technical_details" placeholder="Technical Specs" class="bg-white/5 border border-white/5 rounded-xl px-5 py-4 text-[10px] font-mono outline-none resize-none h-24"></textarea>
                         </div>
                     </div>
 
                     <div class="border-t border-white/5 pt-8 space-y-6">
                         <div class="flex justify-between items-center px-1">
                             <h3 class="text-[9px] font-black text-white/30 uppercase tracking-[0.3em]">Pipeline Execution</h3>
-                            <button @click="showPayload = !showPayload" class="text-[8px] font-black text-white/20 hover:text-white uppercase tracking-widest border border-white/10 px-3 py-1 rounded-full">Review Payload</button>
+                            <button @click="showPayload = !showPayload" class="text-[8px] font-black text-white/20 hover:text-white uppercase tracking-widest">Review Payload</button>
                         </div>
 
                         <div x-show="showPayload" x-transition class="bg-black/40 rounded-2xl p-6 border border-white/5 font-mono text-[9px] overflow-x-auto">
@@ -180,7 +188,7 @@
                         </div>
 
                         <button @click="triggerServices()" :disabled="executing"
-                                class="w-full btn-apple py-6 text-[10px] font-black uppercase tracking-[0.4em] shadow-2xl shadow-white/5 active:scale-[0.98] transition-all disabled:opacity-30">
+                                class="w-full btn-apple py-6 text-[10px] font-black uppercase tracking-[0.4em] shadow-2xl active:scale-[0.98] transition-all disabled:opacity-30">
                             <span x-show="!executing">Execute Workflow</span>
                             <div x-show="executing" class="w-6 h-6 border-2 border-black/10 border-t-black rounded-full animate-spin mx-auto"></div>
                         </button>
@@ -195,18 +203,15 @@
                 <div class="space-y-4">
                     <div class="text-7xl mb-8 opacity-40">🗂️</div>
                     <h2 class="text-3xl font-black tracking-tight uppercase">Bulk Import</h2>
-                    <p class="text-white/30 text-xs max-w-xs mx-auto leading-relaxed font-medium">Batch process high-resolution assets with adaptive AI context.</p>
                 </div>
-
                 <div class="space-y-4 text-left max-w-sm mx-auto">
                     <label class="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] ml-4">Batch Context</label>
                     <textarea x-model="textInfo" placeholder="Global tags or location context..." 
-                              class="w-full bg-white/5 border border-white/5 rounded-[2rem] px-8 py-7 text-sm focus:ring-2 focus:ring-white/10 outline-none resize-none font-medium"></textarea>
+                              class="w-full bg-white/5 border border-white/5 rounded-[2rem] px-8 py-7 text-sm focus:ring-2 focus:ring-white/10 outline-none resize-none font-medium h-32"></textarea>
                 </div>
-
                 <label class="block cursor-pointer group">
                     <input type="file" multiple accept="image/*" class="hidden" @change="onBatchSelected">
-                    <div class="bg-white text-black py-6 rounded-[2.5rem] font-black uppercase tracking-[0.3em] text-[10px] group-active:scale-95 transition-all shadow-2xl shadow-white/10">Select Files</div>
+                    <div class="bg-white text-black py-6 rounded-[2.5rem] font-black uppercase tracking-[0.3em] text-[10px] group-active:scale-95 transition-all shadow-2xl">Upload Files</div>
                 </label>
             </div>
         </div>
@@ -214,10 +219,7 @@
         <!-- Tab: Review -->
         <div x-show="activeTab === 'review'" class="space-y-8" x-transition>
             <div class="flex justify-between items-end mb-10 px-4">
-                <div>
-                    <h2 class="text-4xl font-black tracking-tighter">Queue</h2>
-                    <p class="text-[9px] font-black text-white/20 uppercase tracking-[0.4em] mt-2">Awaiting Verification</p>
-                </div>
+                <h2 class="text-4xl font-black tracking-tighter">Queue</h2>
                 <div class="flex gap-2 p-1 glass rounded-2xl">
                     <button @click="filterType = 'all'" :class="filterType === 'all' ? 'bg-white text-black shadow-lg' : 'text-white/30'" class="px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">All</button>
                     <button @click="filterType = 'food'" :class="filterType === 'food' ? 'bg-white text-black shadow-lg' : 'text-white/30'" class="px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">Food</button>
@@ -228,7 +230,7 @@
                 <template x-for="item in filteredQueue" :key="item.id">
                     <div class="glass rounded-[2.5rem] overflow-hidden group border-white/5 hover:border-white/20 transition-all shadow-xl">
                         <div class="flex h-40">
-                            <div class="w-40 h-full relative flex-shrink-0 group-hover:scale-105 transition-transform duration-700">
+                            <div class="w-40 h-full relative flex-shrink-0">
                                 <img :src="'/uploads/' + item.image_path" class="w-full h-full object-cover">
                                 <div x-show="item.status === 'processing'" class="absolute inset-0 bg-black/70 backdrop-blur-2xl flex items-center justify-center">
                                     <div class="w-10 h-10 border border-white/10 border-t-white rounded-full animate-spin"></div>
@@ -238,16 +240,17 @@
                                 <div class="flex justify-between items-start gap-4">
                                     <div class="truncate">
                                         <input type="text" x-model="item.edit_data.product_name" class="bg-transparent border-none p-0 text-xl font-black focus:ring-0 w-full tracking-tight">
-                                        <div class="text-[9px] text-white/30 font-black uppercase tracking-[0.2em] mt-2" x-text="item.edit_data.brand || 'Original Source'"></div>
+                                        <div class="text-[9px] text-white/30 font-black uppercase mt-2" x-text="item.edit_data.brand || 'Asset'"></div>
                                     </div>
-                                    <button @click="item.show_more = !item.show_more" class="glass p-3 rounded-2xl active:scale-90 transition-all hover:bg-white/10 group">
-                                        <svg class="w-4 h-4 transition-transform group-hover:text-white" :class="item.show_more ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M19 9l-7 7-7-7"></path></svg>
+                                    <button @click="item.show_more = !item.show_more" class="glass p-3 rounded-2xl active:scale-90 transition-all">
+                                        <svg class="w-4 h-4 transition-transform" :class="item.show_more ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M19 9l-7 7-7-7"></path></svg>
                                     </button>
                                 </div>
                             </div>
                         </div>
 
                         <div x-show="item.show_more" class="p-10 bg-white/[0.01] space-y-10 border-t border-white/5" x-transition>
+                            <!-- Review Fields (Location, Qty) -->
                             <div class="grid grid-cols-2 gap-8">
                                 <div class="space-y-3">
                                     <label class="text-[8px] font-black text-white/20 uppercase tracking-[0.4em] ml-2">Fulfillment</label>
@@ -274,7 +277,7 @@
                                 <div class="grid grid-cols-2 gap-3">
                                     <template x-for="svc in ['homebox', 'mealie', 'pricebuddy', 'changedetection']">
                                         <label class="glass p-5 rounded-3xl flex items-center justify-between border-white/5 cursor-pointer hover:bg-white/5 transition-all">
-                                            <span class="text-[9px] font-black uppercase tracking-widest" x-text="svc"></span>
+                                            <span class="text-[9px] font-black uppercase" x-text="svc"></span>
                                             <input type="checkbox" :value="svc" x-model="item.selected_services" class="ios-toggle scale-75 origin-right">
                                         </label>
                                     </template>
@@ -285,7 +288,7 @@
                                 <button @click="triggerServices(item)" :disabled="item.executing" 
                                         class="flex-1 btn-apple py-6 text-[10px] font-black uppercase tracking-[0.4em] shadow-xl shadow-white/5">
                                     <span x-show="!item.executing">Process Entry</span>
-                                    <div x-show="item.executing" class="w-5 h-5 border-2 border-black/10 border-t-black rounded-full animate-spin mx-auto"></div>
+                                    <div x-show="item.executing" class="w-6 h-6 border-2 border-black/10 border-t-black rounded-full animate-spin mx-auto"></div>
                                 </button>
                                 <button @click="discardItem(item.id)" class="glass px-10 rounded-[1.5rem] text-[9px] font-black uppercase tracking-widest text-red-500 hover:bg-red-500/10 transition-colors">Discard</button>
                             </div>
@@ -296,33 +299,29 @@
         </div>
     </main>
 
-    <!-- Global Processing Overlay -->
+    <!-- Global Loading Overlay -->
     <div x-show="loading && !precisionMode" class="fixed inset-0 z-[500] bg-black/80 backdrop-blur-3xl flex flex-col items-center justify-center p-8" x-transition>
-        <div class="w-full max-w-sm space-y-10 flex flex-col items-center">
-            <div class="w-24 h-24 border-2 border-white/5 border-t-white rounded-full animate-spin shadow-[0_0_50px_rgba(255,255,255,0.1)]"></div>
+        <div class="w-full max-w-sm space-y-12 flex flex-col items-center">
+            <div class="w-24 h-24 border-2 border-white/5 border-t-white rounded-full animate-spin shadow-[0_0_60px_rgba(255,255,255,0.15)]"></div>
             
             <div class="text-center space-y-2">
                 <p class="text-[10px] font-black uppercase tracking-[1em] text-white/40 ml-[1em]" x-text="loadingStatus"></p>
-                <p class="text-[9px] font-black text-white/60 uppercase tracking-widest animate-pulse">Running Vision Pipeline</p>
+                <p class="text-[9px] font-black text-white/60 uppercase tracking-widest animate-pulse">Running Agent Trace</p>
             </div>
 
-            <!-- TERMINAL LOGS -->
-            <div class="w-full glass rounded-[1.5rem] p-6 border border-white/10 space-y-4 shadow-2xl bg-black/40">
-                <div class="flex justify-between items-center border-b border-white/5 pb-3">
-                    <span class="text-[8px] font-black text-white/20 uppercase tracking-[0.3em]">System Trace</span>
-                    <div class="flex gap-1">
-                        <div class="w-1.5 h-1.5 rounded-full bg-red-500/40"></div>
-                        <div class="w-1.5 h-1.5 rounded-full bg-orange-500/40"></div>
-                        <div class="w-1.5 h-1.5 rounded-full bg-green-500/40"></div>
-                    </div>
+            <!-- ENHANCED TERMINAL -->
+            <div class="w-full glass rounded-[2rem] p-8 border border-white/10 space-y-5 shadow-2xl bg-black/40">
+                <div class="flex justify-between items-center border-b border-white/5 pb-4">
+                    <span class="text-[8px] font-black text-white/20 uppercase tracking-[0.4em]">System Logs</span>
                 </div>
-                <div class="h-48 overflow-y-auto scrollbar-hide flex flex-col space-y-2" x-ref="overlayLog">
+                <div class="h-56 overflow-y-auto scrollbar-hide flex flex-col space-y-3" x-ref="overlayLog">
                     <template x-for="(log, i) in logs" :key="i">
-                        <div class="terminal-text flex gap-3">
-                            <span class="text-white/20 select-none" x-text="'00:0' + i"></span>
-                            <span :class="log.includes('❌') ? 'text-red-400' : (log.includes('✅') ? 'text-green-400' : 'text-white/70')" x-text="log"></span>
+                        <div class="terminal-text flex gap-4 transition-all duration-300">
+                            <span class="text-white/10 select-none tabular-nums" x-text="(i+1).toString().padStart(2, '0')"></span>
+                            <span :class="log.includes('❌') ? 'text-red-400' : (log.includes('✅') ? 'text-green-400' : 'text-white/80')" x-text="log"></span>
                         </div>
                     </template>
+                    <div x-show="logs.length === 0" class="terminal-text italic text-white/10 uppercase tracking-widest">Awaiting kernel boot...</div>
                 </div>
             </div>
         </div>
@@ -350,6 +349,7 @@
                 results: null,
                 aiPreview: null,
                 rawImage: null,
+                currentFile: null,
                 logs: [],
                 textInfo: '',
                 queue: [],
@@ -365,10 +365,6 @@
                     quantity: 1, unit: '', msrp: '', product_url: '',
                     location: 'pantry', is_food: false, purchase_price: 0
                 },
-                rotation: 0,
-                mirror: false,
-                toasts: [],
-                locations: [],
 
                 init() {
                     this.fetchLocations();
@@ -376,7 +372,6 @@
                     setInterval(() => {
                         if (this.queue.some(i => i.status === 'processing')) this.fetchQueue();
                     }, 5000);
-                    
                     this.$watch('logs', () => {
                         this.$nextTick(() => {
                             const el = this.$refs.overlayLog;
@@ -390,7 +385,7 @@
                         const response = await fetch('/locations');
                         const data = await response.json();
                         if (data.success) this.locations = data.locations;
-                    } catch (err) { console.error(err); }
+                    } catch (e) {}
                 },
 
                 async fetchQueue() {
@@ -399,26 +394,21 @@
                         const data = await response.json();
                         const procResponse = await fetch('/queue?status=processing');
                         const procData = await procResponse.json();
-                        
                         this.queue = [...procData.items, ...data.items].map(i => {
                             const llm = i.ai_output?.llm_output || {};
                             return {
-                                ...i,
-                                show_more: false,
-                                executing: false,
+                                ...i, show_more: false, executing: false,
                                 selected_services: i.product_type === 'food' ? ['mealie'] : ['homebox'],
                                 edit_data: i.user_overrides || {
-                                    product_name: llm.product_name || '',
-                                    brand: llm.brand || '',
-                                    category: llm.category || '',
-                                    description: llm.description || '',
-                                    quantity: 1, unit: '', location: 'pantry',
-                                    msrp: llm.msrp || '', product_url: llm.product_url || '',
+                                    product_name: llm.product_name || '', brand: llm.brand || '',
+                                    category: llm.category || '', description: llm.description || '',
+                                    quantity: 1, unit: '', location: 'pantry', msrp: llm.msrp || '',
+                                    product_url: llm.product_url || '',
                                     purchase_price: parseFloat(llm.msrp?.replace(/[^0-9.]/g, '')) || 0
                                 }
                             };
                         });
-                    } catch (err) { console.error(err); }
+                    } catch (e) {}
                 },
 
                 enterPrecision() {
@@ -427,43 +417,34 @@
                         const img = document.getElementById('cropper-target');
                         if (this.cropper) this.cropper.destroy();
                         this.cropper = new Cropper(img, {
-                            viewMode: 1,
-                            dragMode: 'move',
-                            autoCropArea: 0.5,
-                            restore: false,
-                            guides: true,
-                            center: true,
-                            highlight: false,
-                            cropBoxMovable: true,
-                            cropBoxResizable: true,
-                            toggleDragModeOnDblclick: false,
+                            viewMode: 1, autoCropArea: 0.8, restore: false, guides: true, center: true, highlight: false,
                         });
                     });
                 },
 
-                closePrecision() {
-                    this.precisionMode = false;
-                    if (this.cropper) this.cropper.destroy();
-                },
+                closePrecision() { this.precisionMode = false; if (this.cropper) this.cropper.destroy(); },
 
                 applyCrop() {
                     const canvas = this.cropper.getCroppedCanvas({ maxWidth: 2048, maxHeight: 2048 });
                     canvas.toBlob((blob) => {
-                        this.precisionMode = false;
-                        this.runIdentification(blob);
+                        this.aiPreview = URL.createObjectURL(blob);
+                        this.currentFile = blob;
+                        this.closePrecision();
                     }, 'image/jpeg', 0.9);
                 },
 
                 async onFileSelected(e) {
                     const file = e.target.files[0];
                     if (!file) return;
+                    this.results = null;
+                    this.currentFile = file;
                     this.rawImage = URL.createObjectURL(file);
-                    this.runIdentification(file);
+                    this.aiPreview = this.rawImage;
                 },
 
-                async runIdentification(file) {
+                async runIdentification() {
+                    if (!this.currentFile) return;
                     this.loading = true;
-                    this.results = null;
                     this.logs = [];
                     this.serviceResults = {};
                     
@@ -474,10 +455,10 @@
                             const data = await resp.json();
                             this.logs = data.logs || [];
                         } catch (e) {}
-                    }, 500);
+                    }, 400);
 
                     const formData = new FormData();
-                    formData.append('file', file);
+                    formData.append('file', this.currentFile, 'capture.jpg');
                     formData.append('text', this.textInfo);
                     formData.append('session_id', sessionId);
                     
@@ -496,13 +477,13 @@
                                 technical_details: llm.technical_details || '', product_url: llm.product_url || '',
                                 location: 'pantry', is_food: llm.is_food, purchase_price: 0
                             };
-                            this.notify('Object Identified');
+                            this.notify('Agent Task Complete');
                         } else {
-                            this.notify(data.error || 'Identification Error', 'error');
+                            this.notify(data.error || 'Agent Error', 'error');
                         }
-                    } catch (err) { this.notify('Identification Error', 'error'); }
+                    } catch (e) { this.notify('Identification Timeout', 'error'); }
                     finally { 
-                        setTimeout(() => clearInterval(logInterval), 2000);
+                        setTimeout(() => clearInterval(logInterval), 3000);
                         this.loading = false; 
                     }
                 },
@@ -510,7 +491,6 @@
                 async triggerServices(item = null) {
                     const targetItem = item || { id: null, edit_data: this.form, selected_services: this.selectedServices };
                     if (item) item.executing = true; else this.executing = true;
-
                     try {
                         const response = await fetch('/execute', {
                             method: 'POST',
@@ -523,13 +503,13 @@
                         });
                         const data = await response.json();
                         if (data.success) {
-                            this.notify('Pipeline Executed');
+                            this.notify('Pipeline Dispatched');
                             Object.assign(this.serviceResults, data.results);
                             if (item) this.fetchQueue(); 
                         } else {
-                            this.notify(data.error || 'Execution Error', 'error');
+                            this.notify(data.error || 'Workflow Rejected', 'error');
                         }
-                    } catch (err) { this.notify('Network Error', 'error'); }
+                    } catch (e) { this.notify('Network Failure', 'error'); }
                     finally { if (item) item.executing = false; else this.executing = false; }
                 },
 
@@ -537,7 +517,7 @@
                     const files = e.target.files;
                     if (!files.length) return;
                     this.loading = true;
-                    this.loadingStatus = 'Importing';
+                    this.loadingStatus = 'Batch Upload';
                     const formData = new FormData();
                     for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
                     if (this.textInfo) formData.append('text', this.textInfo);
@@ -549,15 +529,15 @@
                             this.activeTab = 'review';
                             this.fetchQueue();
                         }
-                    } catch (err) { this.notify('Ingestion Failed', 'error'); }
+                    } catch (e) { this.notify('Import Failed', 'error'); }
                     finally { this.loading = false; }
                 },
 
                 async discardItem(id) {
-                    if (!confirm('Discard asset?')) return;
+                    if (!confirm('Purge asset?')) return;
                     await fetch(`/items/${id}`, { method: 'DELETE' });
                     this.queue = this.queue.filter(i => i.id !== id);
-                    this.notify('Asset Purged');
+                    this.notify('Purged');
                 },
 
                 notify(msg, type = 'success') {
