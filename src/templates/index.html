@@ -10,18 +10,19 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #000; color: #fff; overflow-x: hidden; }
+        body { font-family: 'Inter', sans-serif; background-color: #050505; color: #fff; overflow-x: hidden; }
         [x-cloak] { display: none !important; }
-        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); border: 1px solid rgba(255, 255, 255, 0.08); }
-        .glass-dark { background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        .ios-toggle { position: relative; width: 44px; height: 24px; appearance: none; background: #2c2c2e; border-radius: 20px; transition: .3s; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); }
+        .glass { background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); border: 1px solid rgba(255, 255, 255, 0.12); }
+        .glass-dark { background: rgba(30, 30, 30, 0.7); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .ios-toggle { position: relative; width: 44px; height: 24px; appearance: none; background: #3a3a3c; border-radius: 20px; transition: .3s; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); }
         .ios-toggle:checked { background: #34C759; }
-        .ios-toggle::before { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; top: 1px; left: 1px; background: #fff; transition: .3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .ios-toggle::before { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; top: 1px; left: 1px; background: #fff; transition: .3s; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
         .ios-toggle:checked::before { left: 21px; }
         .btn-apple { background: #fff; color: #000; font-weight: 800; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 1.25rem; }
         .btn-apple:active { transform: scale(0.96); opacity: 0.9; }
-        .terminal-text { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: rgba(255,255,255,0.6); }
+        .terminal-text { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: rgba(255,255,255,0.85); }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .label-apple { font-size: 10px; font-weight: 800; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; letter-spacing: 0.15em; }
         .cropper-view-box, .cropper-face { border-radius: 1.5rem; }
         .cropper-line, .cropper-point { background-color: #fff; }
         .cropper-bg { background-image: none; background-color: #000; }
@@ -66,11 +67,11 @@
         <div x-show="activeTab === 'capture'" class="space-y-6" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 translate-y-12">
             
             <!-- Context & Action Control -->
-            <div class="glass p-6 rounded-[2rem] space-y-5 border-white/5 bg-white/[0.01]">
+            <div class="glass p-6 rounded-[2rem] space-y-5 border-white/10 bg-white/[0.04]">
                 <div class="space-y-3">
-                    <label class="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] ml-1">AI Guidance / Notes</label>
+                    <label class="label-apple ml-1">AI Guidance / Notes</label>
                     <textarea x-model="textInfo" placeholder="e.g. This is a special limited edition variant..." 
-                              class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-xs focus:ring-1 focus:ring-white/20 outline-none resize-none font-medium placeholder:text-white/10 h-20 transition-all"></textarea>
+                              class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm focus:ring-1 focus:ring-white/40 outline-none resize-none font-medium placeholder:text-white/20 h-20 transition-all"></textarea>
                 </div>
                 
                 <button x-show="aiPreview && !results" @click="runIdentification()" 
@@ -116,54 +117,53 @@
                 </div>
             </div>
 
-            <!-- Single Result Card (Result Panel) -->
             <div x-show="results" class="space-y-6" x-transition:enter="transition ease-out duration-700" x-transition:enter-start="opacity-0 translate-y-20">
-                <div class="glass p-8 rounded-[3rem] shadow-2xl space-y-8 border-white/10 bg-white/[0.01]">
+                <div class="glass p-8 rounded-[3rem] shadow-2xl space-y-8 border-white/20 bg-white/[0.05]">
                     <div class="space-y-2">
-                        <label class="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] ml-2">Identified Object</label>
-                        <input type="text" x-model="form.product_name" class="w-full bg-transparent border-none p-2 text-2xl font-black focus:ring-0 outline-none transition-all tracking-tighter">
+                        <label class="label-apple ml-2">Identified Object</label>
+                        <input type="text" x-model="form.product_name" class="w-full bg-transparent border-none p-2 text-2xl font-black focus:ring-0 outline-none transition-all tracking-tighter text-white">
                     </div>
 
                     <div class="grid grid-cols-2 gap-8">
                         <div class="space-y-2">
-                            <label class="text-[9px] font-black text-white/20 uppercase tracking-widest ml-2">Brand</label>
-                            <input type="text" x-model="form.brand" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-xs font-bold outline-none">
+                            <label class="label-apple ml-2">Brand</label>
+                            <input type="text" x-model="form.brand" class="w-full bg-white/10 border border-white/10 rounded-2xl px-5 py-4 text-xs font-bold outline-none text-white focus:bg-white/15 transition-all">
                         </div>
                         <div class="space-y-2">
-                            <label class="text-[9px] font-black text-white/20 uppercase tracking-widest ml-2">Category</label>
-                            <input type="text" x-model="form.category" class="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-xs font-bold outline-none">
+                            <label class="label-apple ml-2">Category</label>
+                            <input type="text" x-model="form.category" class="w-full bg-white/10 border border-white/10 rounded-2xl px-5 py-4 text-xs font-bold outline-none text-white focus:bg-white/15 transition-all">
                         </div>
                     </div>
 
                     <div class="space-y-2">
-                        <label class="text-[9px] font-black text-white/20 uppercase tracking-widest ml-2">Summary</label>
-                        <textarea x-model="form.description" rows="2" class="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-5 text-sm font-medium outline-none resize-none"></textarea>
+                        <label class="label-apple ml-2">Summary</label>
+                        <textarea x-model="form.description" rows="2" class="w-full bg-white/10 border border-white/10 rounded-2xl px-6 py-5 text-sm font-medium outline-none resize-none text-white/90 focus:bg-white/15 transition-all"></textarea>
                     </div>
 
                     <div x-data="{ open: false }" class="space-y-4">
-                        <button @click="open = !open" class="flex items-center gap-3 text-[9px] font-black text-white/30 uppercase tracking-[0.2em] hover:text-white transition-colors group">
-                            <div class="w-6 h-6 rounded-full glass flex items-center justify-center group-hover:bg-white/10 transition-all">
+                        <button @click="open = !open" class="flex items-center gap-3 label-apple hover:text-white transition-colors group">
+                            <div class="w-6 h-6 rounded-full glass flex items-center justify-center group-hover:bg-white/20 transition-all">
                                 <svg class="w-2.5 h-2.5 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M19 9l-7 7-7-7"></path></svg>
                             </div>
                             Technical Details & Metadata
                         </button>
                         <div x-show="open" x-transition class="grid grid-cols-1 gap-4 mt-2">
                             <div class="grid grid-cols-2 gap-4">
-                                <input type="text" x-model="form.manufacturer" placeholder="Manufacturer" class="bg-white/5 border border-white/5 rounded-xl px-5 py-3 text-[10px] font-bold outline-none">
-                                <input type="text" x-model="form.msrp" placeholder="MSRP" class="bg-white/5 border border-white/5 rounded-xl px-5 py-3 text-[10px] font-bold outline-none">
+                                <input type="text" x-model="form.manufacturer" placeholder="Manufacturer" class="bg-white/10 border border-white/10 rounded-xl px-5 py-3 text-[10px] font-bold outline-none text-white">
+                                <input type="text" x-model="form.msrp" placeholder="MSRP" class="bg-white/10 border border-white/10 rounded-xl px-5 py-3 text-[10px] font-bold outline-none text-white">
                             </div>
-                            <textarea x-model="form.technical_details" placeholder="Technical Specs" class="bg-white/5 border border-white/5 rounded-xl px-5 py-4 text-[10px] font-mono outline-none resize-none h-24"></textarea>
+                            <textarea x-model="form.technical_details" placeholder="Technical Specs" class="bg-white/10 border border-white/10 rounded-xl px-5 py-4 text-[10px] font-mono outline-none resize-none h-24 text-white/80"></textarea>
                         </div>
                     </div>
 
-                    <div class="border-t border-white/5 pt-8 space-y-6">
+                    <div class="border-t border-white/10 pt-8 space-y-6">
                         <div class="flex justify-between items-center px-1">
-                            <h3 class="text-[9px] font-black text-white/30 uppercase tracking-[0.3em]">Pipeline Execution</h3>
-                            <button @click="showPayload = !showPayload" class="text-[8px] font-black text-white/20 hover:text-white uppercase tracking-widest">Review Payload</button>
+                            <h3 class="label-apple">Pipeline Execution</h3>
+                            <button @click="showPayload = !showPayload" class="text-[8px] font-black text-white/40 hover:text-white uppercase tracking-widest border border-white/20 px-3 py-1 rounded-full transition-all">Review Payload</button>
                         </div>
 
-                        <div x-show="showPayload" x-transition class="bg-black/40 rounded-2xl p-6 border border-white/5 font-mono text-[9px] overflow-x-auto">
-                            <pre class="text-blue-400" x-text="JSON.stringify(form, null, 2)"></pre>
+                        <div x-show="showPayload" x-transition class="bg-black/60 rounded-2xl p-6 border border-white/10 font-mono text-[9px] overflow-x-auto shadow-inner">
+                            <pre class="text-blue-300" x-text="JSON.stringify(form, null, 2)"></pre>
                         </div>
 
                         <div class="grid grid-cols-2 gap-3">
@@ -173,11 +173,11 @@
                                 {id: 'pricebuddy', label: 'PriceBuddy', icon: '🏷️'},
                                 {id: 'changedetection', label: 'Tracker', icon: '🔔'}
                             ]">
-                                <label class="flex items-center justify-between p-4 glass rounded-2xl cursor-pointer hover:bg-white/[0.05] transition-all group"
-                                       :class="serviceResults[svc.id]?.success ? 'border-green-500/50 bg-green-500/5' : ''">
+                                <label class="flex items-center justify-between p-4 glass rounded-2xl cursor-pointer hover:bg-white/[0.08] transition-all group border-white/10"
+                                       :class="serviceResults[svc.id]?.success ? 'border-green-500 bg-green-500/10' : ''">
                                     <div class="flex items-center gap-3">
-                                        <span class="text-sm opacity-50 group-hover:opacity-100 transition-opacity" x-text="svc.icon"></span>
-                                        <span class="text-[10px] font-black uppercase tracking-tight" x-text="svc.label"></span>
+                                        <span class="text-sm opacity-70 group-hover:opacity-100 transition-opacity" x-text="svc.icon"></span>
+                                        <span class="text-[10px] font-black uppercase tracking-tight text-white/80 group-hover:text-white" x-text="svc.label"></span>
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <span x-show="serviceResults[svc.id]?.success" class="text-[10px] animate-bounce">✅</span>
@@ -310,18 +310,18 @@
             </div>
 
             <!-- ENHANCED TERMINAL -->
-            <div class="w-full glass rounded-[2rem] p-8 border border-white/10 space-y-5 shadow-2xl bg-black/40">
-                <div class="flex justify-between items-center border-b border-white/5 pb-4">
-                    <span class="text-[8px] font-black text-white/20 uppercase tracking-[0.4em]">System Logs</span>
+            <div class="w-full glass rounded-[2rem] p-8 border border-white/20 space-y-5 shadow-2xl bg-black/60">
+                <div class="flex justify-between items-center border-b border-white/10 pb-4">
+                    <span class="label-apple">System Logs</span>
                 </div>
                 <div class="h-56 overflow-y-auto scrollbar-hide flex flex-col space-y-3" x-ref="overlayLog">
                     <template x-for="(log, i) in logs" :key="i">
                         <div class="terminal-text flex gap-4 transition-all duration-300">
-                            <span class="text-white/10 select-none tabular-nums" x-text="(i+1).toString().padStart(2, '0')"></span>
-                            <span :class="log.includes('❌') ? 'text-red-400' : (log.includes('✅') ? 'text-green-400' : 'text-white/80')" x-text="log"></span>
+                            <span class="text-white/20 select-none tabular-nums" x-text="(i+1).toString().padStart(2, '0')"></span>
+                            <span :class="log.includes('❌') ? 'text-red-400' : (log.includes('✅') ? 'text-green-400' : 'text-white')" x-text="log"></span>
                         </div>
                     </template>
-                    <div x-show="logs.length === 0" class="terminal-text italic text-white/10 uppercase tracking-widest">Awaiting kernel boot...</div>
+                    <div x-show="logs.length === 0" class="terminal-text italic text-white/20 uppercase tracking-widest">Awaiting kernel boot...</div>
                 </div>
             </div>
         </div>
