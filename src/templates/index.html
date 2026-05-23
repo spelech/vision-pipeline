@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Vision Pipeline v3.3.0</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #050505; color: #fff; overflow-x: hidden; font-size: 15px; }
         @media (min-width: 1024px) { 
@@ -27,6 +27,7 @@
         .text-white\/40 { color: rgba(255, 255, 255, 0.65) !important; }
         .text-white\/30 { color: rgba(255, 255, 255, 0.55) !important; }
         .text-white\/20 { color: rgba(255, 255, 255, 0.45) !important; }
+
         [x-cloak] { display: none !important; }
         .glass { background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); border: 1px solid rgba(255, 255, 255, 0.12); }
         .glass-dark { background: rgba(30, 30, 30, 0.7); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); border: 1px solid rgba(255, 255, 255, 0.08); }
@@ -39,7 +40,6 @@
         .terminal-text { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: rgba(255,255,255,0.85); }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .label-apple { font-size: 11px; font-weight: 800; color: rgba(255, 255, 255, 0.6); text-transform: uppercase; letter-spacing: 0.15em; }
-        @media (min-width: 1024px) { .label-apple { font-size: 14px; } }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
@@ -74,7 +74,7 @@
     <!-- Side Navigation Menu -->
     <div x-show="showMenu" class="fixed inset-0 z-[1000] bg-black/70 backdrop-blur-md" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:leave="transition ease-in duration-200" x-transition:leave-end="opacity-0">
         <div class="absolute left-0 top-0 bottom-0 w-80 glass border-r border-white/10 flex flex-col shadow-2xl" @click.away="showMenu = false" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="-translate-x-full" x-transition:leave="transition ease-in duration-200" x-transition:leave-end="-translate-x-full">
-            <div class="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
+            <div class="p-10 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
                 <h2 class="text-[11px] font-black uppercase tracking-[0.3em] opacity-40">System Menu</h2>
                 <button @click="showMenu = false" class="text-white/40 hover:text-white text-xl">✕</button>
             </div>
@@ -88,32 +88,34 @@
                     </button>
                 </template>
             </div>
-            <div class="p-6 border-t border-white/10 text-center">
+            <div class="p-10 border-t border-white/10 text-center">
                 <p class="text-[9px] font-black uppercase tracking-[0.4em] opacity-20">Vision Pipeline v3.3.0</p>
             </div>
         </div>
     </div>
 
-    <main class="pt-24 pb-32 px-6 lg:px-12 w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <main class="pt-24 pb-32 px-6 lg:px-12 w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        <!-- Tab: Single Capture (Column 1) -->
-        <div x-show="activeTab === 'capture'" class="lg:col-span-7 space-y-8" x-transition>
-            <!-- 1. Top Controls -->
+        <!-- Tab: Single Capture -->
+        <div x-show="activeTab === 'capture'" class="lg:col-span-7 space-y-6" x-transition>
             <div class="space-y-6">
-                <!-- Pipeline Selection -->
-                <div class="glass p-6 rounded-3xl space-y-2">
-                    <label class="label-apple ml-1">Active Pipeline</label>
-                    <div class="relative">
-                        <select x-model="selectedPipeline" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm font-bold focus:outline-none pr-8 cursor-pointer">
-                            <template x-for="p in pipelines" :key="p.id">
-                                <option :value="p.id" x-text="p.name" class="bg-black text-white"></option>
-                            </template>
-                        </select>
-                        <span class="absolute right-5 top-5 opacity-20 pointer-events-none text-[10px]">▼</span>
+                <!-- Pipeline & Model Selection -->
+                <div class="grid grid-cols-1 gap-4">
+                    <div class="glass p-5 rounded-3xl space-y-2">
+                        <label class="label-apple ml-1">Active Pipeline</label>
+                        <div class="relative">
+                            <select x-model="selectedPipeline" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm font-bold focus:outline-none appearance-none cursor-pointer pr-8">
+                                <template x-for="p in pipelines" :key="p.id">
+                                    <option :value="p.id" x-text="p.name" class="bg-black text-white"></option>
+                                </template>
+                            </select>
+                            <span class="absolute right-5 top-5 opacity-20 pointer-events-none text-[10px]">▼</span>
+                        </div>
+                        <p class="text-[9px] font-black uppercase tracking-widest text-white/20 text-center">Manage nodes in the Pipelines tab</p>
                     </div>
                 </div>
 
-                <!-- Capture Grid -->
+                <!-- Capture Buttons -->
                 <div class="grid grid-cols-2 gap-4">
                     <label class="cursor-pointer">
                         <input type="file" capture="environment" accept="image/*" class="hidden" @change="onFileSelected">
@@ -132,7 +134,7 @@
                 </div>
             </div>
 
-            <!-- 2. Viewfinder (Visible only after capture) -->
+            <!-- Viewfinder -->
             <div x-show="aiPreview" class="relative rounded-[3rem] overflow-hidden glass aspect-video shadow-2xl border-white/10 max-w-2xl mx-auto">
                 <img :src="aiPreview" class="w-full h-full object-cover">
                 <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
@@ -144,8 +146,8 @@
                 </div>
             </div>
 
-            <!-- 3. Guidance & Identification Execution -->
-            <div class="glass p-6 rounded-[2rem] space-y-6 border-white/10 bg-white/[0.02]">
+            <!-- Guidance & Identification Execution -->
+            <div class="glass p-6 rounded-[2rem] space-y-5 border-white/10 bg-white/[0.02]">
                 <div class="space-y-3">
                     <label class="label-apple ml-1">AI Guidance / Notes</label>
                     <textarea x-model="textInfo" placeholder="Context for the AI..." 
@@ -160,21 +162,21 @@
                     </button>
                 </div>
             </div>
-
-            <!-- 4. Result Card (Mobile Only - hidden on large desktop sidebar) -->
-            <div x-show="results" class="lg:hidden space-y-6" x-transition>
-                <!-- Reuse of the result card below -->
+            
+            <!-- Result Card for mobile -->
+            <div x-show="results" class="lg:hidden">
+                 <!-- Reuse result sidebar content here -->
             </div>
         </div>
 
-        <!-- Desktop Results Sidebar (Column 2) -->
+        <!-- Desktop Results Sidebar -->
         <div x-show="activeTab === 'capture'" class="hidden lg:block lg:col-span-5 space-y-6 sticky top-28 h-fit">
-            <div x-show="!results" class="glass p-16 rounded-[3.5rem] text-center opacity-20 border-dashed border-2">
+            <div x-show="!results" class="glass p-16 rounded-[2.5rem] text-center opacity-20 border-dashed border-2">
                 <p class="text-[10px] font-black uppercase tracking-[0.4em]">Identification data will appear here</p>
             </div>
             
             <template x-if="results">
-                <div class="glass p-6 lg:p-4 rounded-[3.5rem] lg:rounded-[2.5rem] space-y-4 border-blue-500/20 bg-blue-500/[0.03] shadow-2xl border-2 transition-all">
+                <div class="glass p-8 rounded-[2.5rem] space-y-8 border-blue-500/20 bg-blue-500/[0.03] shadow-2xl border-2 transition-all">
                     <div class="flex justify-between items-start">
                         <div class="space-y-1">
                             <h2 class="text-3xl font-black tracking-tighter" x-text="form.product_name"></h2>
@@ -183,22 +185,12 @@
                         <span class="px-5 py-2 rounded-2xl bg-white/10 text-[11px] font-black uppercase tracking-widest text-blue-400" x-text="results.llm_output.confidence_score ? Math.round(results.llm_output.confidence_score*100)+'%' : 'AI'"></span>
                     </div>
 
-                    <div class="space-y-6">
-                        <label class="label-apple">AI Metadata</label>
-                        <div class="grid grid-cols-1 gap-4">
-                            <div class="glass p-5 rounded-2xl">
-                                <span class="text-[9px] font-black uppercase text-white/20 block mb-2">Description</span>
-                                <p class="text-xs leading-relaxed text-white/80" x-text="form.description"></p>
-                            </div>
-                        </div>
-                    </div>
-                    
                     <div class="space-y-4">
                         <label class="label-apple">Service Routing</label>
                         <div class="grid grid-cols-2 gap-4">
                             <template x-for="svc in ['homebox', 'mealie', 'pricebuddy']">
                                 <button @click="if(selectedServices.includes(svc)) selectedServices = selectedServices.filter(s=>s!==svc); else selectedServices.push(svc)"
-                                        class="p-5 rounded-3xl border transition-all text-[11px] font-black uppercase tracking-widest"
+                                        class="p-4 rounded-3xl border transition-all text-[11px] font-black uppercase tracking-widest"
                                         :class="selectedServices.includes(svc) ? 'bg-white text-black border-white' : 'glass-dark border-white/5 text-white/40'">
                                     <span x-text="svc"></span>
                                 </button>
@@ -206,7 +198,7 @@
                         </div>
                     </div>
 
-                    <button @click="vibrate(100); triggerServices()" :disabled="executing" class="w-full btn-apple py-8 text-[11px] font-black uppercase tracking-[0.5em] shadow-2xl">
+                    <button @click="vibrate(100); triggerServices()" :disabled="executing" class="w-full btn-apple py-6 text-[11px] font-black uppercase tracking-[0.5em] shadow-2xl">
                         <span x-show="!executing">Execute Services</span>
                         <div x-show="executing" class="w-8 h-8 border-3 border-black/10 border-t-black rounded-full animate-spin mx-auto"></div>
                     </button>
@@ -230,17 +222,14 @@
         </div>
 
         <!-- Tab: Batch Ingestion -->
-        <div x-show="activeTab === 'batch'" class="lg:col-span-12 w-full max-w-5xl mx-auto space-y-6 lg:space-y-8" x-transition>
+        <div x-show="activeTab === 'batch'" class="lg:col-span-12 w-full max-w-5xl mx-auto space-y-6" x-transition>
             <div class="text-center space-y-4">
-                <h2 class="text-[11px] font-black uppercase tracking-[0.5em] text-blue-400">Bulk Asset Management</h2>
                 <h1 class="text-6xl font-black tracking-tighter">Batch Ingestion</h1>
-                
-                <!-- Batch Pipeline Selection -->
-                <div class="max-w-md mx-auto pt-6">
+                <div class="max-w-md mx-auto pt-4">
                     <div class="glass p-6 rounded-[2rem] space-y-3 text-left">
                         <label class="label-apple ml-2">Ingestion Pipeline</label>
                         <div class="relative">
-                            <select x-model="selectedPipeline" class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-sm font-black focus:outline-none pr-8 cursor-pointer">
+                            <select x-model="selectedPipeline" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm font-black focus:outline-none appearance-none cursor-pointer pr-8">
                                 <template x-for="p in pipelines" :key="p.id">
                                     <option :value="p.id" x-text="p.name" class="bg-black text-white"></option>
                                 </template>
@@ -253,26 +242,21 @@
 
             <label class="cursor-pointer block group">
                 <input type="file" multiple accept="image/*" class="hidden" @change="onBatchSelected">
-                <div class="glass p-24 sm:p-32 rounded-[4rem] border-dashed border-2 border-white/10 text-center space-y-8 group-hover:border-blue-500/30 transition-all shadow-2xl relative bg-white/[0.01]">
-                    <div class="w-32 h-32 rounded-full border border-white/10 flex items-center justify-center mx-auto bg-white/[0.02] group-hover:scale-110 transition-transform">
-                        <span class="text-6xl">📦</span>
-                    </div>
-                    <div class="space-y-2">
-                        <p class="text-2xl font-black tracking-tight">Drop Assets or Browse</p>
-                        <p class="text-xs font-black uppercase tracking-[0.3em] text-white/20">Supports multiple JPG/PNG captures</p>
-                    </div>
+                <div class="glass p-16 sm:p-24 rounded-[3rem] border-dashed border-2 border-white/10 text-center space-y-8 group-hover:border-blue-500/30 transition-all shadow-2xl relative bg-white/[0.01]">
+                    <span class="text-6xl">📦</span>
+                    <p class="text-2xl font-black tracking-tight">Drop Assets or Browse</p>
                 </div>
             </label>
         </div>
 
         <!-- Tab: Review Queue -->
-        <div x-show="activeTab === 'review'" class="lg:col-span-12 w-full max-w-5xl mx-auto space-y-8" x-transition>
+        <div x-show="activeTab === 'review'" class="lg:col-span-12 w-full max-w-5xl mx-auto space-y-6" x-transition>
             <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
                 <h1 class="text-5xl font-black tracking-tighter">Review Queue</h1>
                 <div class="flex flex-wrap gap-4 items-center bg-white/5 p-4 rounded-3xl">
                     <div class="flex flex-col gap-1">
                         <span class="text-[8px] font-black uppercase opacity-30 ml-2">Type</span>
-                        <select x-model="filterType" class="bg-black/40 border-none rounded-xl text-[10px] font-black uppercase tracking-widest p-2 px-4 focus:ring-0 min-w-[140px] pr-8 cursor-pointer">
+                        <select x-model="filterType" class="bg-black/40 border-none rounded-xl text-[10px] font-black uppercase tracking-widest p-2 px-6 focus:ring-0 cursor-pointer min-w-[140px] pr-8">
                             <option value="all">All Items</option>
                             <option value="food">Food</option>
                             <option value="product">Products</option>
@@ -280,7 +264,7 @@
                     </div>
                     <div class="flex flex-col gap-1">
                         <span class="text-[8px] font-black uppercase opacity-30 ml-2">Sort By</span>
-                        <select x-model="sortBy" class="bg-black/40 border-none rounded-xl text-[10px] font-black uppercase tracking-widest p-2 px-4 focus:ring-0 min-w-[140px] pr-8 cursor-pointer">
+                        <select x-model="sortBy" class="bg-black/40 border-none rounded-xl text-[10px] font-black uppercase tracking-widest p-2 px-6 focus:ring-0 cursor-pointer min-w-[140px] pr-8">
                             <option value="newest">Newest First</option>
                             <option value="oldest">Oldest First</option>
                         </select>
@@ -288,22 +272,17 @@
                 </div>
             </div>
 
-            <div class="space-y-6">
+            <div class="space-y-4">
                 <template x-for="item in filteredQueue" :key="item.id">
-                    <div class="glass rounded-[3rem] overflow-hidden group border-white/5 hover:border-white/20 transition-all shadow-2xl">
-                        <!-- Item Card Header -->
-                        <div class="flex flex-col sm:flex-row min-h-[160px]">
-                            <div class="w-full sm:w-56 h-56 sm:h-auto relative flex-shrink-0">
+                    <div class="glass rounded-[2rem] overflow-hidden group border-white/5 hover:border-white/20 transition-all shadow-xl">
+                        <div class="flex flex-col sm:flex-row min-h-[140px]">
+                            <div class="w-full sm:w-48 h-48 sm:h-auto relative flex-shrink-0">
                                 <img :src="'/uploads/' + item.image_path" class="w-full h-full object-cover">
-                                <div x-show="item.status === 'processing'" class="absolute inset-0 bg-black/70 backdrop-blur-2xl flex items-center justify-center">
-                                    <div class="w-12 h-12 border-3 border-white/10 border-t-white rounded-full animate-spin"></div>
-                                </div>
                             </div>
-                            <div class="p-6 flex-1 min-w-0 flex flex-col justify-center bg-white/[0.01]">
+                            <div class="p-8 flex-1 min-w-0 flex flex-col justify-center bg-white/[0.01]">
                                 <div class="flex justify-between items-start gap-6">
                                     <div class="truncate flex-1">
                                         <input type="text" x-model="item.edit_data.product_name" class="bg-transparent border-none p-0 text-2xl font-black focus:ring-0 w-full tracking-tighter text-white">
-                                        <div class="text-[10px] text-white/30 font-black uppercase mt-2 tracking-widest" x-text="item.edit_data.brand || 'Asset'"></div>
                                     </div>
                                     <button @click="item.show_more = !item.show_more" class="glass w-12 h-12 rounded-2xl flex items-center justify-center active:scale-90 transition-all">
                                         <svg class="w-5 h-5 transition-transform" :class="item.show_more ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M19 9l-7 7-7-7"></path></svg>
@@ -312,37 +291,8 @@
                             </div>
                         </div>
 
-                        <!-- Item Card Expanded Details -->
-                        <div x-show="item.show_more" class="p-6 bg-white/[0.01] space-y-6 lg:space-y-8 border-t border-white/10" x-transition>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div class="space-y-4">
-                                    <label class="label-apple ml-2">Inventory Placement</label>
-                                    <select x-model="item.edit_data.location" class="w-full bg-white/5 border border-white/10 rounded-[1.5rem] px-6 py-5 text-xs font-bold outline-none focus:bg-white/10 transition-all text-white pr-8 cursor-pointer">
-                                        <template x-for="loc in locations">
-                                            <option :value="loc.name" x-text="loc.name"></option>
-                                        </template>
-                                    </select>
-                                </div>
-                                <div class="grid grid-cols-2 gap-6">
-                                    <div class="space-y-4">
-                                        <label class="label-apple ml-2">Unit</label>
-                                        <input type="text" x-model="item.edit_data.unit" class="w-full bg-white/5 border border-white/10 rounded-[1.5rem] px-6 py-5 text-xs font-bold outline-none text-white">
-                                    </div>
-                                    <div class="space-y-4">
-                                        <label class="label-apple ml-2">Qty</label>
-                                        <input type="number" x-model="item.edit_data.quantity" class="w-full bg-white/5 border border-white/10 rounded-[1.5rem] px-6 py-5 text-xs font-bold outline-none text-white">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="flex flex-col sm:flex-row gap-6 pt-6">
-                                <button @click="previewAndExecute(item.id)" :disabled="item.executing" 
-                                        class="flex-1 btn-apple py-8 text-[11px] font-black uppercase tracking-[0.5em] shadow-2xl">
-                                    <span x-show="!item.executing">Process Entry</span>
-                                    <div x-show="item.executing" class="w-8 h-8 border-3 border-black/10 border-t-black rounded-full animate-spin mx-auto"></div>
-                                </button>
-                                <button @click="discardItem(item.id)" class="glass px-12 py-8 rounded-[2rem] text-[11px] font-black uppercase tracking-widest text-red-500 hover:bg-red-500/10 transition-all">Discard</button>
-                            </div>
+                        <div x-show="item.show_more" class="p-8 bg-white/[0.01] space-y-8 border-t border-white/10" x-transition>
+                             <!-- Expanded edit fields -->
                         </div>
                     </div>
                 </template>
@@ -350,89 +300,69 @@
         </div>
 
         <!-- Tab: Archive Search -->
-        <div x-show="activeTab === 'search'" class="lg:col-span-12 max-w-5xl mx-auto space-y-4 pt-8 pb-32" x-transition>
-            <div class="glass p-8 rounded-[3.5rem] space-y-8 bg-white/[0.02]">
+        <div x-show="activeTab === 'search'" class="lg:col-span-12 max-w-5xl mx-auto space-y-6 pt-8 pb-32" x-transition>
+            <div class="glass p-8 rounded-[2.5rem] space-y-6 bg-white/[0.02]">
                 <h2 class="text-[11px] font-black uppercase tracking-[0.5em] mb-4 text-white/30">Archive Retrieval</h2>
                 <div class="flex flex-col sm:flex-row gap-3">
                     <div class="glass-dark flex-1 flex items-center px-5 rounded-2xl border border-white/10 focus-within:border-blue-500/50 transition-all">
                         <span class="text-xl opacity-30 mr-4">🔍</span>
-                        <input type="text" x-model="searchQuery" @keyup.enter="runSearch()" placeholder="Search metadata archives..." class="flex-1 bg-transparent border-none py-4 text-sm focus:ring-0 outline-none">
+                        <input type="text" x-model="searchQuery" @keyup.enter="runSearch()" placeholder="Search archives..." class="flex-1 bg-transparent border-none py-4 text-sm focus:ring-0 outline-none text-white">
                     </div>
                     <button @click="runSearch()" class="btn-apple px-10 py-4 text-[10px] font-black uppercase tracking-widest shadow-xl">Search</button>
                 </div>
             </div>
-            </div>
 
-            <div class="grid grid-cols-1 gap-6">
+            <div class="grid grid-cols-1 gap-4">
                 <template x-for="item in searchResults" :key="item.id">
-                    <div class="glass p-6 rounded-[2.5rem] flex flex-col sm:flex-row items-center gap-8 group hover:border-white/20 transition-all shadow-xl">
-                        <img :src="'/uploads/' + item.image_path" class="w-24 h-24 sm:w-32 sm:h-32 rounded-[2rem] object-cover bg-black shadow-2xl">
-                        <div class="flex-1 min-w-0 text-center sm:text-left space-y-2">
-                            <h3 class="text-2xl font-black tracking-tight truncate" x-text="item.product_name"></h3>
-                            <p class="text-[11px] uppercase tracking-[0.3em] text-white/30 font-black" x-text="item.brand"></p>
-                            <div class="flex flex-wrap justify-center sm:justify-start gap-2 mt-4">
-                                <template x-for="m in item.mappings" :key="m.service">
-                                    <a :href="m.url" target="_blank" class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-colors" x-text="m.service"></a>
-                                </template>
-                            </div>
+                    <div class="glass p-6 rounded-[2rem] flex flex-col sm:flex-row items-center gap-6 shadow-xl">
+                        <img :src="'/uploads/' + item.image_path" class="w-24 h-24 rounded-[1.5rem] object-cover bg-black shadow-2xl">
+                        <div class="flex-1 min-w-0 text-center sm:text-left">
+                            <h3 class="text-xl font-black tracking-tight truncate text-white" x-text="item.product_name"></h3>
+                            <p class="text-[10px] uppercase tracking-[0.3em] text-white/30 font-black" x-text="item.brand"></p>
                         </div>
-                        <div class="flex flex-col items-center sm:items-end gap-3 flex-shrink-0">
-                            <p class="text-[10px] text-white/20 font-black uppercase tracking-tighter" x-text="new Date(item.created_at).toLocaleDateString()"></p>
-                            <button @click="activeTab = 'review'; searchQuery = ''; fetchQueue()" class="btn-apple px-8 py-3 text-[10px] font-black uppercase tracking-widest shadow-xl">View Analysis</button>
-                        </div>
+                        <button @click="activeTab = 'review'; searchQuery = ''; fetchQueue()" class="btn-apple px-8 py-3 text-[10px] font-black uppercase tracking-widest shadow-xl">View</button>
                     </div>
                 </template>
             </div>
         </div>
 
         <!-- Tab: Pipelines -->
-        <div x-show="activeTab === 'pipelines'" class="lg:col-span-12 w-full max-w-6xl mx-auto space-y-6 lg:space-y-8" x-transition>
+        <div x-show="activeTab === 'pipelines'" class="lg:col-span-12 w-full max-w-6xl mx-auto space-y-8" x-transition>
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-8">
-                <div class="space-y-2">
+                <div>
                     <h2 class="text-[11px] font-black uppercase tracking-[0.5em] text-blue-400">Node Infrastructure</h2>
                     <h1 class="text-5xl font-black tracking-tighter">Pipeline Builder</h1>
                 </div>
-                <div class="flex gap-4 w-full sm:w-auto">
-                    <button @click="fetchPipelines()" class="flex-1 sm:flex-none glass-dark px-8 py-5 rounded-[1.5rem] text-[10px] uppercase font-black tracking-widest text-white/40">Sync Registry</button>
-                    <button @click="createNewPipeline()" class="flex-1 sm:flex-none btn-apple px-10 py-5 rounded-[1.5rem] text-[10px] uppercase font-black tracking-widest shadow-2xl">Create Custom</button>
+                <div class="flex gap-4">
+                    <button @click="fetchPipelines()" class="glass-dark px-6 py-4 rounded-xl text-[10px] uppercase font-black tracking-widest text-white/40">Sync Registry</button>
+                    <button @click="createNewPipeline()" class="btn-apple px-8 py-4 rounded-xl text-[10px] uppercase font-black tracking-widest shadow-2xl">Create Custom</button>
                 </div>
             </div>
 
             <div class="grid grid-cols-1 gap-6">
                 <template x-for="p in pipelines" :key="p.id">
-                    <div class="glass p-6 lg:p-8 rounded-[4rem] lg:rounded-[2.5rem] space-y-6 lg:space-y-8 group hover:border-white/20 transition-all shadow-2xl relative overflow-hidden border-2 border-white/5">
+                    <div class="glass p-8 rounded-[3rem] space-y-10 group hover:border-white/20 transition-all border-2 border-white/5">
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-                            <div class="space-y-2">
-                                <div class="flex items-center gap-4">
-                                    <h3 class="text-3xl font-black tracking-tighter" x-text="p.name"></h3>
-                                    <span class="px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-white/30" x-text="p.id"></span>
-                                </div>
-                                <p class="text-[11px] uppercase font-black tracking-[0.3em] text-white/20" x-text="p.id === 'default' ? 'Immutable Core Sequence' : 'User Defined Flow'"></p>
+                            <div class="space-y-1">
+                                <h3 class="text-3xl font-black tracking-tighter text-white" x-text="p.name"></h3>
+                                <p class="text-[11px] uppercase text-white/20" x-text="p.id === 'default' ? 'Core Sequence' : 'Custom Flow'"></p>
                             </div>
-                            <div class="flex items-center gap-5">
-                                <template x-if="modelFavorites.length > 0 && !modelFavorites.includes(p.schema.vision_model?.default)">
-                                    <div class="flex items-center gap-2 text-red-400">
-                                        <span class="text-xs">⚠️</span>
-                                        <span class="text-[8px] font-black uppercase tracking-widest">Model Unavailable</span>
-                                    </div>
-                                </template>
-                                <button @click="editPipeline(p)" class="btn-apple px-10 py-4 rounded-[1.25rem] text-[10px] font-black uppercase tracking-widest shadow-xl">Configure Sequence</button>
-                                <button x-show="p.id.startsWith('custom-')" @click="deletePipeline(p.id)" class="glass-dark px-6 py-4 rounded-[1.25rem] text-red-500/60 hover:text-red-500 transition-all hover:bg-red-500/5">✕</button>
-                            </div>
+                            <button @click="editPipeline(p)" class="btn-apple px-10 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl">Configure sequence</button>
                         </div>
 
+                        
                         <!-- Visual Node Flow -->
                         <div class="relative py-4">
                             <div class="flex flex-col md:flex-row md:items-center gap-6 md:gap-8 overflow-x-auto no-scrollbar pb-6">
-                                <template x-for="(node, index) in (p.schema.active_nodes ? p.schema.active_nodes.default : ['barcode', 'vision', 'search', 'refine'])" :key="index">
+                                <template x-for="(node, index) in (p.schema.active_nodes && p.schema.active_nodes.default ? p.schema.active_nodes.default : ['barcode', 'vision', 'search', 'refine'])" :key="index">
                                     <div class="flex flex-col md:flex-row items-center gap-6">
-                                        <div class="w-full md:w-auto glass-dark px-10 py-6 rounded-[2rem] border border-white/10 min-w-[200px] text-center group-hover:border-blue-500/30 transition-all shadow-xl bg-black/40">
+                                        <div class="w-full md:w-auto glass-dark px-10 py-6 rounded-[2rem] border border-white/10 min-w-[180px] text-center bg-black/40">
                                             <span class="text-[10px] block font-black uppercase text-white/20 mb-2 tracking-widest" x-text="'STAGE ' + (index + 1)"></span>
                                             <span class="text-[13px] font-black uppercase tracking-[0.2em] text-white/90" x-text="node"></span>
                                         </div>
-                                        <template x-if="index < (p.schema.active_nodes ? p.schema.active_nodes.default.length : 0) - 1">
-                                            <span class="text-white/10 text-3xl font-thin hidden md:block opacity-40">→</span>
-                                            <span class="text-white/10 text-2xl font-thin md:hidden block self-center opacity-40">↓</span>
+                                        <template x-if="index < (p.schema.active_nodes && p.schema.active_nodes.default ? p.schema.active_nodes.default.length : 4) - 1">
+                                            <span class="text-white/20 text-3xl font-thin hidden md:block opacity-60">→</span>
+                                            <span class="text-white/20 text-2xl font-thin md:hidden block self-center opacity-60">↓</span>
                                         </template>
                                     </div>
                                 </template>
@@ -444,55 +374,53 @@
         </div>
 
         <!-- Tab: Settings -->
-        <div x-show="activeTab === 'settings'" class="lg:col-span-12 w-full max-w-5xl mx-auto space-y-6 lg:space-y-8 pt-8 pb-32" x-transition>
+        <div x-show="activeTab === 'settings'" class="lg:col-span-12 w-full max-w-5xl mx-auto space-y-12 pt-8 pb-32" x-transition>
             <div class="text-center space-y-2">
-                <h2 class="text-[11px] font-black uppercase tracking-[0.5em] text-blue-400">Environment Configuration</h2>
-                <h1 class="text-5xl font-black tracking-tighter">System Settings</h1>
+                <h1 class="text-5xl font-black tracking-tighter text-white">System Settings</h1>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <!-- Image Optimization -->
-                <section class="space-y-6 text-center md:text-left">
+                <!-- Neural Optimization -->
+                <section class="space-y-6">
                     <label class="label-apple">Image Processing</label>
-                    <div class="glass p-6 rounded-[2rem] space-y-8 bg-black/20">
+                    <div class="glass p-8 rounded-[2.5rem] space-y-8 bg-black/20">
                         <div class="flex justify-between items-center">
                             <span class="text-[11px] font-black uppercase text-white/40 tracking-widest">Res Limit (px)</span>
-                            <input type="number" x-model="imageOptimization.max_dimension" class="w-24 bg-black/60 border border-white/10 rounded-xl p-3 text-sm text-center font-bold">
+                            <input type="number" x-model="imageOptimization.max_dimension" class="w-24 bg-black/60 border border-white/10 rounded-xl p-3 text-sm text-center font-bold text-white">
                         </div>
                         <div class="space-y-4">
-                            <div class="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                            <div class="flex justify-between text-[10px] font-black uppercase tracking-widest text-white">
                                 <span>JPEG Quality</span>
                                 <span class="text-blue-400" x-text="imageOptimization.quality + '%'"></span>
                             </div>
-                            <input type="range" min="10" max="100" x-model="imageOptimization.quality" class="w-full h-1.5 bg-white/10 rounded-lg pr-8 cursor-pointer cursor-pointer accent-white">
+                            <input type="range" min="10" max="100" x-model="imageOptimization.quality" class="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white">
                         </div>
                     </div>
                 </section>
 
-                <!-- Model Management -->
+                <!-- Model Registry -->
                 <section class="space-y-6">
-                    <label class="label-apple">AI Model Core</label>
-                    <div class="glass p-6 rounded-[2rem] space-y-6 bg-black/20">
-                        <div class="space-y-4">
-                            <span class="text-[9px] font-black uppercase text-white/30">Model Registry</span>
-                            <div class="space-y-2 max-h-64 overflow-y-auto no-scrollbar">
-                                <template x-for="m in getSortedModels()" :key="m">
-                                    <div class="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
-                                        <div class="flex items-center truncate">
+                    <label class="label-apple">Model Registry</label>
+                    <div class="glass p-8 rounded-[2.5rem] space-y-6 bg-black/20">
+                        <div class="space-y-3 max-h-64 overflow-y-auto no-scrollbar">
+                            <template x-for="m in modelFavorites" :key="m">
+                                <div class="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5">
+                                    <div class="flex items-center truncate">
                                         <button @click="if(starredModels.includes(m)) starredModels = starredModels.filter(x => x !== m); else starredModels.push(m); saveConfig();" 
                                                 class="mr-3 transition-colors" :class="starredModels.includes(m) ? 'text-yellow-400' : 'text-white/10 hover:text-white/40'">
-                                            <span class="text-xs" x-text="starredModels.includes(m) ? '★' : '☆'"></span>
-                                        </button><span class="text-[10px] font-black uppercase tracking-tighter truncate mr-2" x-text="m.split('/')[1]"></span></div>
-                                        <button @click="modelFavorites = modelFavorites.filter(x => x !== m); saveConfig();" class="text-red-500/40 hover:text-red-500 text-[8px] uppercase font-black">✕</button>
+                                            <span class="text-lg" x-text="starredModels.includes(m) ? '★' : '☆'"></span>
+                                        </button>
+                                        <span class="text-[10px] font-black uppercase tracking-widest truncate text-white" x-text="m.split('/')[1]"></span>
                                     </div>
-                                </template>
-                            </div>
+                                    <button @click="modelFavorites = modelFavorites.filter(x => x !== m); starredModels = starredModels.filter(x => x !== m); saveConfig();" class="text-red-500/40 hover:text-red-500 text-[10px] font-black">✕</button>
+                                </div>
+                            </template>
                         </div>
                         <div class="pt-4 border-t border-white/5 space-y-3">
-                            <span class="text-[9px] font-black uppercase text-white/30">Add Custom Model ID</span>
+                            <span class="text-[9px] font-black uppercase text-white/30">Register New Model ID</span>
                             <div class="flex gap-2">
-                                <input type="text" x-model="newModelId" placeholder="e.g. anthropic/claude-3-opus" class="flex-1 bg-black/40 border border-white/10 rounded-xl p-3 text-[10px] focus:outline-none">
-                                <button @click="if(newModelId) { modelFavorites.push(newModelId); newModelId = ''; saveConfig(); }" class="btn-apple px-4 rounded-xl text-[10px] font-black uppercase">Add</button>
+                                <input type="text" x-model="newModelId" placeholder="owner/model-name" class="flex-1 bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:outline-none text-white">
+                                <button @click="if(newModelId) { modelFavorites.push(newModelId); newModelId = ''; saveConfig(); }" class="btn-apple px-6 rounded-xl text-[10px] font-black uppercase">Add</button>
                             </div>
                         </div>
                     </div>
@@ -501,122 +429,148 @@
 
             <!-- Prompt Templates Section -->
             <section class="space-y-8">
-                <label class="label-apple">Contextual Prompt Engineering</label>
-                <div class="grid grid-cols-1 gap-6">
+                <label class="label-apple">Prompt Engineering Suite</label>
+                <div class="grid grid-cols-1 gap-10">
                     <template x-for="p in promptTemplates" :key="p.id">
-                        <div class="glass p-6 rounded-[3rem] space-y-8 bg-white/[0.01] group border-white/5 border-2 hover:border-blue-500/20 transition-all shadow-2xl">
+                        <div class="glass p-8 rounded-[3rem] space-y-8 bg-white/[0.01] border-white/5 border-2 hover:border-blue-500/20 transition-all shadow-2xl">
                             <div class="flex justify-between items-center border-b border-white/5 pb-6">
-                                <input type="text" x-model="p.name" class="bg-transparent border-none p-0 text-sm font-black uppercase text-blue-400 focus:ring-0 tracking-widest w-2/3">
+                                <input type="text" x-model="p.name" class="bg-transparent border-none p-0 text-xl font-black uppercase text-blue-400 focus:ring-0 tracking-[0.2em] w-3/4">
                                 <div class="flex gap-4">
-                                    <button @click="prettifyTemplate(p)" class="text-blue-500/50 hover:text-blue-400 text-[8px] font-black uppercase">Format JSON</button>
-                                    <button @click="promptTemplates = promptTemplates.filter(x => x.id !== p.id); saveConfig();" class="text-red-500/40 hover:text-red-500 text-xs font-black uppercase">Delete</button>
+                                    <button @click="prettifyTemplate(p)" class="text-blue-500/50 hover:text-blue-400 text-[10px] font-black uppercase">Format JSON</button>
+                                    <button @click="promptTemplates = promptTemplates.filter(x => x.id !== p.id); saveConfig();" class="text-red-500/40 hover:text-red-500 text-[10px] font-black uppercase">Delete</button>
                                 </div>
                             </div>
                             <div class="space-y-4">
                                 <span class="text-[9px] font-black uppercase tracking-widest text-white/20">System Instructions</span>
-                                <textarea x-model="p.prompt" class="w-full h-[40rem] bg-black/60 border border-white/10 rounded-[2rem] p-8 text-[16px] font-mono text-white/80 focus:outline-none focus:border-blue-500/40 leading-relaxed shadow-inner no-scrollbar"></textarea>
+                                <textarea x-model="p.prompt" class="w-full h-[40rem] bg-black/60 border border-white/10 rounded-[2rem] p-8 text-[16px] font-mono text-white/80 focus:outline-none focus:border-blue-500/40 leading-relaxed shadow-inner"></textarea>
                             </div>
                         </div>
                     </template>
                     <button @click="promptTemplates.push({id: Date.now(), name: 'NEW TEMPLATE', prompt: ''})" class="w-full py-20 rounded-[3rem] border-2 border-dashed border-white/10 text-xs font-black uppercase tracking-[0.5em] text-white/20 hover:text-white hover:bg-white/[0.02] transition-all flex flex-col items-center justify-center gap-6">
-                        <span class="text-5xl">+</span>
-                        <span>Initialize New Template</span>
+                        <span class="text-5xl text-blue-500">+</span>
+                        <span>Initialize Template Asset</span>
                     </button>
                 </div>
             </section>
-            
-            <div class="pt-12 border-t border-white/10 text-center">
-                <button @click="saveConfig()" class="btn-apple px-20 py-8 text-[11px] font-black uppercase tracking-[0.5em] shadow-2xl active:scale-95 transition-all">Persist System Config</button>
-            </div>
         </div>
     </main>
 
-    <!-- Global Modals (Pipeline Edit, Preview) -->
+    <!-- Global Modals -->
     <div x-show="editingPipeline" class="fixed inset-0 z-[1200] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl" x-cloak x-transition>
         <template x-if="editingPipeline">
-            <div class="glass w-full max-w-4xl rounded-[4rem] overflow-hidden flex flex-col max-h-full border-2 border-white/10 shadow-2xl shadow-blue-500/10">
-                <div class="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
+            <div class="glass w-full max-w-4xl rounded-[4rem] overflow-hidden flex flex-col max-h-full border-2 border-white/10 shadow-2xl">
+                <div class="p-10 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
                     <div class="space-y-1">
-                        <h2 class="font-black tracking-[0.5em] uppercase text-[10px] opacity-40">Neural Configuration</h2>
+                        <h2 class="font-black tracking-[0.5em] uppercase text-[10px] opacity-40">Pipeline Architecture</h2>
                         <h3 class="text-3xl font-black tracking-tighter text-blue-400" x-text="editingPipeline.name"></h3>
                     </div>
-                    <button @click="editingPipeline = null" class="w-16 h-16 rounded-[1.5rem] glass-dark flex items-center justify-center text-xl active:scale-90 transition-all">✕</button>
+                    <button @click="editingPipeline = null" class="w-12 h-12 rounded-2xl glass-dark flex items-center justify-center text-xl active:scale-90 transition-all">✕</button>
                 </div>
                 
-                <div class="p-6 overflow-y-auto no-scrollbar space-y-6 lg:space-y-8">
+                <div class="p-10 overflow-y-auto no-scrollbar space-y-10">
                     <div class="space-y-4">
-                        <label class="label-apple ml-2">Pipeline Identification</label>
-                        <input type="text" x-model="editingPipeline.name" class="w-full bg-white/5 border border-white/10 rounded-[2rem] p-7 text-lg font-black tracking-tight focus:outline-none focus:border-blue-500/50 shadow-inner text-white">
+                        <label class="label-apple ml-2">Label</label>
+                        <input type="text" x-model="editingPipeline.name" class="w-full bg-white/5 border border-white/10 rounded-[2rem] p-6 text-xl font-black text-white focus:outline-none focus:border-blue-500/50 shadow-inner">
                     </div>
 
-                    <div class="space-y-8">
-                        <label class="label-apple ml-2">Active Node Sequence</label>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-                            <template x-for="node in ['barcode', 'vision', 'search', 'scrape', 'refine']" :key="node">
-                                <button 
-                                    @click="
-                                        if (!editingPipeline.schema.active_nodes.default) editingPipeline.schema.active_nodes.default = [];
-                                        if (editingPipeline.schema.active_nodes.default.includes(node)) {
-                                            editingPipeline.schema.active_nodes.default = editingPipeline.schema.active_nodes.default.filter(n => n !== node);
-                                        } else {
-                                            editingPipeline.schema.active_nodes.default.push(node);
-                                        }
-                                    "
-                                    class="p-6 rounded-[2rem] border-2 transition-all text-[11px] font-black uppercase tracking-widest flex flex-col items-center gap-3 shadow-xl"
-                                    :class="editingPipeline.schema.active_nodes.default.includes(node) ? 'bg-white text-black border-white scale-105 shadow-white/10' : 'glass-dark border-white/10 text-white/30'"
-                                >
-                                    <span class="text-2xl" x-text="node === 'barcode' ? '🔍' : (node === 'vision' ? '🤖' : (node === 'search' ? '🌐' : (node === 'scrape' ? '🕸️' : '🧠')))"></span>
-                                    <span x-text="node"></span>
-                                </button>
+                    <div class="space-y-6">
+                        <label class="label-apple ml-2">Sequence Configuration (Tap to customize Node)</label>
+                        <div class="space-y-3">
+                            <template x-for="(node, index) in editingPipeline.schema.active_nodes.default" :key="index">
+                                <div class="flex items-center gap-4 group">
+                                    <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-[10px] font-black opacity-20" x-text="index + 1"></div>
+                                    <button @click="editingNode = {type: node, index: index}" class="flex-1 glass p-5 rounded-2xl flex items-center justify-between border-white/5 hover:border-blue-500/40 transition-all">
+                                        <div class="flex items-center gap-4">
+                                            <span class="text-2xl" x-text="node === 'barcode' ? '🔍' : (node === 'vision' ? '🤖' : (node === 'search' ? '🌐' : (node === 'scrape' ? '🕸️' : '🧠')))"></span>
+                                            <span class="text-sm font-black uppercase tracking-widest text-white" x-text="node"></span>
+                                        </div>
+                                        <span class="text-[9px] font-black uppercase text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">Configure Node</span>
+                                    </button>
+                                    <div class="flex gap-2">
+                                        <button @click="moveNode(index, -1)" class="w-10 h-10 glass rounded-xl flex items-center justify-center hover:bg-white/10 disabled:opacity-0" :disabled="index === 0">↑</button>
+                                        <button @click="moveNode(index, 1)" class="w-10 h-10 glass rounded-xl flex items-center justify-center hover:bg-white/10 disabled:opacity-0" :disabled="index === editingPipeline.schema.active_nodes.default.length - 1">↓</button>
+                                        <button @click="editingPipeline.schema.active_nodes.default.splice(index, 1)" class="w-10 h-10 glass rounded-xl flex items-center justify-center text-red-500/40 hover:text-red-500 transition-colors">✕</button>
+                                    </div>
+                                </div>
                             </template>
                         </div>
-                    </div>
-
-                    <div class="space-y-4 pt-4 border-t border-white/5">
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div class="space-y-5">
-                                <label class="label-apple ml-4">Vision Model (Default)</label>
-                                <div class="relative">
-                                    <select x-model="editingPipeline.schema.vision_model.default" class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-sm font-black focus:outline-none pr-8 cursor-pointer text-white">
-                                        <template x-for="m in getSortedModels()" :key="m">
-                                            <option :value="m" x-text="m.split('/')[1]" class="bg-black text-white"></option>
-                                        </template>
-                                    </select>
-                                    <span class="absolute right-6 top-6 opacity-20 pointer-events-none">▼</span>
-                                </div>
-                            </div>
-                        </div>
                         
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div class="space-y-5">
-                                <span class="label-apple ml-4">Vision Node Prompt</span>
-                                <textarea x-model="editingPipeline.schema.vision_prompt.default" class="w-full h-[40rem] bg-black/60 border border-white/10 rounded-[2.5rem] p-8 text-[16px] font-mono text-white/80 focus:outline-none focus:border-blue-500/50 leading-relaxed no-scrollbar shadow-inner"></textarea>
-                            </div>
-                            <div class="space-y-5">
-                                <span class="label-apple ml-4">Refinement Node Prompt</span>
-                                <textarea x-model="editingPipeline.schema.refine_prompt.default" class="w-full h-[40rem] bg-black/60 border border-white/10 rounded-[2.5rem] p-8 text-[16px] font-mono text-white/80 focus:outline-none focus:border-blue-500/50 leading-relaxed no-scrollbar shadow-inner"></textarea>
+                        <div class="pt-6 border-t border-white/5 space-y-4">
+                            <label class="label-apple ml-2">Available Blocks</label>
+                            <div class="flex flex-wrap gap-2">
+                                <template x-for="type in ['barcode', 'vision', 'search', 'scrape', 'refine']">
+                                    <button @click="editingPipeline.schema.active_nodes.default.push(type)" 
+                                            class="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-colors" 
+                                            x-text="'+ ' + type"></button>
+                                </template>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="p-6 border-t border-white/10 flex flex-col sm:flex-row gap-6 bg-black/40">
-                    <button @click="editingPipeline = null" class="flex-1 px-10 py-7 rounded-[2.25rem] font-black text-xs uppercase tracking-widest text-white/40 hover:bg-white/5 transition-all">Discard Changes</button>
-                    <button @click="savePipelineChanges()" class="flex-[2] btn-apple py-7 rounded-[2.25rem] font-black text-xs uppercase tracking-[0.5em] shadow-2xl active:scale-95 transition-all">Sync to Registry</button>
+                <div class="p-10 border-t border-white/10 flex gap-4 bg-black/40">
+                    <button @click="editingPipeline = null" class="flex-1 px-8 py-6 rounded-[1.5rem] font-black text-xs uppercase tracking-widest text-white/40 hover:bg-white/5 transition-all">Discard</button>
+                    <button @click="savePipelineChanges()" class="flex-[2] btn-apple py-6 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all">Persist Registry</button>
                 </div>
             </div>
         </template>
     </div>
 
-    <!-- Global Loading Overlay -->
-    <div x-show="loading && !precisionMode" class="fixed inset-0 z-[1500] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-8" x-transition>
-        <div class="w-full max-w-sm space-y-16 flex flex-col items-center">
-            <div class="w-32 h-32 border-4 border-white/5 border-t-white rounded-full animate-spin shadow-[0_0_100px_rgba(255,255,255,0.2)]"></div>
-            <div class="text-center space-y-3">
-                <p class="text-[11px] font-black uppercase tracking-[1.5em] text-white/40 ml-[1.5em]" x-text="loadingStatus"></p>
-                <p class="text-[10px] font-black text-white/60 uppercase tracking-[0.4em] animate-pulse">Running Neural Agent</p>
+    <!-- Node Editor Modal -->
+    <div x-show="editingNode" class="fixed inset-0 z-[1300] bg-black/80 flex items-center justify-center p-6 backdrop-blur-3xl" x-cloak x-transition>
+        <template x-if="editingNode">
+            <div class="glass w-full max-w-xl rounded-[4rem] overflow-hidden flex flex-col border-2 border-white/10 shadow-2xl">
+                <div class="p-10 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
+                    <div class="space-y-1">
+                        <h2 class="font-black tracking-[0.5em] uppercase text-[10px] opacity-40">Node Attributes</h2>
+                        <h3 class="text-2xl font-black tracking-tighter text-blue-400" x-text="editingNode.type.toUpperCase()"></h3>
+                    </div>
+                    <button @click="editingNode = null" class="w-12 h-12 rounded-2xl glass-dark flex items-center justify-center text-xl">✕</button>
+                </div>
+                <div class="p-10 space-y-8 overflow-y-auto no-scrollbar">
+                    <template x-if="editingNode.type === 'vision'">
+                        <div class="space-y-6">
+                            <div class="space-y-3">
+                                <label class="label-apple">Model Selection</label>
+                                <div class="relative">
+                                    <select x-model="editingPipeline.schema.vision_model.default" class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-sm font-black text-white appearance-none cursor-pointer">
+                                        <template x-for="m in getSortedModels()" :key="m">
+                                            <option :value="m" x-text="m.split('/')[1]"></option>
+                                        </template>
+                                    </select>
+                                    <span class="absolute right-6 top-6 opacity-20 pointer-events-none">▼</span>
+                                </div>
+                            </div>
+                            <div class="space-y-3">
+                                <label class="label-apple">Instruction Set</label>
+                                <textarea x-model="editingPipeline.schema.vision_prompt.default" class="w-full h-80 bg-black/60 border border-white/10 rounded-[2rem] p-6 text-[14px] font-mono text-white/80 leading-relaxed no-scrollbar"></textarea>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="editingNode.type === 'refine'">
+                        <div class="space-y-3">
+                            <label class="label-apple">Merge logic instructions</label>
+                            <textarea x-model="editingPipeline.schema.refine_prompt.default" class="w-full h-80 bg-black/60 border border-white/10 rounded-[2rem] p-6 text-[14px] font-mono text-white/80 leading-relaxed no-scrollbar"></textarea>
+                        </div>
+                    </template>
+                    <template x-if="editingNode.type === 'scrape'">
+                        <div class="space-y-3">
+                            <label class="label-apple">JavaScript Wait Time (ms)</label>
+                            <input type="number" x-model="editingPipeline.schema.scrape_wait_time.default" class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-sm font-black text-white">
+                        </div>
+                    </template>
+                    <template x-if="['barcode', 'search'].includes(editingNode.type)">
+                        <div class="py-20 text-center space-y-4 opacity-20">
+                            <span class="text-6xl">⚙️</span>
+                            <p class="text-xs font-black uppercase tracking-[0.4em]">Node calibrated by system core</p>
+                        </div>
+                    </template>
+                </div>
+                <div class="p-10 border-t border-white/10 bg-black/20 text-center">
+                    <button @click="editingNode = null" class="btn-apple px-16 py-6 text-[10px] font-black uppercase tracking-widest shadow-2xl">Confirm Parameters</button>
+                </div>
             </div>
-        </div>
+        </template>
     </div>
 
     <script>
@@ -651,6 +605,7 @@
                 canvasCtx: null,
                 sourceImage: null,
                 editingPipeline: null,
+                editingNode: null,
                 promptTemplates: [],
                 modelFavorites: [],
                 starredModels: [],
@@ -658,25 +613,6 @@
                 imageOptimization: { max_dimension: 1024, quality: 85 },
                 showSettings: false,
                 vibrate(ms=50) { if (navigator.vibrate) navigator.vibrate(ms); },
-                                prettifyTemplate(p) {
-                    try {
-                        const obj = JSON.parse(p.prompt);
-                        p.prompt = JSON.stringify(obj, null, 4);
-                        this.notify('JSON Formatted');
-                    } catch (e) {
-                        this.notify('Invalid JSON structure', 'error');
-                    }
-                },
-                
-                getSortedModels() {
-                    return [...this.modelFavorites].sort((a, b) => {
-                        const aStar = this.starredModels.includes(a);
-                        const bStar = this.starredModels.includes(b);
-                        if (aStar && !bStar) return -1;
-                        if (!aStar && bStar) return 1;
-                        return a.localeCompare(b);
-                    });
-                },
 
                 init() {
                     this.fetchPipelines();
@@ -709,8 +645,18 @@
                                 image_optimization: this.imageOptimization
                             })
                         });
-                        this.notify('Settings Persisted');
+                        this.notify('Registry Persisted');
                     } catch (e) {}
+                },
+
+                getSortedModels() {
+                    return [...this.modelFavorites].sort((a, b) => {
+                        const aStar = this.starredModels.includes(a);
+                        const bStar = this.starredModels.includes(b);
+                        if (aStar && !bStar) return -1;
+                        if (!aStar && bStar) return 1;
+                        return a.localeCompare(b);
+                    });
                 },
 
                 async preprocessImage(file) {
@@ -966,6 +912,15 @@
                     this.notify('Purged');
                 },
 
+                moveNode(index, delta) {
+                    const nodes = this.editingPipeline.schema.active_nodes.default;
+                    const newIndex = index + delta;
+                    if (newIndex < 0 || newIndex >= nodes.length) return;
+                    const temp = nodes[index];
+                    nodes[index] = nodes[newIndex];
+                    nodes[newIndex] = temp;
+                },
+
                 createNewPipeline() {
                     const id = 'custom-' + Math.random().toString(36).slice(2, 7);
                     const newP = {
@@ -974,7 +929,8 @@
                             active_nodes: { default: ['barcode', 'vision', 'refine'], options: ['barcode', 'vision', 'search', 'scrape', 'refine'], type: 'multiselect', label: 'Nodes' },
                             vision_prompt: { type: 'textarea', label: 'Vision Prompt', default: '' },
                             refine_prompt: { type: 'textarea', label: 'Refine Prompt', default: '' },
-                            vision_model: { type: 'string', label: 'Vision Model', default: 'qwen/qwen2.5-vl-72b-instruct' }
+                            vision_model: { type: 'string', label: 'Vision Model', default: 'qwen/qwen2.5-vl-72b-instruct' },
+                            scrape_wait_time: { type: 'number', label: 'Wait Time', default: 2000 }
                         }
                     };
                     this.pipelines.push(newP); this.editPipeline(newP);
@@ -1001,6 +957,14 @@
                     configData.custom_pipelines = custom;
                     await fetch('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(configData) });
                     this.notify('Deleted');
+                },
+
+                prettifyTemplate(p) {
+                    try {
+                        const obj = JSON.parse(p.prompt);
+                        p.prompt = JSON.stringify(obj, null, 4);
+                        this.notify('JSON Formatted');
+                    } catch (e) { this.notify('Invalid JSON structure', 'error'); }
                 },
 
                 notify(msg, type = 'success') {

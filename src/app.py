@@ -48,6 +48,7 @@ os.makedirs("templates", exist_ok=True)
 os.makedirs("data/uploads", exist_ok=True)
 
 # Mount uploads for serving review images
+app.mount("/static", StaticFiles(directory="templates"), name="static")
 app.mount("/uploads", StaticFiles(directory="data/uploads"), name="uploads")
 templates = Jinja2Templates(directory="templates")
 
@@ -58,14 +59,12 @@ async def get_db():
 
 # --- Pipeline Helpers ---
 
+
 def get_pipeline(pipeline_id: str):
     from pipelines import PIPELINE_REGISTRY, DefaultPipeline, ComposablePipeline
+    import json
     
-    # Check registry first
-    if pipeline_id in PIPELINE_REGISTRY:
-        return PIPELINE_REGISTRY[pipeline_id]()
-        
-    # Check for custom composable pipeline in config
+    # Check for custom composable pipeline in config first
     try:
         config_path = "config/user_config.json"
         if os.path.exists(config_path):
@@ -73,11 +72,17 @@ def get_pipeline(pipeline_id: str):
                 config = json.load(f)
                 for cp in config.get("custom_pipelines", []):
                     if cp["id"] == pipeline_id:
+                        # Return a ComposablePipeline
                         return ComposablePipeline()
     except:
         pass
+
+    # Check registry
+    if pipeline_id in PIPELINE_REGISTRY:
+        return PIPELINE_REGISTRY[pipeline_id]()
         
     return DefaultPipeline()
+
 
 # --- Endpoints ---
 
