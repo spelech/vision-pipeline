@@ -35,10 +35,11 @@ uploads/
 .env
 .env.local
 .env.*
+!.env.example
 secrets.yml
 
 # IDEs
-.vscode/
+#.vscode/
 .idea/
 *.swp
 *.swo

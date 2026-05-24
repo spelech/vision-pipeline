@@ -27,13 +27,19 @@ See [Architecture Documentation](docs/ARCHITECTURE.md) for more details.
 - SearxNG Instance (local or remote)
 
 ### 2. Setup
-Create a `.env` file in the root directory:
-```env
-OPENROUTER_API_KEY=your_key_here
-SEARXNG_URL=http://your_searxng:8080
-HOMEBOX_API_KEY=your_key
-MEALIE_API_TOKEN=your_token
+The easiest way to get started is to use the included Python setup script:
+
+```bash
+python3 setup.py
 ```
+
+This will:
+- Create your `.env` file from the template.
+- Generate a unique `ENCRYPTION_KEY` for your database secrets.
+- Prepare necessary data directories with correct permissions.
+- Build the Docker containers.
+
+Once the script finishes, edit the `.env` file with your specific API keys.
 
 ### 🐳 Docker Images
 The system is automatically built and published to **GitHub Container Registry (GHCR)**:
