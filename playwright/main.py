@@ -1,8 +1,8 @@
+import asyncio
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from playwright_stealth import Stealth
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth_async
-import asyncio
 
 app = FastAPI()
 
@@ -19,7 +19,7 @@ async def scrape_url(req: ScrapeRequest):
             viewport={"width": 1920, "height": 1080}
         )
         page = await context.new_page()
-        await stealth_async(page)
+        await Stealth().apply_stealth_async(page)
         
         try:
             await page.goto(req.url, wait_until="domcontentloaded", timeout=30000)
