@@ -12,6 +12,7 @@ aiosqlite
 asyncpg
 psycopg2-binary
 cryptography
+jinja2
 pytest
 pytest-asyncio
 httpx
