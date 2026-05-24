@@ -26,7 +26,11 @@ export function AssetCard({ item, onPreview, onExecute }: AssetCardProps) {
           <h3 className="text-xl font-bold">{editData.product_name || 'New Asset'}</h3>
           <p className="text-white/40 text-[10px] font-medium tracking-tight truncate max-w-sm">{item.filename}</p>
         </div>
-        <button onClick={() => setIsExpanded(!isExpanded)} className="w-12 h-12 rounded-full glass flex items-center justify-center hover:bg-white/10">
+        <button 
+          onClick={() => setIsExpanded(!isExpanded)} 
+          className="w-12 h-12 rounded-full glass flex items-center justify-center hover:bg-white/10"
+          aria-label="Expand Asset"
+        >
           <ChevronDown className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
         </button>
       </div>

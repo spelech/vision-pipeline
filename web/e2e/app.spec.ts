@@ -41,8 +41,7 @@ test.describe('Vision Pipeline Review Flow', () => {
 
   test('should expand asset card and edit fields', async ({ page }) => {
     // Click the expand button (ChevronDown)
-    // The button has classes "w-12 h-12 rounded-full glass..."
-    await page.locator('button:has(svg.lucide-chevron-down)').first().click();
+    await page.getByLabel('Expand Asset').first().click();
     
     // Verify fields are visible
     const brandInput = page.getByLabel('Brand');
