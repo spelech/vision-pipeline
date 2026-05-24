@@ -13,7 +13,7 @@ test.describe('Vision Pipeline Integration', () => {
       if (!response.ok()) {
         test.skip(true, 'Backend not reachable');
       }
-    } catch (e) {
+    } catch {
       test.skip(true, 'Backend not reachable');
     }
     
@@ -34,7 +34,6 @@ test.describe('Vision Pipeline Integration', () => {
       return;
     }
 
-    const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator('input[type="file"]').setInputFiles(imagePath);
 
     // 3. The app should switch to Review tab automatically
