@@ -6,7 +6,7 @@ import logging
 import re
 from io import BytesIO
 from PIL import Image, ImageEnhance, ImageFilter
-from pyzbar.pyzbar import decode
+from pyzbar.pyzbar import decode  # type: ignore
 from openai import OpenAI
 
 logger = logging.getLogger("PipelineNodes")

@@ -27,7 +27,7 @@ test.describe('Vision Pipeline Integration', () => {
 
     // 2. Upload a predefined image
     // Using an existing image from the repo for this test
-    const imagePath = path.resolve(__dirname, '../../data/uploads/raw_9940b71b-4565-4014-8e1c-6fe79ea5febf.jpg');
+    const imagePath = path.resolve(__dirname, '../../data/uploads/sriracha.png');
     
     if (!fs.existsSync(imagePath)) {
       console.warn('Test image not found, skipping upload test');

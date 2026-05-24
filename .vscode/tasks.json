@@ -1,62 +1,67 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Docker: Build",
-            "type": "shell",
-            "command": "docker compose build",
-            "group": "build",
-            "problemMatcher": []
-        },
-        {
-            "label": "Docker: Up",
-            "type": "shell",
-            "command": "docker compose up -d",
-            "group": "none",
-            "problemMatcher": []
-        },
-        {
-            "label": "Docker: Up (Remote)",
-            "type": "shell",
-            "command": "docker compose --env-file .env.remote up -d",
-            "group": "none",
-            "problemMatcher": []
-        },
-        {
-            "label": "Docker: Down",
-            "type": "shell",
-            "command": "docker compose down",
-            "group": "none",
-            "problemMatcher": []
-        },
-        {
-            "label": "Python: Install Requirements",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m pip install -r src/requirements.txt",
-            "problemMatcher": []
-        },
-        {
-            "label": "Python: Run Tests",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m pytest src/tests",
-            "group": "test",
-            "problemMatcher": []
-        },
-        {
-            "label": "Python: Lint",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m pylint src",
-            "problemMatcher": [
-                "$pylint"
-            ]
-        },
-        {
-            "label": "Python: Typecheck",
-            "type": "shell",
-            "command": "${command:python.interpreterPath} -m mypy src",
-            "problemMatcher": [
-                "$mypy"
-            ]
-        }
-    ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Docker: Build",
+			"type": "shell",
+			"command": "docker compose build",
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "Docker: Up",
+			"type": "shell",
+			"command": "docker compose up -d",
+			"group": "none",
+			"problemMatcher": []
+		},
+		{
+			"label": "Docker: Up (Remote)",
+			"type": "shell",
+			"command": "docker compose --env-file .env.remote up -d",
+			"group": "none",
+			"problemMatcher": []
+		},
+		{
+			"label": "Docker: Down",
+			"type": "shell",
+			"command": "docker compose down",
+			"group": "none",
+			"problemMatcher": []
+		},
+		{
+			"label": "Python: Install Requirements",
+			"type": "shell",
+			"command": "${command:python.interpreterPath} -m pip install -r src/requirements.txt",
+			"problemMatcher": []
+		},
+		{
+			"label": "Python: Run Tests",
+			"type": "shell",
+			"command": "${command:python.interpreterPath} -m pytest src/tests",
+			"group": "test",
+			"problemMatcher": []
+		},
+		{
+			"label": "Python: Lint",
+			"type": "shell",
+			"command": "${command:python.interpreterPath} -m pylint src",
+			"problemMatcher": [
+				"$pylint"
+			]
+		},
+		{
+			"label": "Python: Typecheck",
+			"type": "shell",
+			"command": "${command:python.interpreterPath} -m mypy src",
+			"problemMatcher": [
+				"$mypy"
+			]
+		},
+		{
+			"label": "Cleanup old files",
+			"type": "shell",
+			"command": "rm -rf src/templates src/.nicegui src/test_output.py"
+		}
+	]
 }
