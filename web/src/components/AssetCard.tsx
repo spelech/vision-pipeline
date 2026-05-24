@@ -24,7 +24,7 @@ export function AssetCard({ item, onPreview, onExecute }: AssetCardProps) {
             <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${item.product_type === 'food' ? 'bg-orange-500' : 'bg-blue-500'}`}>{item.product_type}</span>
           </div>
           <h3 className="text-xl font-bold">{editData.product_name || 'New Asset'}</h3>
-          <p className="text-white/40 text-xs truncate max-w-sm">{item.filename}</p>
+          <p className="text-white/40 text-[10px] font-medium tracking-tight truncate max-w-sm">{item.filename}</p>
         </div>
         <button onClick={() => setIsExpanded(!isExpanded)} className="w-12 h-12 rounded-full glass flex items-center justify-center hover:bg-white/10">
           <ChevronDown className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
