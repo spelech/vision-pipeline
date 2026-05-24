@@ -46,5 +46,5 @@ networks:
   default:
     name: vision_default
   net_webservices:
-    external: true
+    external: ${EXTERNAL_NETWORK_EXISTS:-false}
     name: ${EXTERNAL_NETWORK:-net_webservices}
