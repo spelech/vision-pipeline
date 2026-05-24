@@ -48,6 +48,7 @@ secrets.yml
 .docker_logs/
 
 # Project Specific
+config/user_config.json
 playwright/.nicegui/
 src/.nicegui/
 src/.pytest_cache/
