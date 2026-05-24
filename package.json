@@ -1,0 +1,30 @@
+{
+  "name": "vision-pipeline",
+  "version": "1.0.0",
+  "description": "An automated product identification and enrichment system that bridges physical items with digital home services.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/spelech/vision-pipeline.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/spelech/vision-pipeline/issues"
+  },
+  "homepage": "https://github.com/spelech/vision-pipeline#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
+}

@@ -6,7 +6,7 @@ import logging
 import re
 from io import BytesIO
 from PIL import Image, ImageEnhance, ImageFilter
-from pyzbar.pyzbar import decode
+from pyzbar.pyzbar import decode  # type: ignore
 from openai import OpenAI
 
 logger = logging.getLogger("PipelineNodes")
@@ -61,6 +61,8 @@ def vision_identify(image, text_description=None, model="qwen/qwen2.5-vl-72b-ins
         }
         """
 
+    if image.mode in ("RGBA", "P"):
+        image = image.convert("RGB")
     buffered = BytesIO()
     image.save(buffered, format="JPEG")
     img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")

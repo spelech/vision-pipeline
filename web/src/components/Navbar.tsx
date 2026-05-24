@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Camera } from 'lucide-react';
 
 interface NavbarProps {
@@ -18,7 +18,7 @@ export function Navbar({ activeTab, setActiveTab }: NavbarProps) {
         </div>
         
         <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5">
-          {['identify', 'review', 'system'].map(tab => (
+          {['identify', 'review', 'pipelines', 'system'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}

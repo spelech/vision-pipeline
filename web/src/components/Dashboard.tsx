@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { StatusStat } from './StatusStat';
 import { Upload } from 'lucide-react';
 

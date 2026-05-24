@@ -16,6 +16,8 @@ services:
     build:
       context: ./src
     container_name: vision-pipeline
+    env_file:
+      - .env.remote
     image: ghcr.io/spelech/vision-pipeline:latest
     networks:
       - default

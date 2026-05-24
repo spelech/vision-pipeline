@@ -5,9 +5,14 @@ import { Navbar } from './components/Navbar';
 import { AssetCard } from './components/AssetCard';
 import { Dashboard } from './components/Dashboard';
 import { PreviewModal } from './components/PreviewModal';
+import { Settings } from './components/Settings';
+import { NetworkCheck } from './components/NetworkCheck';
+
+import { PipelineEditor } from './components/PipelineEditor';
 
 export default function App() {
   const [queue, setQueue] = useState<Asset[]>([]);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('review');
   const [previewItem, setPreviewItem] = useState<{item: Asset, service: string, payload: Record<string, unknown>} | null>(null);
@@ -29,6 +34,38 @@ export default function App() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchQueue();
   }, [fetchQueue]);
+
+  const toggleSelection = (id: string) => {
+    setSelectedItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const selectAll = () => {
+    if (selectedItems.length === queue.length) {
+      setSelectedItems([]);
+    } else {
+      setSelectedItems(queue.map(i => i.id));
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    if (!selectedItems.length) return;
+    setLoading(true);
+    try {
+      const resp = await fetch('/api/bulk-approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_ids: selectedItems })
+      });
+      if (resp.ok) {
+        setQueue(q => q.filter(i => !selectedItems.includes(i.id)));
+        setSelectedItems([]);
+      }
+    } catch (e) {
+      console.error('Bulk approve failed', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handlePreview = async (item: Asset) => {
     const service = item.selected_services[0] || 'homebox';
@@ -107,6 +144,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-blue-500/30 font-sans">
+      <NetworkCheck />
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
 
       <main className="max-w-7xl mx-auto pt-32 px-6 pb-20">
@@ -137,14 +175,41 @@ export default function App() {
                       <p className="text-white/30 text-sm font-medium">Waiting for assets to ingest...</p>
                     </div>
                   ) : (
-                    queue.map(item => (
-                      <AssetCard 
-                        key={item.id} 
-                        item={item} 
-                        onPreview={() => handlePreview(item)} 
-                        onExecute={(overrides) => executeItem(item, overrides)} 
+                    <>
+                      <div className="flex justify-between items-center px-4">
+                        <label htmlFor="selectAll" className="flex items-center gap-3 cursor-pointer group">
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${selectedItems.length === queue.length ? 'bg-blue-500 border-blue-500' : 'border-white/30 group-hover:border-white/50'}`}>
+                            {selectedItems.length === queue.length && <div className="w-2.5 h-2.5 bg-white rounded-[2px]" />}
+                          </div>
+                          <span className="text-sm font-bold text-white/70 group-hover:text-white transition-colors">Select All</span>
+                        </label>
+                        {selectedItems.length > 0 && (
+                          <button 
+                            onClick={handleBulkApprove} 
+                            className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all shadow-lg shadow-green-600/20"
+                          >
+                            Approve {selectedItems.length} Items
+                          </button>
+                        )}
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        className="hidden" 
+                        checked={selectedItems.length === queue.length} 
+                        onChange={selectAll} 
+                        id="selectAll" 
                       />
-                    ))
+                      {queue.map(item => (
+                        <AssetCard 
+                          key={item.id} 
+                          item={item} 
+                          isSelected={selectedItems.includes(item.id)}
+                          onToggleSelect={() => toggleSelection(item.id)}
+                          onPreview={() => handlePreview(item)} 
+                          onExecute={(overrides) => executeItem(item, overrides)} 
+                        />
+                      ))}
+                    </>
                   )}
                 </div>
               </>
@@ -175,9 +240,13 @@ export default function App() {
                    </div>
                 </div>
               </div>
+            ) : activeTab === 'pipelines' ? (
+              <PipelineEditor />
+            ) : activeTab === 'system' ? (
+              <Settings />
             ) : (
               <div className="py-20 text-center glass rounded-[2rem]">
-                <p className="text-white/30 text-sm font-medium">System settings coming soon...</p>
+                <p className="text-white/30 text-sm font-medium">Coming soon...</p>
               </div>
             )}
           </div>

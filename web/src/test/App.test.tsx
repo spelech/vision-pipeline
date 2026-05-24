@@ -1,13 +1,12 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import React from 'react';
+
 import App from '../App';
 
 describe('Vision Pipeline App', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     
-    // @ts-expect-error - mocking global fetch
     global.fetch = vi.fn().mockImplementation((url: string) => {
       if (url === '/api/queue') {
         return Promise.resolve({
@@ -40,8 +39,10 @@ describe('Vision Pipeline App', () => {
     });
   });
 
-  it('renders progress text and header', () => {
-    render(<App />);
+  it('renders progress text and header', async () => {
+    await act(async () => {
+      render(<App />);
+    });
     expect(screen.getByText(/Review Queue/i)).toBeInTheDocument();
   });
 
@@ -55,13 +56,12 @@ describe('Vision Pipeline App', () => {
 
   it('shows empty state when queue is empty', async () => {
     // Override mock for empty queue
-    // @ts-expect-error - mocking global fetch
-    global.fetch.mockImplementationOnce(() => 
+    vi.mocked(global.fetch).mockImplementationOnce(() => 
       Promise.resolve({
         ok: true,
         status: 200,
         json: async () => ({ items: [] }),
-      })
+      } as Response)
     );
 
     render(<App />);
