@@ -2,14 +2,15 @@ import os
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, ForeignKey, Text, Table
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base, relationship
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncAttrs
+from sqlalchemy.orm import sessionmaker, DeclarativeBase, relationship
 import uuid
 
 # Load DATABASE_URL from env, fallback to SQLite for local tests if needed (though we'll use Postgres mostly now)
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://vision:vision_pass@db:5432/vision_pipeline")
 
-Base = declarative_base()
+class Base(AsyncAttrs, DeclarativeBase):
+    pass
 
 class Batch(Base):
     __tablename__ = "batches"
@@ -67,7 +68,7 @@ class ConfigSecret(Base):
     encrypted_value = Column(String)
 
 engine = create_async_engine(DATABASE_URL, echo=False)
-AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)  # type: ignore
 
 async def init_db():
     async with engine.begin() as conn:

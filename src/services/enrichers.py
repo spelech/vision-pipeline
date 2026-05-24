@@ -19,7 +19,7 @@ class PriceBuddyService(BaseService):
         if not self.api_key: return None
         return {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
-    async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None) -> Dict[str, Any]:
+    async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
         """Track item price by barcode or name."""
         headers = self._get_headers()
         if not headers: return {"success": False, "error": "No API Key"}
@@ -94,7 +94,7 @@ class ChangeDetectionService(BaseService):
         if not self.api_key: return None
         return {"x-api-key": self.api_key, "Content-Type": "application/json"}
 
-    async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None) -> Dict[str, Any]:
+    async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
         """Monitor product URL for changes."""
         headers = self._get_headers()
         if not headers: return {"success": False, "error": "No API Key"}

@@ -6,7 +6,7 @@ import base64
 import logging
 import asyncio
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, UploadFile, File, Form, Request, BackgroundTasks, Depends, APIRouter
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -174,7 +174,7 @@ async def update_config(data: Dict, db: AsyncSession = Depends(get_db)):
             res = await db.execute(select(ConfigSecret).where(ConfigSecret.key == key))
             secret_obj = res.scalar_one_or_none()
             if secret_obj:
-                secret_obj.encrypted_value = encrypted
+                secret_obj.encrypted_value = encrypted # type: ignore
             else:
                 db.add(ConfigSecret(key=key, encrypted_value=encrypted))
     await db.commit()
@@ -292,9 +292,9 @@ async def identify(
             f.write(content)
             
         img = Image.open(io.BytesIO(content))
-        img = ImageOps.exif_transpose(img)
+        img = ImageOps.exif_transpose(img) # type: ignore
         
-        results = await run_in_threadpool(core_pipeline.run, img, text, pipeline_settings, log_it)
+        results = await run_in_threadpool(core_pipeline.run, img, text, pipeline_settings, log_it) # type: ignore
         
         log_it("🔌 Checking for existing entries in services...")
         enrichment_tasks = [s.get_pre_enrichment(results['llm_output']) for s in SERVICES.values()]
@@ -432,8 +432,8 @@ async def batch_upload(
     await db.refresh(new_batch)
     
     for file in files:
-        if not file.content_type.startswith("image/"): continue
-        file_ext = os.path.splitext(file.filename)[1]
+        if file.content_type and not file.content_type.startswith("image/"): continue
+        file_ext = os.path.splitext(file.filename or "")[1]
         file_name = f"{uuid.uuid4()}{file_ext}"
         file_path = f"data/uploads/{file_name}"
         content = await file.read()
@@ -443,7 +443,7 @@ async def batch_upload(
         db.add(new_item)
         await db.commit()
         await db.refresh(new_item)
-        background_tasks.add_task(process_item_task, new_item.id, pipeline_id, settings)
+        background_tasks.add_task(process_item_task, int(new_item.id), pipeline_id, settings) # type: ignore
         
     return {"success": True, "batch_id": new_batch.id}
 
@@ -522,7 +522,7 @@ async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
 @api_router.post("/bulk-approve")
 async def bulk_approve(data: dict, db: AsyncSession = Depends(get_db)):
     item_ids = data.get("item_ids", [])
-    results = {"success": [], "failed": []}
+    results: Dict[str, Any] = {"success": [], "failed": []}
     for iid in item_ids:
         res = await db.execute(select(Item).where(Item.id == iid))
         item = res.scalar_one_or_none()
