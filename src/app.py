@@ -7,10 +7,9 @@ import logging
 import asyncio
 from datetime import datetime
 from typing import Optional, List, Dict
-from fastapi import FastAPI, UploadFile, File, Form, Request, BackgroundTasks, Depends
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, UploadFile, File, Form, Request, BackgroundTasks, Depends, APIRouter
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
@@ -64,6 +63,7 @@ async def lifespan(app: FastAPI):
 
 # --- Setup ---
 app = FastAPI(lifespan=lifespan, title="Vision Pipeline API", version="3.3.0")
+api_router = APIRouter(prefix="/api")
 
 # Registry of available services
 SERVICES = {
@@ -74,13 +74,10 @@ SERVICES = {
 }
 
 # Ensure directories exist
-os.makedirs("templates", exist_ok=True)
 os.makedirs("data/uploads", exist_ok=True)
 
 # Mount uploads for serving review images
-app.mount("/static", StaticFiles(directory="templates"), name="static")
 app.mount("/uploads", StaticFiles(directory="data/uploads"), name="uploads")
-templates = Jinja2Templates(directory="templates")
 
 # DB Dependency
 async def get_db():
@@ -116,7 +113,7 @@ def get_pipeline(pipeline_id: str):
 
 # --- Endpoints ---
 
-@app.get("/pipelines")
+@api_router.get("/pipelines")
 async def list_pipelines():
     from pipelines import get_all_pipelines
     try:
@@ -133,7 +130,7 @@ async def list_pipelines():
         logger.error(f"Error listing pipelines: {e}")
         return {"success": False, "error": str(e)}
 
-@app.get("/models")
+@api_router.get("/models")
 async def list_models():
     return {"success": True, "models": [
         {"id": "qwen/qwen2.5-vl-72b-instruct", "name": "Qwen 2.5 VL 72B (OpenRouter)"},
@@ -141,7 +138,7 @@ async def list_models():
         {"id": "anthropic/claude-3.5-sonnet", "name": "Claude 3.5 Sonnet (OpenRouter)"}
     ]}
 
-@app.get("/config")
+@api_router.get("/config")
 async def get_config():
     config_path = "config/user_config.json"
     data = {}
@@ -162,7 +159,7 @@ async def get_config():
     data["secrets_status"] = secrets_status
     return data
 
-@app.post("/config")
+@api_router.post("/config")
 async def update_config(data: Dict, db: AsyncSession = Depends(get_db)):
     # Separate secrets from general config
     keys_to_persist = ["prompt_templates", "model_favorites", "starred_models", "image_optimization", "custom_pipelines"]
@@ -189,7 +186,7 @@ async def update_config(data: Dict, db: AsyncSession = Depends(get_db)):
 
     return {"success": True}
 
-@app.get("/search")
+@api_router.get("/search")
 async def search_items(query: str, db: AsyncSession = Depends(get_db)):
     from sqlalchemy import or_
     # Simple JSON search for product name and brand
@@ -222,15 +219,12 @@ async def search_items(query: str, db: AsyncSession = Depends(get_db)):
         res.append(item_dict)
     return {"items": res}
 
-@app.get("/health")
+@api_router.get("/health")
 def health():
     return {"status": "ok"}
 
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html")
 
-@app.get("/locations")
+@api_router.get("/locations")
 async def get_locations():
     try:
         headers = SERVICES["homebox"]._get_headers()
@@ -241,11 +235,11 @@ async def get_locations():
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-@app.get("/logs/{session_id}")
+@api_router.get("/logs/{session_id}")
 async def get_session_logs(session_id: str):
     return {"logs": session_logger.get_logs(session_id)}
 
-@app.get("/preview/{service_name}")
+@api_router.get("/preview/{service_name}")
 async def get_service_preview(service_name: str, item_id: int):
     if service_name not in SERVICES:
         return JSONResponse(status_code=404, content={"error": "Service not found"})
@@ -263,7 +257,7 @@ async def get_service_preview(service_name: str, item_id: int):
 
 # --- Core Processing ---
 
-@app.post("/identify")
+@api_router.post("/identify")
 async def identify(
     file: UploadFile = File(...),
     text: Optional[str] = Form(None),
@@ -352,7 +346,7 @@ async def identify(
         session_logger.end_session(sid)
         return JSONResponse(status_code=500, content={"success": False, "error": str(e), "session_id": sid})
 
-@app.post("/execute")
+@api_router.post("/execute")
 async def execute_services(data: Dict):
     item_id = data.get("item_id")
     service_names = data.get("service_names", [])
@@ -423,7 +417,7 @@ async def execute_services(data: Dict):
 
 # --- Batch Processing ---
 
-@app.post("/batch-upload")
+@api_router.post("/batch-upload")
 async def batch_upload(
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
@@ -493,27 +487,27 @@ async def process_item_task(item_id: int, pipeline_id: str = "default", settings
         session_logger.end_session(sid)
         await db.commit()
 
-@app.get("/queue")
+@api_router.get("/queue")
 async def get_queue(status: str = "pending", db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Item).where(Item.status == status).order_by(Item.created_at.desc()))
     items = result.scalars().all()
     return {"items": items}
 
-@app.post("/items/{item_id}/update")
+@api_router.post("/items/{item_id}/update")
 async def update_item_data(item_id: int, data: dict, db: AsyncSession = Depends(get_db)):
     query = update(Item).where(Item.id == item_id).values(**data)
     await db.execute(query)
     await db.commit()
     return {"success": True}
 
-@app.post("/items/{item_id}/rerun")
+@api_router.post("/items/{item_id}/rerun")
 async def rerun_item(item_id: int, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     await db.execute(update(Item).where(Item.id == item_id).values(status="processing"))
     await db.commit()
     background_tasks.add_task(process_item_task, item_id, "default", "{}")
     return {"success": True}
 
-@app.delete("/items/{item_id}")
+@api_router.delete("/items/{item_id}")
 async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Item).where(Item.id == item_id))
     item = result.scalar_one_or_none()
@@ -525,7 +519,7 @@ async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
         await db.commit()
     return {"success": True}
 
-@app.post("/bulk-approve")
+@api_router.post("/bulk-approve")
 async def bulk_approve(data: dict, db: AsyncSession = Depends(get_db)):
     item_ids = data.get("item_ids", [])
     results = {"success": [], "failed": []}
@@ -539,6 +533,9 @@ async def bulk_approve(data: dict, db: AsyncSession = Depends(get_db)):
         else: results["failed"].append({"id": iid, "error": exec_res.get("error")})
     return results
 
+app.include_router(api_router)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8501)
+
