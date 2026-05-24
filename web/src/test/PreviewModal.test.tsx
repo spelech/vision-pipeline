@@ -1,16 +1,24 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { PreviewModal } from '../components/PreviewModal';
+import type { Asset } from '../types';
 
 describe('PreviewModal', () => {
   const mockPreview = {
-    item: { id: 1, filename: 'test.jpg' } as any,
+    item: {
+      id: '1',
+      filename: 'test.jpg',
+      original_filename: 'test.jpg',
+      product_type: 'food',
+      edit_data: {},
+      selected_services: [],
+    } as Asset,
     service: 'homebox',
     payload: { test_key: 'test_value' }
   };
 
   it('renders correctly and shows payload', () => {
-    const { container } = render(<PreviewModal preview={mockPreview} onClose={vi.fn()} onConfirm={vi.fn()} />);
+    render(<PreviewModal preview={mockPreview} onClose={vi.fn()} onConfirm={vi.fn()} />);
     expect(screen.getByText('Pre-flight Review')).toBeInTheDocument();
     expect(screen.getByText('homebox')).toBeInTheDocument();
     expect(screen.getByDisplayValue(/test_key/)).toBeInTheDocument();

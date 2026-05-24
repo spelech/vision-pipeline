@@ -1,18 +1,20 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { AssetCard } from '../components/AssetCard';
+import type { Asset } from '../types';
 
 describe('AssetCard', () => {
-  const mockItem = {
-    id: 1,
+  const mockItem: Asset = {
+    id: '1',
     filename: 'test-image.jpg',
+    original_filename: 'test-image.jpg',
     product_type: 'food',
     edit_data: { product_name: 'Test Food', brand: 'Test Brand', category: 'Snack', description: 'desc' },
     selected_services: ['homebox']
   };
 
   it('renders collapsed state correctly', () => {
-    const { container } = render(<AssetCard item={mockItem} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    render(<AssetCard item={mockItem} onPreview={vi.fn()} onExecute={vi.fn()} />);
     expect(screen.getByText('Test Food')).toBeInTheDocument();
     expect(screen.getByText('test-image.jpg')).toBeInTheDocument();
     expect(screen.getByText('food')).toBeInTheDocument();

@@ -38,7 +38,6 @@ describe('Settings', () => {
     render(<Settings />);
     await screen.findByText('System Settings');
 
-    const inputs = screen.getAllByRole('textbox');
     // Find the input with placeholder
     const modelInput = screen.getByPlaceholderText('owner/model-name');
     fireEvent.change(modelInput, { target: { value: 'new/model' } });
@@ -50,10 +49,8 @@ describe('Settings', () => {
   });
 
   it('allows saving settings', async () => {
-    let fetchBody = '';
     globalThis.fetch = vi.fn().mockImplementation((url, opts) => {
       if (url === '/api/config' && opts?.method === 'POST') {
-        fetchBody = opts.body;
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       }
       if (url === '/api/config') {

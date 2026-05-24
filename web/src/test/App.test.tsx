@@ -7,7 +7,6 @@ describe('Vision Pipeline App', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     
-    // @ts-expect-error - mocking global fetch
     global.fetch = vi.fn().mockImplementation((url: string) => {
       if (url === '/api/queue') {
         return Promise.resolve({
@@ -57,13 +56,12 @@ describe('Vision Pipeline App', () => {
 
   it('shows empty state when queue is empty', async () => {
     // Override mock for empty queue
-    // @ts-expect-error - mocking global fetch
-    global.fetch.mockImplementationOnce(() => 
+    vi.mocked(global.fetch).mockImplementationOnce(() => 
       Promise.resolve({
         ok: true,
         status: 200,
         json: async () => ({ items: [] }),
-      })
+      } as Response)
     );
 
     render(<App />);

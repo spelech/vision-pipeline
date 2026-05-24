@@ -6,6 +6,7 @@ import { AssetCard } from './components/AssetCard';
 import { Dashboard } from './components/Dashboard';
 import { PreviewModal } from './components/PreviewModal';
 import { Settings } from './components/Settings';
+import { NetworkCheck } from './components/NetworkCheck';
 
 import { PipelineEditor } from './components/PipelineEditor';
 
@@ -143,6 +144,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-blue-500/30 font-sans">
+      <NetworkCheck />
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
 
       <main className="max-w-7xl mx-auto pt-32 px-6 pb-20">

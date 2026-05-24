@@ -13,7 +13,7 @@ interface AssetCardProps {
 
 export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecute }: AssetCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [editData, setEditData] = useState(item.edit_data);
+  const [editData, setEditData] = useState(item.edit_data || {});
 
   return (
     <div className={`glass rounded-[2rem] overflow-hidden transition-all ${isSelected ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'hover:border-white/20'}`}>
@@ -32,7 +32,7 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
           <div className="flex gap-2 mb-1">
             <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${item.product_type === 'food' ? 'bg-orange-500' : 'bg-blue-500'}`}>{item.product_type}</span>
           </div>
-          <h3 className="text-xl font-bold">{editData.product_name || 'New Asset'}</h3>
+          <h3 className="text-xl font-bold">{editData?.product_name || 'New Asset'}</h3>
           <p className="text-white/40 text-[10px] font-medium tracking-tight truncate max-w-sm">{item.filename}</p>
         </div>
         <button 
