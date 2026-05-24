@@ -42,6 +42,7 @@ export function PipelineEditor() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPipelines();
     fetchConfig();
   }, []);
@@ -70,9 +71,9 @@ export function PipelineEditor() {
     try {
       const cRes = await fetch('/api/config');
       const cData = await cRes.json();
-      let custom = cData.custom_pipelines || [];
+      const custom = cData.custom_pipelines || [];
       
-      const idx = custom.findIndex((p: any) => p.id === editingPipeline.id);
+      const idx = custom.findIndex((p: Pipeline) => p.id === editingPipeline.id);
       if (idx !== -1) {
         custom[idx] = editingPipeline;
       } else {
