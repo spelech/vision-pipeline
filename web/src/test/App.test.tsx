@@ -16,16 +16,19 @@ describe('Vision Pipeline App', () => {
             items: [
               {
                 id: '1',
-                filename: 'test.jpg',
-                thumbnail: 'test_thumb.jpg',
-                timestamp: new Date().toISOString(),
-                edit_data: {
-                  product_name: 'Test Product',
-                  brand: 'Test Brand',
-                  category: 'Test Category',
-                  description: 'Test Description'
+                image_path: 'test.jpg',
+                status: 'pending',
+                product_type: 'food',
+                ai_output: {
+                  llm_output: {
+                    product_name: 'Test Product',
+                    brand: 'Test Brand',
+                    category: 'Test Category',
+                    description: 'Test Description'
+                  }
                 },
-                product_type: 'food'
+                user_overrides: {},
+                selected_services: ['homebox']
               }
             ]
           }),

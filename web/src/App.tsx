@@ -67,26 +67,26 @@ export default function App() {
     }
   };
 
-  const handlePreview = async (item: Asset) => {
-    const service = item.selected_services[0] || 'homebox';
+  const handlePreview = async (item: Asset, service: string) => {
     try {
       const resp = await fetch(`/api/preview/${service}?item_id=${item.id}`);
       const data = await resp.json();
+      
       setPreviewItem({ item, service, payload: data.payload });
     } catch (e) {
       console.error('Preview failed', e);
     }
   };
 
-  const executeItem = async (item: Asset, overrides?: Record<string, unknown>) => {
+  const executeItem = async (item: Asset, services: string[], overrides?: Record<string, unknown>) => {
     try {
       const resp = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           item_id: item.id,
-          service_names: item.selected_services,
-          overrides: overrides || item.edit_data
+          service_names: services,
+          overrides: overrides || item.user_overrides
         })
       });
       if (resp.ok) {
@@ -205,8 +205,8 @@ export default function App() {
                           item={item} 
                           isSelected={selectedItems.includes(item.id)}
                           onToggleSelect={() => toggleSelection(item.id)}
-                          onPreview={() => handlePreview(item)} 
-                          onExecute={(overrides) => executeItem(item, overrides)} 
+                          onPreview={(svc, overrides) => handlePreview(item, svc, overrides)} 
+                          onExecute={(svcs, overrides) => executeItem(item, svcs, overrides)} 
                         />
                       ))}
                     </>
@@ -271,7 +271,7 @@ export default function App() {
         <PreviewModal 
           preview={previewItem} 
           onClose={() => setPreviewItem(null)} 
-          onConfirm={(overrides) => executeItem(previewItem.item, overrides)}
+          onConfirm={(overrides) => executeItem(previewItem.item, [previewItem.service], overrides)}
         />
       )}
     </div>

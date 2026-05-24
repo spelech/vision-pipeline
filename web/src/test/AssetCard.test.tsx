@@ -6,10 +6,13 @@ import type { Asset } from '../types';
 describe('AssetCard', () => {
   const mockItem: Asset = {
     id: '1',
-    filename: 'test-image.jpg',
-    original_filename: 'test-image.jpg',
+    image_path: 'test-image.jpg',
+    status: 'pending',
     product_type: 'food',
-    edit_data: { product_name: 'Test Food', brand: 'Test Brand', category: 'Snack', description: 'desc' },
+    ai_output: {
+      llm_output: { product_name: 'Test Food', brand: 'Test Brand', category: 'Snack', description: 'desc' }
+    },
+    user_overrides: {},
     selected_services: ['homebox']
   };
 
@@ -44,7 +47,10 @@ describe('AssetCard', () => {
     
     fireEvent.click(screen.getByText(/Execute & Sync/i));
     
-    expect(handleExecute).toHaveBeenCalledWith(expect.objectContaining({ brand: 'New Brand', product_name: 'Test Food' }));
+    expect(handleExecute).toHaveBeenCalledWith(
+      ['homebox'],
+      expect.objectContaining({ brand: 'New Brand', product_name: 'Test Food' })
+    );
   });
 
   it('toggles selection', () => {

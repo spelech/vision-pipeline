@@ -7,10 +7,10 @@ describe('PreviewModal', () => {
   const mockPreview = {
     item: {
       id: '1',
-      filename: 'test.jpg',
-      original_filename: 'test.jpg',
+      image_path: 'test.jpg',
+      status: 'pending',
       product_type: 'food',
-      edit_data: {},
+      ai_output: {},
       selected_services: [],
     } as Asset,
     service: 'homebox',
@@ -38,8 +38,8 @@ describe('PreviewModal', () => {
     
     const textarea = screen.getByRole('textbox');
     fireEvent.change(textarea, { target: { value: '{"test_key": "new_value"}' } });
-    
-    fireEvent.click(screen.getByText('Confirm & Push Assets'));
+
+    fireEvent.click(screen.getByText(/Confirm & Transmit to/));
     expect(handleConfirm).toHaveBeenCalledWith({ test_key: 'new_value' });
   });
 });
