@@ -227,17 +227,29 @@ export default function App() {
                          <Camera className="w-10 h-10 text-white" />
                       </div>
                       <div className="text-center">
-                        <h3 className="text-2xl font-bold mb-2">Drop image here</h3>
-                        <p className="text-white/40 text-sm">or click to browse from your device</p>
+                        <h3 className="text-2xl font-bold mb-2">Open Camera</h3>
+                        <p className="text-white/40 text-sm">or drag and drop files here</p>
                       </div>
                       <input 
                         type="file" 
                         onChange={handleUpload}
                         className="absolute inset-0 opacity-0 cursor-pointer" 
                         accept="image/*"
-                        multiple
+                        capture="environment"
                       />
                    </div>
+                </div>
+                <div className="text-center">
+                  <label className="text-xs font-bold text-white/30 hover:text-white cursor-pointer transition-colors uppercase tracking-widest">
+                    <span>Or upload from gallery</span>
+                    <input 
+                      type="file" 
+                      onChange={handleUpload}
+                      className="hidden" 
+                      accept="image/*"
+                      multiple
+                    />
+                  </label>
                 </div>
               </div>
             ) : activeTab === 'pipelines' ? (
