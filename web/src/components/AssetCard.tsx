@@ -1,21 +1,30 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ChevronDown, Search, Send } from 'lucide-react';
 import type { Asset } from '../types';
 import { Field } from './Field';
 
 interface AssetCardProps {
   item: Asset;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
   onPreview: () => void;
   onExecute: (overrides: Record<string, unknown>) => void;
 }
 
-export function AssetCard({ item, onPreview, onExecute }: AssetCardProps) {
+export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecute }: AssetCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [editData, setEditData] = useState(item.edit_data);
 
   return (
-    <div className="glass rounded-[2rem] overflow-hidden transition-all hover:border-white/20">
+    <div className={`glass rounded-[2rem] overflow-hidden transition-all ${isSelected ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'hover:border-white/20'}`}>
       <div className="p-6 flex items-center gap-6">
+        {onToggleSelect && (
+          <div onClick={onToggleSelect} className="cursor-pointer px-2">
+            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-white/30'}`}>
+              {isSelected && <div className="w-2.5 h-2.5 bg-white rounded-full" />}
+            </div>
+          </div>
+        )}
         <div className="w-24 h-24 rounded-2xl overflow-hidden bg-white/5 shrink-0">
           <img src={`/data/uploads/${item.filename}`} className="w-full h-full object-cover" alt="" />
         </div>
@@ -38,8 +47,8 @@ export function AssetCard({ item, onPreview, onExecute }: AssetCardProps) {
       {isExpanded && (
         <div className="p-8 border-t border-white/5 bg-white/[0.01] space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Field label="Brand" value={editData.brand} onChange={(v) => setEditData({...editData, brand: v})} />
-            <Field label="Category" value={editData.category} onChange={(v) => setEditData({...editData, category: v})} />
+            <Field label="Brand" value={editData.brand || ""} onChange={(v) => setEditData({...editData, brand: v})} />
+            <Field label="Category" value={editData.category || ""} onChange={(v) => setEditData({...editData, category: v})} />
             <div className="md:col-span-2">
               <label htmlFor="description" className="label-apple">Description</label>
               <textarea 

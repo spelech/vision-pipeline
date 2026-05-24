@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import React from 'react';
+
 import App from '../App';
 
 describe('Vision Pipeline App', () => {
@@ -40,8 +40,10 @@ describe('Vision Pipeline App', () => {
     });
   });
 
-  it('renders progress text and header', () => {
-    render(<App />);
+  it('renders progress text and header', async () => {
+    await act(async () => {
+      render(<App />);
+    });
     expect(screen.getByText(/Review Queue/i)).toBeInTheDocument();
   });
 

@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 interface FieldProps {
   label: string;
@@ -6,8 +6,10 @@ interface FieldProps {
   onChange: (v: string) => void;
 }
 
+import { useId } from "react";
+
 export function Field({ label, value, onChange }: FieldProps) {
-  const id = React.useId();
+  const id = useId();
   return (
     <div className="space-y-1">
       <label htmlFor={id} className="label-apple">{label}</label>
