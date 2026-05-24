@@ -61,6 +61,8 @@ def vision_identify(image, text_description=None, model="qwen/qwen2.5-vl-72b-ins
         }
         """
 
+    if image.mode in ("RGBA", "P"):
+        image = image.convert("RGB")
     buffered = BytesIO()
     image.save(buffered, format="JPEG")
     img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
