@@ -245,10 +245,19 @@ async def get_locations():
 async def get_session_logs(session_id: str):
     return {"logs": session_logger.get_logs(session_id)}
 
-@app.post("/preview/{service_name}")
-async def get_service_preview(service_name: str, data: Dict):
+@app.get("/preview/{service_name}")
+async def get_service_preview(service_name: str, item_id: int):
     if service_name not in SERVICES:
         return JSONResponse(status_code=404, content={"error": "Service not found"})
+    
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(Item).where(Item.id == item_id))
+        item = res.scalar_one_or_none()
+        if not item:
+            return JSONResponse(status_code=404, content={"error": "Item not found"})
+        
+        data = item.user_overrides or item.ai_output.get("llm_output", {})
+    
     payload = SERVICES[service_name].get_payload(data)
     return {"service": service_name, "payload": payload}
 

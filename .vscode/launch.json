@@ -11,12 +11,29 @@
                 "--host",
                 "0.0.0.0",
                 "--port",
-                "8501",
+                "8460",
                 "--reload"
             ],
             "cwd": "${workspaceFolder}/src",
             "jinja": true,
             "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Python: FastAPI (Remote)",
+            "type": "python",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "app:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8460",
+                "--reload"
+            ],
+            "cwd": "${workspaceFolder}/src",
+            "jinja": true,
+            "envFile": "${workspaceFolder}/.env.remote"
         },
         {
             "name": "Python: Current File",
@@ -30,6 +47,27 @@
             "type": "docker",
             "request": "launch",
             "preLaunchTask": "Docker: Up",
+            "python": {
+                "pathMappings": [
+                    {
+                        "localRoot": "${workspaceFolder}/src",
+                        "remoteRoot": "/app"
+                    }
+                ],
+                "projectType": "fastapi"
+            },
+            "dockerCompose": {
+                "files": [
+                    "docker-compose.yaml"
+                ],
+                "service": "vision-pipeline"
+            }
+        },
+        {
+            "name": "Docker: Python - Fastapi (Remote)",
+            "type": "docker",
+            "request": "launch",
+            "preLaunchTask": "Docker: Up (Remote)",
             "python": {
                 "pathMappings": [
                     {

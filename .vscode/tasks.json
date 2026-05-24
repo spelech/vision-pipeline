@@ -16,6 +16,13 @@
             "problemMatcher": []
         },
         {
+            "label": "Docker: Up (Remote)",
+            "type": "shell",
+            "command": "docker compose --env-file .env.remote up -d",
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
             "label": "Docker: Down",
             "type": "shell",
             "command": "docker compose down",
@@ -34,6 +41,22 @@
             "command": "${command:python.interpreterPath} -m pytest src/tests",
             "group": "test",
             "problemMatcher": []
+        },
+        {
+            "label": "Python: Lint",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m pylint src",
+            "problemMatcher": [
+                "$pylint"
+            ]
+        },
+        {
+            "label": "Python: Typecheck",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} -m mypy src",
+            "problemMatcher": [
+                "$mypy"
+            ]
         }
     ]
 }

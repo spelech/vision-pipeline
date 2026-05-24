@@ -13,3 +13,6 @@ aiosqlite
 asyncpg
 psycopg2-binary
 cryptography
+pytest
+pytest-asyncio
+httpx

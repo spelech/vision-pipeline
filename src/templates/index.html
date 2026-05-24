@@ -327,15 +327,109 @@
                                     <div class="truncate flex-1">
                                         <input type="text" x-model="item.edit_data.product_name" class="bg-transparent border-none p-0 text-2xl font-black focus:ring-0 w-full tracking-tighter text-white">
                                     </div>
-                                    <button @click="item.show_more = !item.show_more" class="glass w-12 h-12 rounded-2xl flex items-center justify-center active:scale-90 transition-all">
-                                        <svg class="w-5 h-5 transition-transform" :class="item.show_more ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M19 9l-7 7-7-7"></path></svg>
-                                    </button>
+                                    <div class="flex gap-2">
+                                        <button @click="previewAndExecute(item.id)" class="glass px-6 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white">
+                                            <span>Preview Payload</span>
+                                        </button>
+                                        <button @click="item.show_more = !item.show_more" class="glass w-12 h-12 rounded-2xl flex items-center justify-center active:scale-90 transition-all">
+                                            <svg class="w-5 h-5 transition-transform" :class="item.show_more ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         <div x-show="item.show_more" class="p-8 bg-white/[0.01] space-y-8 border-t border-white/10" x-transition>
-                             <!-- Expanded edit fields -->
+                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                <!-- Basic Fields -->
+                                <div class="space-y-3">
+                                    <label class="label-apple">Brand / Manufacturer</label>
+                                    <input type="text" x-model="item.edit_data.brand" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white focus:outline-none focus:border-blue-500/50">
+                                </div>
+                                <div class="space-y-3">
+                                    <label class="label-apple">Category</label>
+                                    <input type="text" x-model="item.edit_data.category" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white focus:outline-none focus:border-blue-500/50">
+                                </div>
+                                <div class="space-y-3">
+                                    <label class="label-apple">Location</label>
+                                    <div class="relative">
+                                        <select x-model="item.edit_data.location" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white focus:outline-none appearance-none pr-8">
+                                            <template x-for="loc in locations" :key="loc.id">
+                                                <option :value="loc.name" x-text="loc.name" class="bg-black"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="space-y-3">
+                                    <label class="label-apple">Identify As</label>
+                                    <div class="flex gap-2">
+                                        <button @click="item.product_type = 'product'" 
+                                                class="flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all"
+                                                :class="item.product_type === 'product' ? 'bg-white text-black border-white' : 'bg-transparent border-white/10 text-white/40'">Product</button>
+                                        <button @click="item.product_type = 'food'" 
+                                                class="flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all"
+                                                :class="item.product_type === 'food' ? 'bg-white text-black border-white' : 'bg-transparent border-white/10 text-white/40'">Food</button>
+                                    </div>
+                                </div>
+
+                                <!-- Product Specifics -->
+                                <div class="space-y-3">
+                                    <label class="label-apple">Model Number</label>
+                                    <input type="text" x-model="item.edit_data.model_number" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white focus:outline-none focus:border-blue-500/50">
+                                </div>
+                                <div class="space-y-3">
+                                    <label class="label-apple">Serial Number</label>
+                                    <input type="text" x-model="item.edit_data.serial_number" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white focus:outline-none focus:border-blue-500/50">
+                                </div>
+                                <div class="space-y-3">
+                                    <label class="label-apple">Source Price / MSRP</label>
+                                    <input type="text" x-model="item.edit_data.msrp" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white focus:outline-none focus:border-blue-500/50">
+                                </div>
+
+                                <!-- Description (Full Width) -->
+                                <div class="md:col-span-2 lg:col-span-3 space-y-3">
+                                    <label class="label-apple">Description</label>
+                                    <textarea x-model="item.edit_data.description" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white focus:outline-none focus:border-blue-500/50 h-24"></textarea>
+                                </div>
+
+                                <!-- Food Specifics (Only if applicable) -->
+                                <template x-if="item.product_type === 'food'">
+                                    <div class="md:col-span-2 lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-white/5">
+                                        <div class="space-y-3">
+                                            <label class="label-apple">Ingredients</label>
+                                            <textarea x-model="item.edit_data.recipe_ingredients_raw" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-xs font-mono text-blue-200 focus:outline-none h-40"></textarea>
+                                        </div>
+                                        <div class="space-y-3">
+                                            <label class="label-apple">Instructions</label>
+                                            <textarea x-model="item.edit_data.recipe_instructions_raw" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-xs font-mono text-green-200 focus:outline-none h-40"></textarea>
+                                        </div>
+                                    </div>
+                                </template>
+                             </div>
+
+                             <!-- Service Selector -->
+                             <div class="pt-6 border-t border-white/5 space-y-4">
+                                <label class="label-apple">Dispatch To</label>
+                                <div class="flex flex-wrap gap-3">
+                                    <template x-for="svc in ['homebox', 'mealie', 'pricebuddy', 'changedetection']">
+                                        <button @click="if(item.selected_services.includes(svc)) item.selected_services = item.selected_services.filter(s=>s!==svc); else item.selected_services.push(svc)"
+                                                class="px-6 py-3 rounded-xl border transition-all text-[10px] font-black uppercase tracking-widest"
+                                                :class="item.selected_services.includes(svc) ? 'bg-white text-black border-white' : 'glass-dark border-white/5 text-white/40'">
+                                            <span x-text="svc"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                             </div>
+
+                             <div class="flex gap-4 pt-4">
+                                <button @click="discardItem(item.id)" class="flex-1 px-8 py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest text-red-500/60 hover:bg-red-500/5 transition-all">Discard Asset</button>
+                                <button @click="vibrate(100); item.executing = true; triggerServicesForItem(item)" :disabled="item.executing" 
+                                        class="flex-[2] btn-apple py-5 text-[10px] font-black uppercase tracking-[0.4em] shadow-xl">
+                                    <span x-show="!item.executing">Execute & Sync</span>
+                                    <div x-show="item.executing" class="w-6 h-6 border-2 border-black/10 border-t-black rounded-full animate-spin mx-auto"></div>
+                                </button>
+                             </div>
                         </div>
                     </div>
                 </template>
@@ -598,6 +692,52 @@
                 <div class="p-10 border-t border-white/10 flex gap-4 bg-black/40">
                     <button @click="editingPipeline = null" class="flex-1 px-8 py-6 rounded-[1.5rem] font-black text-xs uppercase tracking-widest text-white/40 hover:bg-white/5 transition-all">Discard</button>
                     <button @click="savePipelineChanges()" class="flex-[2] btn-apple py-6 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all">Persist Registry</button>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Pre-flight Preview Modal -->
+    <div x-show="showPreviewModal" class="fixed inset-0 z-[2000] bg-black/90 flex items-center justify-center p-6 backdrop-blur-3xl" x-cloak x-transition>
+        <template x-if="showPreviewModal">
+            <div class="glass w-full max-w-4xl rounded-[4rem] overflow-hidden flex flex-col max-h-[90vh] border-2 border-white/10 shadow-2xl">
+                <div class="p-10 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
+                    <div class="space-y-1">
+                        <h2 class="font-black tracking-[0.5em] uppercase text-[10px] opacity-40">Pre-flight Review</h2>
+                        <h3 class="text-2xl font-black tracking-tighter text-blue-400">Review Outbound Payload</h3>
+                    </div>
+                    <button @click="showPreviewModal = false" class="w-12 h-12 rounded-2xl glass-dark flex items-center justify-center text-xl">✕</button>
+                </div>
+                
+                <div class="p-10 overflow-y-auto no-scrollbar space-y-8 flex-1">
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="svc in JSON.parse(previewData).service_names">
+                            <button @click="updatePreview(svc)" 
+                                    class="px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+                                    :class="JSON.parse(previewData).preview_service === svc ? 'bg-blue-500 text-white shadow-lg' : 'bg-white/5 text-white/40 hover:bg-white/10'">
+                                <span x-text="'Preview ' + svc"></span>
+                            </button>
+                        </template>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <label class="label-apple ml-2">JSON Transmission Data</label>
+                            <span class="text-[9px] font-black uppercase tracking-widest text-white/20">Edit directly below to override</span>
+                        </div>
+                        <textarea x-model="previewData" class="w-full h-96 bg-black/60 border border-white/10 rounded-[2rem] p-8 text-[14px] font-mono text-blue-300 leading-relaxed focus:border-blue-500/50 outline-none shadow-inner"></textarea>
+                    </div>
+
+                    <div class="glass p-6 rounded-3xl bg-blue-500/5 border-blue-500/20">
+                        <p class="text-[11px] text-white/60 leading-relaxed font-medium">
+                            <span class="text-blue-400 font-black">NOTE:</span> These values will be passed as the final `overrides` to the service registry. Any changes made here will persist to the external service but will not overwrite your local database identification until successfully synced.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="p-10 border-t border-white/10 flex gap-4 bg-black/40">
+                    <button @click="showPreviewModal = false" class="flex-1 px-8 py-6 rounded-[1.5rem] font-black text-xs uppercase tracking-widest text-white/40 hover:bg-white/5 transition-all">Cancel Review</button>
+                    <button @click="confirmExecute()" class="flex-[2] btn-apple py-6 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all">Confirm & Execute</button>
                 </div>
             </div>
         </template>
@@ -957,24 +1097,89 @@
                     finally { this.loading = false; }
                 },
 
-                previewAndExecute(itemId) {
+                async previewAndExecute(itemId) {
                     const item = this.queue.find(i => i.id === itemId); if (!item) return;
-                    const payloadPreview = { item_id: itemId, service_names: item.selected_services, overrides: item.edit_data };
-                    this.previewData = JSON.stringify(payloadPreview, null, 2);
-                    this.executeQueue = [payloadPreview]; this.showPreviewModal = true;
+                    this.loading = true;
+                    try {
+                        const serviceToPreview = item.selected_services[0] || 'homebox';
+                        const response = await fetch(`/preview/${serviceToPreview}?item_id=${itemId}`);
+                        const data = await response.json();
+                        
+                        const reviewObject = {
+                            item_id: itemId,
+                            service_names: item.selected_services,
+                            preview_service: serviceToPreview,
+                            payload: data.payload,
+                            overrides: item.edit_data
+                        };
+                        this.previewData = JSON.stringify(reviewObject, null, 4);
+                        this.executeQueue = [reviewObject];
+                        this.showPreviewModal = true;
+                    } catch (e) {
+                         this.notify('Failed to generate preview', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async updatePreview(serviceName) {
+                    try {
+                        const current = JSON.parse(this.previewData);
+                        const response = await fetch(`/preview/${serviceName}?item_id=${current.item_id}`);
+                        const data = await response.json();
+                        current.preview_service = serviceName;
+                        current.payload = data.payload;
+                        this.previewData = JSON.stringify(current, null, 4);
+                    } catch (e) {
+                        this.notify('Failed to switch preview', 'error');
+                    }
+                },
+
+                async triggerServicesForItem(item) {
+                     try {
+                        const response = await fetch('/execute', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ item_id: item.id, service_names: item.selected_services, overrides: item.edit_data })
+                        });
+                        const data = await response.json();
+                        if (data.success) { 
+                            this.notify('Pipeline Dispatched'); 
+                            this.queue = this.queue.filter(i => i.id !== item.id);
+                        }
+                    } catch (e) { this.notify('Network Failure', 'error'); }
+                    finally { item.executing = false; }
                 },
 
                 async confirmExecute() {
-                    this.vibrate(100); this.showPreviewModal = false;
-                    for (const payload of this.executeQueue) {
-                        const item = this.queue.find(i => i.id === payload.item_id);
-                        if (item) item.executing = true;
-                        try {
-                            await fetch('/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: this.previewData });
-                            this.queue = this.queue.filter(i => i.id !== payload.item_id);
-                        } catch (e) {} finally { if (item) item.executing = false; }
+                    this.vibrate(100); 
+                    try {
+                        const finalPayload = JSON.parse(this.previewData);
+                        this.showPreviewModal = false;
+                        this.loading = true;
+                        
+                        const response = await fetch('/execute', { 
+                            method: 'POST', 
+                            headers: { 'Content-Type': 'application/json' }, 
+                            body: JSON.stringify({
+                                item_id: finalPayload.item_id,
+                                service_names: finalPayload.service_names,
+                                overrides: finalPayload.overrides
+                            }) 
+                        });
+                        
+                        const data = await response.json();
+                        if (data.success) {
+                            this.notify('Execution Successful');
+                            this.queue = this.queue.filter(i => i.id !== finalPayload.item_id);
+                        } else {
+                            this.notify(data.error || 'Execution Failed', 'error');
+                        }
+                    } catch (e) {
+                        this.notify('Invalid JSON in editor', 'error');
+                    } finally {
+                        this.loading = false;
+                        this.executeQueue = [];
                     }
-                    this.executeQueue = [];
                 },
 
                 async triggerServices() {
