@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class MealieService(BaseService):
     def __init__(self):
         self.api_url = os.getenv("MEALIE_URL", "http://mealie:9000/api")
-        self.api_key = os.getenv("MEALIE_API_KEY")
+        self.api_key = os.getenv("MEALIE_API_TOKEN")
 
     @property
     def name(self) -> str:

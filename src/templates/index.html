@@ -178,7 +178,7 @@
                         <div class="space-y-4">
                             <label class="label-apple">Service Routing</label>
                             <div class="grid grid-cols-2 gap-4">
-                                <template x-for="svc in ['homebox', 'mealie', 'pricebuddy']">
+                                <template x-for="svc in ['homebox', 'mealie', 'pricebuddy', 'changedetection']">
                                     <button @click="if(selectedServices.includes(svc)) selectedServices = selectedServices.filter(s=>s!==svc); else selectedServices.push(svc)"
                                             class="p-4 rounded-3xl border transition-all text-[11px] font-black uppercase tracking-widest"
                                             :class="selectedServices.includes(svc) ? 'bg-white text-black border-white' : 'glass-dark border-white/5 text-white/40'">
@@ -231,7 +231,7 @@
                     <div class="space-y-4">
                         <label class="label-apple">Service Routing</label>
                         <div class="grid grid-cols-2 gap-4">
-                            <template x-for="svc in ['homebox', 'mealie', 'pricebuddy']">
+                            <template x-for="svc in ['homebox', 'mealie', 'pricebuddy', 'changedetection']">
                                 <button @click="if(selectedServices.includes(svc)) selectedServices = selectedServices.filter(s=>s!==svc); else selectedServices.push(svc)"
                                         class="p-4 rounded-3xl border transition-all text-[11px] font-black uppercase tracking-widest"
                                         :class="selectedServices.includes(svc) ? 'bg-white text-black border-white' : 'glass-dark border-white/5 text-white/40'">
@@ -484,8 +484,16 @@
                             <input type="text" x-model="secrets.SEARXNG_URL" placeholder="http://..." class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm text-white focus:border-blue-500/50 outline-none">
                         </div>
                         <div class="space-y-3">
-                            <label class="text-[10px] font-black uppercase tracking-widest text-white/30">Homebox API Key</label>
+                            <label class="text-[10px] font-black uppercase tracking-widest text-white/30">Homebox API Key (or use Email/Pass below)</label>
                             <input type="password" x-model="secrets.HOMEBOX_API_KEY" placeholder="..." class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm text-white focus:border-blue-500/50 outline-none">
+                        </div>
+                        <div class="space-y-3">
+                            <label class="text-[10px] font-black uppercase tracking-widest text-white/30">Homebox Email</label>
+                            <input type="text" x-model="secrets.HOMEBOX_EMAIL" placeholder="user@example.com" class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm text-white focus:border-blue-500/50 outline-none">
+                        </div>
+                        <div class="space-y-3">
+                            <label class="text-[10px] font-black uppercase tracking-widest text-white/30">Homebox Password</label>
+                            <input type="password" x-model="secrets.HOMEBOX_PASSWORD" placeholder="..." class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm text-white focus:border-blue-500/50 outline-none">
                         </div>
                         <div class="space-y-3">
                             <label class="text-[10px] font-black uppercase tracking-widest text-white/30">Mealie API Token</label>
@@ -690,7 +698,7 @@
                 starredModels: [],
                 newModelId: "",
                 imageOptimization: { max_dimension: 1024, quality: 85 },
-                secrets: { OPENROUTER_API_KEY: '', SEARXNG_URL: '', HOMEBOX_API_KEY: '', MEALIE_API_TOKEN: '', PRICEBUDDY_API_KEY: '', CHANGEDETECTION_API_KEY: '' },
+                secrets: { OPENROUTER_API_KEY: '', SEARXNG_URL: '', HOMEBOX_API_KEY: '', HOMEBOX_EMAIL: '', HOMEBOX_PASSWORD: '', MEALIE_API_TOKEN: '', PRICEBUDDY_API_KEY: '', CHANGEDETECTION_API_KEY: '' },
                 showSettings: false,
                 vibrate(ms=50) { if (navigator.vibrate) navigator.vibrate(ms); },
 

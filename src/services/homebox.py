@@ -10,15 +10,34 @@ class HomeboxService(BaseService):
     def __init__(self):
         self.api_url = os.getenv("HOMEBOX_URL", "http://homebox:7745/api/v1")
         self.api_key = os.getenv("HOMEBOX_API_KEY")
+        self.email = os.getenv("HOMEBOX_EMAIL")
+        self.password = os.getenv("HOMEBOX_PASSWORD")
+        self._cached_token = None
 
     @property
     def name(self) -> str:
         return "homebox"
 
     def _get_headers(self):
-        if not self.api_key:
-            return None
-        return {"Authorization": f"Bearer {self.api_key}"}
+        if self.api_key:
+            return {"Authorization": f"Bearer {self.api_key}"}
+            
+        if self.email and self.password:
+            if not self._cached_token:
+                try:
+                    resp = requests.post(f"{self.api_url}/users/login", json={
+                        "email": self.email,
+                        "password": self.password
+                    }, timeout=5)
+                    resp.raise_for_status()
+                    self._cached_token = resp.json().get('token')
+                except Exception as e:
+                    logger.error(f"Homebox login failed: {e}")
+                    return None
+            if self._cached_token:
+                return {"Authorization": f"Bearer {self._cached_token}"}
+                
+        return None
 
     def find_or_create_location(self, name: str) -> Optional[str]:
         headers = self._get_headers()

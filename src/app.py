@@ -151,7 +151,7 @@ async def get_config():
 
     # Mask secrets - return only presence status
     secrets_status = {}
-    for key in ["OPENROUTER_API_KEY", "SEARXNG_URL", "HOMEBOX_API_KEY", "MEALIE_API_TOKEN", "PRICEBUDDY_API_KEY", "CHANGEDETECTION_API_KEY"]:
+    for key in ["OPENROUTER_API_KEY", "SEARXNG_URL", "HOMEBOX_API_KEY", "HOMEBOX_EMAIL", "HOMEBOX_PASSWORD", "MEALIE_API_TOKEN", "PRICEBUDDY_API_KEY", "CHANGEDETECTION_API_KEY"]:
         val = os.getenv(key)
         if val:
             if "URL" in key: secrets_status[key] = f"{val[:15]}..."
@@ -168,7 +168,7 @@ async def update_config(data: Dict, db: AsyncSession = Depends(get_db)):
     keys_to_persist = ["prompt_templates", "model_favorites", "starred_models", "image_optimization", "custom_pipelines"]
     config_to_save = {k: data[k] for k in keys_to_persist if k in data}
 
-    for key in ["OPENROUTER_API_KEY", "SEARXNG_URL", "HOMEBOX_API_KEY", "MEALIE_API_TOKEN", "PRICEBUDDY_API_KEY", "CHANGEDETECTION_API_KEY"]:
+    for key in ["OPENROUTER_API_KEY", "SEARXNG_URL", "HOMEBOX_API_KEY", "HOMEBOX_EMAIL", "HOMEBOX_PASSWORD", "MEALIE_API_TOKEN", "PRICEBUDDY_API_KEY", "CHANGEDETECTION_API_KEY"]:
         if key in data and data[key] and data[key] != "********":
             os.environ[key] = data[key]
             encrypted = encrypt_secret(data[key])
