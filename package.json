@@ -23,5 +23,8 @@
   "homepage": "https://github.com/spelech/vision-pipeline#readme",
   "devDependencies": {
     "@playwright/test": "^1.60.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
   }
 }
