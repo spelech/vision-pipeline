@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: vision-db
     environment:
-      - POSTGRES_USER=vision
-      - POSTGRES_PASSWORD=vision_pass
-      - POSTGRES_DB=vision_pipeline
+      - POSTGRES_USER=${DB_USER:-vision}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-vision_pass}
+      - POSTGRES_DB=${DB_NAME:-vision_pipeline}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     networks:
@@ -21,13 +21,13 @@ services:
       - default
       - net_webservices
     ports:
-      - "8460:8501"
+      - "${APP_PORT:-8460}:8501"
     volumes:
       - ./src:/app
       - ./config:/app/config
       - ./data:/app/data
     environment:
-      - DATABASE_URL=postgresql+asyncpg://vision:vision_pass@db:5432/vision_pipeline
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://vision:vision_pass@db:5432/vision_pipeline}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
     depends_on:
       - db
@@ -43,5 +43,8 @@ services:
     restart: unless-stopped
 
 networks:
+  default:
+    name: vision_default
   net_webservices:
     external: true
+    name: ${EXTERNAL_NETWORK:-net_webservices}
