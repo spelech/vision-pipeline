@@ -1,22 +1,22 @@
 import { useState } from 'react';
 import { ChevronDown, Search, Send, Box, Utensils, Eye, DollarSign, Info } from 'lucide-react';
-import type { Asset } from '../types';
+import type { Asset, AssetEditData } from '../types';
 import { Field } from './Field';
 
 interface AssetCardProps {
   item: Asset;
   isSelected?: boolean;
   onToggleSelect?: () => void;
-  onPreview: (service: string, overrides: any) => void;
+  onPreview: (service: string, overrides: Record<string, unknown>) => void;
   onExecute: (services: string[], overrides: Record<string, unknown>) => void;
 }
 
 export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecute }: AssetCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [editData, setEditData] = useState(
+  const [editData, setEditData] = useState<AssetEditData>(
     (item.user_overrides && Object.keys(item.user_overrides).length > 0) 
-      ? item.user_overrides 
-      : (item.ai_output?.llm_output || {})
+      ? (item.user_overrides as AssetEditData) 
+      : ((item.ai_output?.llm_output as AssetEditData) || {})
   );
   const [selectedServices, setSelectedServices] = useState<string[]>(
     item.selected_services?.length ? item.selected_services : [item.product_type === 'food' ? 'mealie' : 'homebox']

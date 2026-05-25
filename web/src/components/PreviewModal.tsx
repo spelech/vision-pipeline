@@ -20,7 +20,7 @@ export function PreviewModal({ preview, onClose, onConfirm }: PreviewModalProps)
     try {
       const parsed = JSON.parse(editedPayload);
       onConfirm(parsed);
-    } catch (e) {
+    } catch {
       setError("Invalid JSON format. Please check your syntax.");
     }
   };

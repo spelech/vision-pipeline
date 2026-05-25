@@ -3,6 +3,7 @@ export interface AssetEditData {
   brand?: string;
   category?: string;
   description?: string;
+  price?: string;
   [key: string]: unknown;
 }
 
@@ -13,10 +14,10 @@ export interface Asset {
   status: string;
   product_type: 'product' | 'food' | 'unknown';
   ai_output?: {
-    llm_output?: Record<string, any>;
+    llm_output?: Record<string, unknown>;
     vision_raw?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
-  user_overrides?: Record<string, any>;
+  user_overrides?: Record<string, unknown>;
   selected_services: string[];
 }

@@ -3,8 +3,11 @@ import { useState, useEffect } from 'react';
 const SECRET_KEYS = [
   "OPENROUTER_API_KEY",
   "SEARXNG_URL",
-  "HOMEBOX_API_KEY",
-  "HOMEBOX_EMAIL",
+  "HOMEBOX_URL",
+  "MEALIE_URL",
+  "PRICEBUDDY_URL",
+  "CHANGEDETECTION_URL",
+  "HOMEBOX_USERNAME",
   "HOMEBOX_PASSWORD",
   "MEALIE_API_TOKEN",
   "PRICEBUDDY_API_KEY",
@@ -22,6 +25,59 @@ interface PromptTemplate {
   prompt: string;
 }
 
+interface ModelApiResponse {
+  success?: boolean;
+  models?: Array<{ id: string }>;
+}
+
+interface PipelineApiResponse {
+  success?: boolean;
+  pipelines?: Array<{
+    id: string;
+    name: string;
+    schema?: Record<string, { default?: string }>;
+  }>;
+}
+
+function normalizePromptTemplates(value: unknown): PromptTemplate[] {
+  if (Array.isArray(value)) {
+    return value
+      .filter((template): template is PromptTemplate => typeof template === 'object' && template !== null && 'id' in template && 'name' in template && 'prompt' in template)
+      .map((template) => ({
+        id: template.id,
+        name: template.name,
+        prompt: template.prompt,
+      }));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.entries(value as Record<string, string>).map(([id, prompt]) => ({
+      id,
+      name: id.replace(/_/g, ' ').toUpperCase(),
+      prompt: String(prompt),
+    }));
+  }
+
+  return [];
+}
+
+function derivePromptTemplatesFromPipelines(pipelines: PipelineApiResponse['pipelines']): PromptTemplate[] {
+  if (!Array.isArray(pipelines)) {
+    return [];
+  }
+
+  return pipelines.flatMap((pipeline) => {
+    const schema = pipeline.schema || {};
+    return Object.entries(schema)
+      .filter(([key]) => key.includes('prompt'))
+      .map(([key, definition]) => ({
+        id: `${pipeline.id}-${key}`,
+        name: `${pipeline.name} ${key.replace(/_/g, ' ')}`,
+        prompt: typeof definition?.default === 'string' ? definition.default : '',
+      }));
+  });
+}
+
 export function Settings() {
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [modelFavorites, setModelFavorites] = useState<string[]>([]);
@@ -30,23 +86,66 @@ export function Settings() {
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([]);
   const [newModelId, setNewModelId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [templatesFromConfig, setTemplatesFromConfig] = useState(false);
 
   useEffect(() => {
-    fetch('/api/config')
-      .then(r => r.json())
-      .then(data => {
-        const statuses = data.secrets_status || {};
+    void (async () => {
+      try {
+        const [configResult, modelsResult, pipelinesResult] = await Promise.allSettled([
+          fetch('/api/config').then(async (response) => {
+            if (!response.ok) {
+              throw new Error('Failed to load config');
+            }
+            return response.json();
+          }),
+          fetch('/api/models').then(async (response) => {
+            if (!response.ok) {
+              throw new Error('Failed to load models');
+            }
+            return response.json() as Promise<ModelApiResponse>;
+          }),
+          fetch('/api/pipelines').then(async (response) => {
+            if (!response.ok) {
+              throw new Error('Failed to load pipelines');
+            }
+            return response.json() as Promise<PipelineApiResponse>;
+          })
+        ]);
+
+        const configData = configResult.status === 'fulfilled' ? configResult.value : {};
+        const modelsData = modelsResult.status === 'fulfilled' ? modelsResult.value : {};
+        const pipelinesData = pipelinesResult.status === 'fulfilled' ? pipelinesResult.value : {};
+
+        const statuses = configData.secrets_status || {};
         const loaded: Record<string, string> = {};
         SECRET_KEYS.forEach(key => {
-          loaded[key] = statuses[key] ? "********" : "";
+          if (!statuses[key]) {
+            loaded[key] = '';
+          } else if (key.includes('URL')) {
+            loaded[key] = String(statuses[key]);
+          } else {
+            loaded[key] = '********';
+          }
         });
         setSecrets(loaded);
-        
-        if (data.model_favorites) setModelFavorites(data.model_favorites);
-        if (data.starred_models) setStarredModels(data.starred_models);
-        if (data.image_optimization) setImageOptimization(data.image_optimization);
-        if (data.prompt_templates) setPromptTemplates(data.prompt_templates);
-      });
+
+        const savedFavorites = Array.isArray(configData.model_favorites) ? configData.model_favorites : [];
+        const catalogModels = modelsData?.success && Array.isArray(modelsData.models)
+          ? modelsData.models.map((m) => m.id)
+          : [];
+        setModelFavorites(Array.from(new Set([...savedFavorites, ...catalogModels])));
+
+        if (Array.isArray(configData.starred_models)) setStarredModels(configData.starred_models);
+        if (configData.image_optimization) setImageOptimization(configData.image_optimization);
+
+        const savedTemplates = normalizePromptTemplates(configData.prompt_templates);
+        const derivedTemplates = derivePromptTemplatesFromPipelines(pipelinesData.pipelines);
+        setTemplatesFromConfig(savedTemplates.length > 0);
+        setPromptTemplates(savedTemplates.length > 0 ? savedTemplates : derivedTemplates);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
   }, []);
 
   const handleChange = (key: string, value: string) => {
@@ -60,9 +159,11 @@ export function Settings() {
         model_favorites: modelFavorites,
         starred_models: starredModels,
         image_optimization: imageOptimization,
-        prompt_templates: promptTemplates,
         ...secrets
       };
+      if (templatesFromConfig || promptTemplates.length > 0) {
+        Object.assign(payload, { prompt_templates: promptTemplates });
+      }
       
       await fetch('/api/config', {
         method: 'POST',
@@ -91,6 +192,7 @@ export function Settings() {
         n[index].prompt = n[index].prompt.trim(); 
         return n;
       });
+      setTemplatesFromConfig(true);
       alert("Formatted template!");
     } catch (e) {
         console.error(e);
@@ -213,25 +315,47 @@ export function Settings() {
       <section className="space-y-6">
         <label className="label-apple">Prompt Engineering Suite</label>
         <div className="space-y-8">
+          {promptTemplates.length === 0 && (
+            <div className="glass p-8 rounded-[3rem] border border-white/5 text-sm text-white/40">
+              No prompt templates are currently saved. Pipeline prompt defaults will appear here once available or after you save templates.
+            </div>
+          )}
           {promptTemplates.map((p, index) => (
             <div key={p.id} className="glass p-8 rounded-[3rem] space-y-6 border border-white/5 hover:border-blue-500/20 transition-all">
                <div className="flex justify-between items-center border-b border-white/5 pb-6">
                   <input 
                     type="text" 
                     value={p.name} 
-                    onChange={e => setPromptTemplates(prev => { const n = [...prev]; n[index].name = e.target.value; return n; })}
+                    onChange={e => {
+                      setTemplatesFromConfig(true);
+                      setPromptTemplates(prev => {
+                        const n = [...prev];
+                        n[index].name = e.target.value;
+                        return n;
+                      });
+                    }}
                     className="bg-transparent border-none p-0 text-xl font-black uppercase text-blue-400 focus:outline-none focus:ring-0 tracking-[0.2em] w-3/4" 
                   />
                   <div className="flex gap-4">
                       <button onClick={() => prettifyTemplate(index)} className="text-blue-500/50 hover:text-blue-400 text-[10px] font-black uppercase tracking-widest transition-colors">Format</button>
-                      <button onClick={() => setPromptTemplates(prev => prev.filter(x => x.id !== p.id))} className="text-red-500/40 hover:text-red-500 text-[10px] font-black uppercase tracking-widest transition-colors">Delete</button>
+                      <button onClick={() => {
+                        setTemplatesFromConfig(true);
+                        setPromptTemplates(prev => prev.filter(x => x.id !== p.id));
+                      }} className="text-red-500/40 hover:text-red-500 text-[10px] font-black uppercase tracking-widest transition-colors">Delete</button>
                   </div>
               </div>
               <div className="space-y-3">
                   <span className="text-[9px] font-black uppercase tracking-widest text-white/30 block ml-2">System Instructions</span>
                   <textarea 
                     value={p.prompt} 
-                    onChange={e => setPromptTemplates(prev => { const n = [...prev]; n[index].prompt = e.target.value; return n; })}
+                    onChange={e => {
+                      setTemplatesFromConfig(true);
+                      setPromptTemplates(prev => {
+                        const n = [...prev];
+                        n[index].prompt = e.target.value;
+                        return n;
+                      });
+                    }}
                     className="w-full h-[24rem] bg-white/5 border border-white/10 rounded-[2rem] p-8 text-sm font-mono text-white/80 focus:outline-none focus:border-blue-500/40 leading-relaxed shadow-inner"
                     spellCheck={false}
                   />
@@ -239,7 +363,10 @@ export function Settings() {
             </div>
           ))}
           <button 
-            onClick={() => setPromptTemplates(prev => [...prev, {id: Date.now().toString(), name: 'NEW TEMPLATE', prompt: ''}])} 
+            onClick={() => {
+              setTemplatesFromConfig(true);
+              setPromptTemplates(prev => [...prev, {id: Date.now().toString(), name: 'NEW TEMPLATE', prompt: ''}]);
+            }} 
             className="w-full py-16 rounded-[3rem] border-2 border-dashed border-white/10 hover:border-blue-500/30 text-xs font-black uppercase tracking-[0.5em] text-white/20 hover:text-blue-500 hover:bg-blue-500/5 transition-all flex flex-col items-center justify-center gap-4 group"
           >
               <span className="text-4xl group-hover:scale-110 transition-transform">+</span>

@@ -1,26 +1,44 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Camera } from 'lucide-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Asset } from './types';
 import { Navbar } from './components/Navbar';
 import { AssetCard } from './components/AssetCard';
-import { Dashboard } from './components/Dashboard';
 import { PreviewModal } from './components/PreviewModal';
 import { Settings } from './components/Settings';
 import { NetworkCheck } from './components/NetworkCheck';
 
 import { PipelineEditor } from './components/PipelineEditor';
 
+interface PipelineSummary {
+  id: string;
+  name: string;
+}
+
+const DEFAULT_PIPELINE_OPTION: PipelineSummary = { id: 'default', name: 'Default Vision Pipeline' };
+
 export default function App() {
   const [queue, setQueue] = useState<Asset[]>([]);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('review');
+  const [queueStatus, setQueueStatus] = useState<'all' | 'pending' | 'approved' | 'processing'>('all');
   const [previewItem, setPreviewItem] = useState<{item: Asset, service: string, payload: Record<string, unknown>} | null>(null);
+  const [pipelines, setPipelines] = useState<PipelineSummary[]>([]);
+  const [selectedPipelineId, setSelectedPipelineId] = useState('default');
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const batchInputRef = useRef<HTMLInputElement>(null);
+  const listParentRef = useRef<HTMLDivElement>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
 
-  const fetchQueue = useCallback(async () => {
+  const fetchQueue = useCallback(async (status: 'all' | 'pending' | 'approved' | 'processing' = 'all') => {
     try {
       setLoading(true);
-      const resp = await fetch('/api/queue');
+      const resp = await fetch(`/api/queue?status=${status}`);
       const data = await resp.json();
       setQueue(data.items || []);
     } catch (e) {
@@ -30,10 +48,71 @@ export default function App() {
     }
   }, []);
 
+  const fetchPipelines = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/pipelines');
+      const data = await resp.json();
+      if (data.success && Array.isArray(data.pipelines)) {
+        const loaded = data.pipelines.map((pipeline: PipelineSummary) => ({ id: pipeline.id, name: pipeline.name }));
+        const withDefault = loaded.some((pipeline: PipelineSummary) => pipeline.id === 'default')
+          ? loaded
+          : [DEFAULT_PIPELINE_OPTION, ...loaded];
+        setPipelines(withDefault);
+      }
+    } catch (e) {
+      console.error('Failed to fetch pipelines', e);
+      setPipelines([DEFAULT_PIPELINE_OPTION]);
+    }
+  }, []);
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setSelectedItems([]);
+    if ((tab === 'identify' || tab === 'batch' || tab === 'pipelines') && pipelines.length === 0) {
+      void fetchPipelines();
+    }
+    if (tab === 'identify') {
+      setQueueStatus('pending');
+    } else if (tab === 'review') {
+      setQueueStatus('all');
+    } else if (tab === 'batch') {
+      setQueueStatus('processing');
+    }
+  };
+
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchQueue();
-  }, [fetchQueue]);
+    void fetchQueue(queueStatus);
+  }, [queueStatus, fetchQueue]);
+
+  useEffect(() => {
+    void fetchPipelines();
+  }, [fetchPipelines]);
+
+  useEffect(() => {
+    if (!cameraOpen || !cameraStreamRef.current || !cameraVideoRef.current) {
+      return;
+    }
+
+    cameraVideoRef.current.srcObject = cameraStreamRef.current;
+    void cameraVideoRef.current.play().catch((error) => {
+      console.error('Failed to play camera preview', error);
+      setCameraError('Unable to start the camera preview.');
+    });
+  }, [cameraOpen]);
+
+  useEffect(() => () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+  }, []);
+
+  // TanStack Virtual intentionally returns non-memoizable functions.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const rowVirtualizer = useVirtualizer({
+    count: queue.length,
+    getScrollElement: () => listParentRef.current,
+    estimateSize: () => 360,
+    overscan: 5
+  });
 
   const toggleSelection = (id: string) => {
     setSelectedItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -67,8 +146,9 @@ export default function App() {
     }
   };
 
-  const handlePreview = async (item: Asset, service: string) => {
+  const handlePreview = async (item: Asset, service: string, overrides?: Record<string, unknown>) => {
     try {
+      void overrides;
       const resp = await fetch(`/api/preview/${service}?item_id=${item.id}`);
       const data = await resp.json();
       
@@ -98,9 +178,8 @@ export default function App() {
     }
   };
 
-  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+  const uploadFiles = async (files: File[]) => {
+    if (files.length === 0) return;
 
     setLoading(true);
     
@@ -108,7 +187,7 @@ export default function App() {
       if (files.length === 1) {
         const formData = new FormData();
         formData.append('file', files[0]);
-        formData.append('pipeline_id', 'default');
+        formData.append('pipeline_id', selectedPipelineId);
         formData.append('settings', '{}');
         
         const resp = await fetch('/api/identify', {
@@ -116,23 +195,19 @@ export default function App() {
           body: formData,
         });
         if (resp.ok) {
-          await fetchQueue();
-          setActiveTab('review');
+          await fetchQueue(queueStatus);
         }
       } else {
         const formData = new FormData();
-        for (let i = 0; i < files.length; i++) {
-          formData.append('files', files[i]);
-        }
-        formData.append('pipeline_id', 'default');
+        files.forEach((file) => formData.append('files', file));
+        formData.append('pipeline_id', selectedPipelineId);
         
         const resp = await fetch('/api/batch-upload', {
           method: 'POST',
           body: formData,
         });
         if (resp.ok) {
-          await fetchQueue();
-          setActiveTab('review');
+          await fetchQueue(queueStatus);
         }
       }
     } catch (e) {
@@ -142,75 +217,218 @@ export default function App() {
     }
   };
 
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    await uploadFiles(Array.from(files));
+    event.target.value = '';
+  };
+
+  const closeCamera = () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+    setCameraOpen(false);
+    setCameraError('');
+  };
+
+  const openCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      cameraInputRef.current?.click();
+      return;
+    }
+
+    try {
+      setCameraError('');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      cameraStreamRef.current = stream;
+      setCameraOpen(true);
+    } catch (error) {
+      console.error('Camera access failed', error);
+      setCameraError('Camera permission was denied or is unavailable. Falling back to file upload.');
+      cameraInputRef.current?.click();
+    }
+  };
+
+  const capturePhoto = async () => {
+    const video = cameraVideoRef.current;
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+      setCameraError('Camera preview is not ready yet.');
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      setCameraError('Unable to capture a frame from the camera.');
+      return;
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+    if (!blob) {
+      setCameraError('Unable to create an image from the camera feed.');
+      return;
+    }
+
+    const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    closeCamera();
+    await uploadFiles([file]);
+  };
+
+  const renderQueueCards = (showSelection: boolean) => {
+    if (loading) {
+      return (
+        <div className="py-20 flex justify-center">
+          <div className="w-8 h-8 border-2 border-white/10 border-t-white rounded-full animate-spin" />
+        </div>
+      );
+    }
+
+    if (queue.length === 0) {
+      return (
+        <div className="py-20 text-center glass rounded-[2rem]">
+          <p className="text-white/30 text-sm font-medium">
+            {queueStatus === 'approved' ? 'No approved assets yet.' : queueStatus === 'processing' ? 'No active batch items yet.' : 'Waiting for assets to ingest...'}
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        {showSelection && queueStatus === 'pending' && (
+          <div className="flex justify-between items-center px-4">
+            <label htmlFor="selectAll" className="flex items-center gap-3 cursor-pointer group">
+              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${selectedItems.length === queue.length ? 'bg-blue-500 border-blue-500' : 'border-white/30 group-hover:border-white/50'}`}>
+                {selectedItems.length === queue.length && <div className="w-2.5 h-2.5 bg-white rounded-[2px]" />}
+              </div>
+              <span className="text-sm font-bold text-white/70 group-hover:text-white transition-colors">Select All</span>
+            </label>
+            {selectedItems.length > 0 && (
+              <button
+                onClick={handleBulkApprove}
+                className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all shadow-lg shadow-green-600/20"
+              >
+                Approve {selectedItems.length} Items
+              </button>
+            )}
+          </div>
+        )}
+        {showSelection && queueStatus === 'pending' && (
+          <input
+            type="checkbox"
+            className="hidden"
+            checked={selectedItems.length === queue.length}
+            onChange={selectAll}
+            id="selectAll"
+          />
+        )}
+        <div ref={listParentRef} className="max-h-[72vh] overflow-y-auto pr-1">
+          <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const item = queue[virtualRow.index];
+              return (
+                <div
+                  key={`${item.id}-${virtualRow.index}`}
+                  ref={rowVirtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`
+                  }}
+                  className="pb-4"
+                >
+                  <AssetCard
+                    item={item}
+                    isSelected={showSelection ? selectedItems.includes(item.id) : false}
+                    onToggleSelect={showSelection ? () => toggleSelection(item.id) : undefined}
+                    onPreview={(svc, overrides) => handlePreview(item, svc, overrides)}
+                    onExecute={(svcs, overrides) => executeItem(item, svcs, overrides)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  const selectedPipelineName = pipelines.find((pipeline) => pipeline.id === selectedPipelineId)?.name || DEFAULT_PIPELINE_OPTION.name;
+
   return (
     <div className="min-h-screen bg-black text-white selection:bg-blue-500/30 font-sans">
       <NetworkCheck />
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Navbar activeTab={activeTab} setActiveTab={handleTabChange} />
 
       <main className="max-w-7xl mx-auto pt-32 px-6 pb-20">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          <div className="lg:col-span-8 space-y-8">
+        <div>
+          <div className="space-y-8 max-w-6xl mx-auto">
             {activeTab === 'review' ? (
               <>
                 <header className="flex justify-between items-end">
                   <div>
                     <h2 className="text-4xl font-extrabold tracking-tight mb-2">Review Queue</h2>
-                    <p className="text-white/40 font-medium italic">Vibe-coding the future of asset ingestion.</p>
+                    <p className="text-white/40 font-medium italic">Awaiting review and approved assets in one place.</p>
                   </div>
                   <button 
-                    onClick={fetchQueue} 
+                    onClick={() => fetchQueue(queueStatus)} 
                     className="bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase"
                   >
-                    Sync DB
+                    Refresh Queue
                   </button>
                 </header>
 
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setQueueStatus('all');
+                      setSelectedItems([]);
+                      void fetchQueue('all');
+                    }}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase border transition-all ${
+                      queueStatus === 'all' ? 'bg-white text-black border-white' : 'bg-white/5 text-white/60 border-white/10 hover:text-white'
+                    }`}
+                  >
+                    Everything
+                  </button>
+                  <button
+                    onClick={() => {
+                      setQueueStatus('pending');
+                      setSelectedItems([]);
+                      void fetchQueue('pending');
+                    }}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase border transition-all ${
+                      queueStatus === 'pending' ? 'bg-white text-black border-white' : 'bg-white/5 text-white/60 border-white/10 hover:text-white'
+                    }`}
+                  >
+                    Awaiting Review
+                  </button>
+                  <button
+                    onClick={() => {
+                      setQueueStatus('approved');
+                      setSelectedItems([]);
+                      void fetchQueue('approved');
+                    }}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase border transition-all ${
+                      queueStatus === 'approved' ? 'bg-white text-black border-white' : 'bg-white/5 text-white/60 border-white/10 hover:text-white'
+                    }`}
+                  >
+                    Approved
+                  </button>
+                </div>
+
                 <div className="space-y-4">
-                  {loading ? (
-                    <div className="py-20 flex justify-center">
-                      <div className="w-8 h-8 border-2 border-white/10 border-t-white rounded-full animate-spin" />
-                    </div>
-                  ) : queue.length === 0 ? (
-                    <div className="py-20 text-center glass rounded-[2rem]">
-                      <p className="text-white/30 text-sm font-medium">Waiting for assets to ingest...</p>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex justify-between items-center px-4">
-                        <label htmlFor="selectAll" className="flex items-center gap-3 cursor-pointer group">
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${selectedItems.length === queue.length ? 'bg-blue-500 border-blue-500' : 'border-white/30 group-hover:border-white/50'}`}>
-                            {selectedItems.length === queue.length && <div className="w-2.5 h-2.5 bg-white rounded-[2px]" />}
-                          </div>
-                          <span className="text-sm font-bold text-white/70 group-hover:text-white transition-colors">Select All</span>
-                        </label>
-                        {selectedItems.length > 0 && (
-                          <button 
-                            onClick={handleBulkApprove} 
-                            className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all shadow-lg shadow-green-600/20"
-                          >
-                            Approve {selectedItems.length} Items
-                          </button>
-                        )}
-                      </div>
-                      <input 
-                        type="checkbox" 
-                        className="hidden" 
-                        checked={selectedItems.length === queue.length} 
-                        onChange={selectAll} 
-                        id="selectAll" 
-                      />
-                      {queue.map(item => (
-                        <AssetCard 
-                          key={item.id} 
-                          item={item} 
-                          isSelected={selectedItems.includes(item.id)}
-                          onToggleSelect={() => toggleSelection(item.id)}
-                          onPreview={(svc, overrides) => handlePreview(item, svc, overrides)} 
-                          onExecute={(svcs, overrides) => executeItem(item, svcs, overrides)} 
-                        />
-                      ))}
-                    </>
-                  )}
+                  {renderQueueCards(queueStatus === 'pending')}
                 </div>
               </>
             ) : activeTab === 'identify' ? (
@@ -219,37 +437,133 @@ export default function App() {
                   <h2 className="text-4xl font-extrabold tracking-tight mb-2">Identify Asset</h2>
                   <p className="text-white/40 font-medium italic">Capture or upload an image to begin AI processing.</p>
                 </header>
-                
-                <div className="glass rounded-[3rem] p-12 flex flex-col items-center justify-center border-dashed border-2 border-white/10 hover:border-blue-500/30 transition-all group overflow-hidden relative">
-                   <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                   <div className="relative z-10 flex flex-col items-center gap-6">
-                      <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/40">
-                         <Camera className="w-10 h-10 text-white" />
-                      </div>
-                      <div className="text-center">
-                        <h3 className="text-2xl font-bold mb-2">Open Camera</h3>
-                        <p className="text-white/40 text-sm">or drag and drop files here</p>
-                      </div>
-                      <input 
-                        type="file" 
-                        onChange={handleUpload}
-                        className="absolute inset-0 opacity-0 cursor-pointer" 
-                        accept="image/*"
-                        capture="environment"
-                      />
-                   </div>
+
+                <div className="glass rounded-[2rem] p-6 border border-white/10 flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Active Pipeline</p>
+                    <p className="text-lg font-bold text-white mt-2">{selectedPipelineName}</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                    <select
+                      value={selectedPipelineId}
+                      onChange={(event) => setSelectedPipelineId(event.target.value)}
+                      className="bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white focus:outline-none"
+                    >
+                      {(pipelines.length ? pipelines : [DEFAULT_PIPELINE_OPTION]).map((pipeline) => (
+                        <option key={pipeline.id} value={pipeline.id} className="bg-black text-white">{pipeline.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => handleTabChange('pipelines')}
+                      className="bg-white/5 hover:bg-white/10 px-4 py-4 rounded-2xl text-[10px] font-black tracking-widest uppercase"
+                    >
+                      Open Pipeline Editor
+                    </button>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <label className="text-xs font-bold text-white/30 hover:text-white cursor-pointer transition-colors uppercase tracking-widest">
-                    <span>Or upload from gallery</span>
-                    <input 
-                      type="file" 
-                      onChange={handleUpload}
-                      className="hidden" 
-                      accept="image/*"
-                      multiple
-                    />
-                  </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => void openCamera()}
+                    className="glass rounded-[2rem] p-8 flex items-center justify-center gap-4 border border-white/10 hover:border-blue-500/30 transition-all"
+                  >
+                    <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/40">
+                      <Camera className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-black uppercase tracking-widest">Open Camera</p>
+                      <p className="text-[10px] text-white/50">Requests camera access when supported, otherwise falls back to file upload</p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => galleryInputRef.current?.click()}
+                    className="glass rounded-[2rem] p-8 flex items-center justify-center gap-4 border border-white/10 hover:border-blue-500/30 transition-all"
+                  >
+                    <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                      <Camera className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-black uppercase tracking-widest">Upload Files</p>
+                      <p className="text-[10px] text-white/50">Choose one or many images from gallery/files</p>
+                    </div>
+                  </button>
+
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    onChange={handleUpload}
+                    className="hidden"
+                    accept="image/*"
+                    capture="environment"
+                  />
+
+                  <input
+                    ref={galleryInputRef}
+                    type="file"
+                    onChange={handleUpload}
+                    className="hidden"
+                    accept="image/*"
+                  />
+                </div>
+              </div>
+            ) : activeTab === 'batch' ? (
+              <div className="space-y-8">
+                <header className="flex justify-between items-end">
+                  <div>
+                    <h2 className="text-4xl font-extrabold tracking-tight mb-2">Batch Mode</h2>
+                    <p className="text-white/40 font-medium italic">Set up large ingestions and monitor active processing.</p>
+                  </div>
+                  <button
+                    onClick={() => fetchQueue(queueStatus)}
+                    className="bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase"
+                  >
+                    Refresh Queue
+                  </button>
+                </header>
+
+                <div className="glass rounded-[2rem] p-6 border border-white/10 flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Batch Pipeline</p>
+                    <p className="text-lg font-bold text-white mt-2">{selectedPipelineName}</p>
+                  </div>
+                  <select
+                    value={selectedPipelineId}
+                    onChange={(event) => setSelectedPipelineId(event.target.value)}
+                    className="bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white focus:outline-none"
+                  >
+                    {(pipelines.length ? pipelines : [DEFAULT_PIPELINE_OPTION]).map((pipeline) => (
+                      <option key={pipeline.id} value={pipeline.id} className="bg-black text-white">{pipeline.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="glass rounded-[2rem] p-8 border border-white/10 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="label-apple">Batch Upload</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => batchInputRef.current?.click()}
+                    className="w-full py-10 rounded-[2rem] border-2 border-dashed border-white/10 hover:border-blue-500/30 text-xs font-black uppercase tracking-[0.3em] text-white/40 hover:text-white transition-all"
+                  >
+                    Select Multiple Images
+                  </button>
+                  <input
+                    ref={batchInputRef}
+                    type="file"
+                    onChange={handleUpload}
+                    className="hidden"
+                    accept="image/*"
+                    multiple
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  {renderQueueCards(false)}
                 </div>
               </div>
             ) : activeTab === 'pipelines' ? (
@@ -262,10 +576,33 @@ export default function App() {
               </div>
             )}
           </div>
-
-          <Dashboard queueLength={queue.length} onUpload={handleUpload} />
         </div>
       </main>
+
+      {cameraOpen && (
+        <div className="fixed inset-0 z-[1400] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6">
+          <div className="glass w-full max-w-3xl rounded-[3rem] p-6 space-y-6 border border-white/10">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-2xl font-black tracking-tight">Camera Capture</h3>
+                <p className="text-sm text-white/40">Take a photo and send it through the selected pipeline.</p>
+              </div>
+              <button onClick={closeCamera} className="w-12 h-12 rounded-2xl bg-white/5 text-xl">✕</button>
+            </div>
+
+            <div className="bg-black rounded-[2rem] overflow-hidden border border-white/10">
+              <video ref={cameraVideoRef} className="w-full max-h-[60vh] object-cover" playsInline muted autoPlay />
+            </div>
+
+            {cameraError && <p className="text-sm text-red-300">{cameraError}</p>}
+
+            <div className="flex gap-3 justify-end">
+              <button onClick={closeCamera} className="px-5 py-3 rounded-2xl bg-white/5 text-[10px] font-black uppercase tracking-widest">Cancel</button>
+              <button onClick={() => void capturePhoto()} className="btn-apple px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest">Capture and Process</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {previewItem && (
         <PreviewModal 

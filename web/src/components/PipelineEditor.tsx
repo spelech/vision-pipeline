@@ -4,12 +4,47 @@ export interface Pipeline {
   id: string;
   name: string;
   schema: {
-    active_nodes: { default: string[] };
+    active_nodes?: { default: string[] };
     vision_model?: { default: string };
+    custom_prompt?: { default: string };
     vision_prompt?: { default: string };
     refine_prompt?: { default: string };
-    scrape_wait_time?: { default: number };
+    scrape_wait_time?: { default: number | string };
   };
+}
+
+const DEFAULT_PIPELINE_MODELS = ['qwen/qwen2.5-vl-72b-instruct'];
+
+function getPipelineNodes(pipeline: Pipeline): string[] {
+  if (Array.isArray(pipeline.schema.active_nodes?.default) && pipeline.schema.active_nodes.default.length > 0) {
+    return pipeline.schema.active_nodes.default;
+  }
+
+  if (pipeline.id === 'advanced_playwright') {
+    return ['barcode', 'vision', 'search', 'scrape', 'refine'];
+  }
+
+  return ['barcode', 'vision', 'search', 'refine'];
+}
+
+function isPersistedCustomPipeline(pipeline: Pipeline): boolean {
+  return pipeline.id === 'composable' || pipeline.id.startsWith('custom_');
+}
+
+function getVisionPrompt(pipeline: Pipeline): string {
+  return pipeline.schema.vision_prompt?.default || pipeline.schema.custom_prompt?.default || '';
+}
+
+function getRefinePrompt(pipeline: Pipeline): string {
+  return pipeline.schema.refine_prompt?.default || '';
+}
+
+function getPromptPreview(prompt: string): string {
+  const trimmed = prompt.trim();
+  if (!trimmed) {
+    return 'No prompt configured';
+  }
+  return trimmed.length > 90 ? `${trimmed.slice(0, 90)}...` : trimmed;
 }
 
 export function PipelineEditor() {
@@ -18,6 +53,27 @@ export function PipelineEditor() {
   const [editingNode, setEditingNode] = useState<{type: string, index: number} | null>(null);
   const [models, setModels] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const setVisionPrompt = (pipeline: Pipeline, prompt: string): Pipeline => {
+    const hasVisionPrompt = pipeline.schema.vision_prompt !== undefined;
+    if (hasVisionPrompt) {
+      return {
+        ...pipeline,
+        schema: {
+          ...pipeline.schema,
+          vision_prompt: { default: prompt }
+        }
+      };
+    }
+
+    return {
+      ...pipeline,
+      schema: {
+        ...pipeline.schema,
+        custom_prompt: { default: prompt }
+      }
+    };
+  };
 
   const fetchPipelines = async () => {
     try {
@@ -33,9 +89,31 @@ export function PipelineEditor() {
 
   const fetchConfig = async () => {
     try {
-      const resp = await fetch('/api/config');
-      const data = await resp.json();
-      if (data.model_favorites) setModels(data.model_favorites);
+      const [configResult, modelsResult] = await Promise.allSettled([
+        fetch('/api/config').then(async (response) => {
+          if (!response.ok) {
+            throw new Error('Failed to load config');
+          }
+          return response.json();
+        }),
+        fetch('/api/models').then(async (response) => {
+          if (!response.ok) {
+            throw new Error('Failed to load models');
+          }
+          return response.json();
+        })
+      ]);
+
+      const configData = configResult.status === 'fulfilled' ? configResult.value : {};
+      const modelsData = modelsResult.status === 'fulfilled' ? modelsResult.value : {};
+
+      const favorites = Array.isArray(configData.model_favorites) ? configData.model_favorites : [];
+      const catalog = modelsData?.success && Array.isArray(modelsData.models)
+        ? modelsData.models.map((m: { id: string }) => m.id)
+        : DEFAULT_PIPELINE_MODELS;
+
+      const merged = Array.from(new Set([...favorites, ...catalog]));
+      setModels(merged);
     } catch (e) {
       console.error(e);
     }
@@ -62,7 +140,17 @@ export function PipelineEditor() {
     setEditingPipeline(newPipeline);
   };
 
-  const savePipelineChanges = async () => {
+  const openPipelineEditor = (pipeline: Pipeline) => {
+    setEditingPipeline({
+      ...pipeline,
+      schema: {
+        ...pipeline.schema,
+        active_nodes: { default: getPipelineNodes(pipeline) }
+      }
+    });
+  };
+
+  const savePipelineChanges = async (saveAsCustomCopy = false) => {
     if (!editingPipeline) return;
     setSaving(true);
     
@@ -71,13 +159,20 @@ export function PipelineEditor() {
     try {
       const cRes = await fetch('/api/config');
       const cData = await cRes.json();
-      const custom = cData.custom_pipelines || [];
-      
-      const idx = custom.findIndex((p: Pipeline) => p.id === editingPipeline.id);
+      const custom = Array.isArray(cData.custom_pipelines) ? cData.custom_pipelines : [];
+      const pipelineToSave = saveAsCustomCopy && !isPersistedCustomPipeline(editingPipeline)
+        ? {
+            ...editingPipeline,
+            id: `custom_${Date.now()}`,
+            name: `${editingPipeline.name} Copy`
+          }
+        : editingPipeline;
+
+      const idx = custom.findIndex((p: Pipeline) => p.id === pipelineToSave.id);
       if (idx !== -1) {
-        custom[idx] = editingPipeline;
+        custom[idx] = pipelineToSave;
       } else {
-        custom.push(editingPipeline);
+        custom.push(pipelineToSave);
       }
 
       await fetch('/api/config', {
@@ -87,7 +182,7 @@ export function PipelineEditor() {
       });
       
       setEditingPipeline(null);
-      fetchPipelines();
+      await fetchPipelines();
     } catch (e) {
       console.error(e);
       alert('Failed to save pipeline');
@@ -99,28 +194,31 @@ export function PipelineEditor() {
   const moveNode = (index: number, dir: number) => {
     if (!editingPipeline) return;
     const update = { ...editingPipeline };
-    const nodes = [...update.schema.active_nodes.default];
+    const nodes = [...(update.schema.active_nodes?.default || getPipelineNodes(update))];
     const target = index + dir;
     if (target < 0 || target >= nodes.length) return;
     
     const temp = nodes[index];
     nodes[index] = nodes[target];
     nodes[target] = temp;
-    update.schema.active_nodes.default = nodes;
+    update.schema.active_nodes = { default: nodes };
     setEditingPipeline(update);
   };
 
   const removeNode = (index: number) => {
     if (!editingPipeline) return;
     const update = { ...editingPipeline };
-    update.schema.active_nodes.default.splice(index, 1);
+    const nodes = [...(update.schema.active_nodes?.default || getPipelineNodes(update))];
+    nodes.splice(index, 1);
+    update.schema.active_nodes = { default: nodes };
     setEditingPipeline(update);
   };
 
   const addNode = (type: string) => {
     if (!editingPipeline) return;
     const update = { ...editingPipeline };
-    update.schema.active_nodes.default.push(type);
+    const nodes = [...(update.schema.active_nodes?.default || getPipelineNodes(update)), type];
+    update.schema.active_nodes = { default: nodes };
     setEditingPipeline(update);
   };
 
@@ -137,36 +235,50 @@ export function PipelineEditor() {
           </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6">
+        <div className="grid grid-cols-1 gap-6">
         {pipelines.map(p => (
-          <div key={p.id} className="glass p-8 rounded-[3rem] space-y-10 group hover:border-white/20 transition-all border-2 border-white/5">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
+          <div key={p.id} className="glass p-6 md:p-8 rounded-[2.5rem] space-y-6 group hover:border-white/20 transition-all border-2 border-white/5 overflow-hidden">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                   <div className="space-y-1">
                       <h3 className="text-3xl font-black tracking-tighter text-white">{p.name}</h3>
-                      <p className="text-[11px] uppercase text-white/20">{p.id === 'default' ? 'Core Sequence' : 'Custom Flow'}</p>
+                      <p className="text-[11px] uppercase text-white/20">
+                        {p.id === 'default' ? 'Core Sequence' : p.id === 'advanced_playwright' ? 'Scraping Sequence' : isPersistedCustomPipeline(p) ? 'Configurable Flow' : 'Pipeline Variant'}
+                      </p>
                   </div>
-                  {p.id !== 'default' && (
-                    <button onClick={() => setEditingPipeline({ ...p })} className="btn-apple px-10 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl">Configure sequence</button>
-                  )}
+                  <button onClick={() => openPipelineEditor(p)} className="btn-apple px-10 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl">
+                    {isPersistedCustomPipeline(p) ? 'Configure sequence' : 'Inspect pipeline'}
+                  </button>
               </div>
 
-              <div className="relative py-4">
-                  <div className="flex flex-col md:flex-row md:items-center gap-6 md:gap-8 overflow-x-auto no-scrollbar pb-6">
-                      {(p.schema.active_nodes?.default || ['barcode', 'vision', 'search', 'refine']).map((node, index, arr) => (
-                          <div key={index} className="flex flex-col md:flex-row items-center gap-6">
-                              <div className="w-full md:w-auto glass-dark px-10 py-6 rounded-[2rem] border border-white/10 min-w-[180px] text-center bg-black/40">
+              <div className="relative py-2">
+                  <div className="flex flex-wrap items-center gap-4 pb-2">
+                      {getPipelineNodes(p).map((node, index, arr) => (
+                          <div key={index} className="flex items-center gap-4">
+                              <div className="glass-dark px-6 py-4 rounded-[1.25rem] border border-white/10 min-w-[130px] text-center bg-black/40">
                                   <span className="text-[10px] block font-black uppercase text-white/20 mb-2 tracking-widest">STAGE {index + 1}</span>
                                   <span className="text-[13px] font-black uppercase tracking-[0.2em] text-white/90">{node}</span>
                               </div>
                               {index < arr.length - 1 && (
-                                <>
-                                  <span className="text-white/20 text-3xl font-thin hidden md:block opacity-60">→</span>
-                                  <span className="text-white/20 text-2xl font-thin md:hidden block self-center opacity-60">↓</span>
-                                </>
+                                <span className="text-white/20 text-2xl font-thin opacity-60">→</span>
                               )}
                           </div>
                       ))}
                   </div>
+              </div>
+
+              <div className="flex flex-wrap gap-3 text-[10px] font-black uppercase tracking-widest text-white/40">
+                {p.schema.vision_model?.default && <span className="px-3 py-2 rounded-xl bg-white/5 border border-white/10">Model {p.schema.vision_model.default.split('/')[1] || p.schema.vision_model.default}</span>}
+                {(p.schema.custom_prompt?.default !== undefined || p.schema.vision_prompt?.default !== undefined) && (
+                  <span className="px-3 py-2 rounded-xl bg-white/5 border border-white/10" title={getVisionPrompt(p)}>
+                    Vision prompt: {getPromptPreview(getVisionPrompt(p))}
+                  </span>
+                )}
+                {p.schema.refine_prompt?.default !== undefined && (
+                  <span className="px-3 py-2 rounded-xl bg-white/5 border border-white/10" title={getRefinePrompt(p)}>
+                    Refine prompt: {getPromptPreview(getRefinePrompt(p))}
+                  </span>
+                )}
+                {p.schema.scrape_wait_time?.default !== undefined && <span className="px-3 py-2 rounded-xl bg-white/5 border border-white/10">Scrape wait {p.schema.scrape_wait_time.default}ms</span>}
               </div>
           </div>
         ))}
@@ -198,13 +310,17 @@ export function PipelineEditor() {
                   <div className="space-y-6">
                       <label className="label-apple ml-2">Sequence Configuration (Tap to customize Node)</label>
                       <div className="space-y-3">
-                          {editingPipeline.schema.active_nodes.default.map((node, index, arr) => (
+                            {editingPipeline.schema.active_nodes?.default.map((node, index, arr) => (
                               <div key={`${node}-${index}`} className="flex items-center gap-4 group">
                                   <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-[10px] font-black opacity-20">{index + 1}</div>
                                   <button onClick={() => setEditingNode({type: node, index})} className="flex-1 glass p-5 rounded-2xl flex items-center justify-between border-white/5 hover:border-blue-500/40 transition-all">
                                       <div className="flex items-center gap-4">
                                           <span className="text-2xl">{node === 'barcode' ? '🔍' : (node === 'vision' ? '🤖' : (node === 'search' ? '🌐' : (node === 'scrape' ? '🕸️' : '🧠')))}</span>
-                                          <span className="text-sm font-black uppercase tracking-widest text-white">{node}</span>
+                                          <div>
+                                            <span className="text-sm font-black uppercase tracking-widest text-white block">{node}</span>
+                                            {node === 'vision' && <span className="text-[10px] text-white/45">{getPromptPreview(getVisionPrompt(editingPipeline))}</span>}
+                                            {node === 'refine' && <span className="text-[10px] text-white/45">{getPromptPreview(getRefinePrompt(editingPipeline))}</span>}
+                                          </div>
                                       </div>
                                       <span className="text-[9px] font-black uppercase text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">Configure Node</span>
                                   </button>
@@ -236,7 +352,7 @@ export function PipelineEditor() {
 
               <div className="p-10 border-t border-white/10 flex gap-4 bg-black/40">
                   <button onClick={() => setEditingPipeline(null)} className="flex-1 px-8 py-6 rounded-[1.5rem] font-black text-xs uppercase tracking-widest text-white/40 hover:bg-white/5 transition-all">Discard</button>
-                  <button onClick={savePipelineChanges} className="flex-[2] btn-apple py-6 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all">{saving ? 'Saving...' : 'Persist Registry'}</button>
+                  <button onClick={() => void savePipelineChanges(!isPersistedCustomPipeline(editingPipeline))} className="flex-[2] btn-apple py-6 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all">{saving ? 'Saving...' : isPersistedCustomPipeline(editingPipeline) ? 'Persist Registry' : 'Save As Custom Copy'}</button>
               </div>
           </div>
         </div>
@@ -274,8 +390,8 @@ export function PipelineEditor() {
                       <div className="space-y-3">
                           <label className="label-apple">Instruction Set</label>
                           <textarea 
-                            value={editingPipeline.schema.vision_prompt?.default || ''} 
-                            onChange={e => setEditingPipeline({...editingPipeline, schema: {...editingPipeline.schema, vision_prompt: {default: e.target.value}}})} 
+                            value={getVisionPrompt(editingPipeline)} 
+                            onChange={e => setEditingPipeline(setVisionPrompt(editingPipeline, e.target.value))} 
                             className="w-full h-80 bg-black/60 border border-white/10 rounded-[2rem] p-6 text-[14px] font-mono text-white/80 leading-relaxed no-scrollbar" 
                           />
                       </div>
