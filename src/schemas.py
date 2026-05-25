@@ -1,0 +1,109 @@
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+
+
+class PromptTemplateConfig(BaseModel):
+    id: str
+    name: str
+    prompt: str
+
+class PipelineInfo(BaseModel):
+    id: str
+    name: str = "Unknown Pipeline"
+    description: Optional[str] = None
+
+class PipelineListResponse(BaseModel):
+    success: bool
+    pipelines: List[Dict[str, Any]]
+    error: Optional[str] = None
+
+class ModelInfo(BaseModel):
+    id: str
+    name: str
+
+class ModelListResponse(BaseModel):
+    success: bool
+    models: List[ModelInfo]
+
+class ConfigSecretStatus(BaseModel):
+    OPENROUTER_API_KEY: str = ""
+    SEARXNG_URL: str = ""
+    HOMEBOX_URL: str = ""
+    MEALIE_URL: str = ""
+    PRICEBUDDY_URL: str = ""
+    CHANGEDETECTION_URL: str = ""
+    HOMEBOX_USERNAME: str = ""
+    HOMEBOX_PASSWORD: str = ""
+    MEALIE_API_TOKEN: str = ""
+    PRICEBUDDY_API_KEY: str = ""
+    CHANGEDETECTION_API_KEY: str = ""
+
+class ConfigResponse(BaseModel):
+    prompt_templates: Optional[List[PromptTemplateConfig]] = None
+    model_favorites: Optional[List[str]] = None
+    starred_models: Optional[List[str]] = None
+    image_optimization: Optional[Dict[str, Any]] = None
+    custom_pipelines: Optional[List[Dict[str, Any]]] = None
+    secrets_status: Optional[Dict[str, str]] = None
+
+class ConfigUpdateRequest(BaseModel):
+    prompt_templates: Optional[List[PromptTemplateConfig]] = None
+    model_favorites: Optional[List[str]] = None
+    starred_models: Optional[List[str]] = None
+    image_optimization: Optional[Dict[str, Any]] = None
+    custom_pipelines: Optional[List[Dict[str, Any]]] = None
+    # Secrets
+    OPENROUTER_API_KEY: Optional[str] = None
+    SEARXNG_URL: Optional[str] = None
+    HOMEBOX_URL: Optional[str] = None
+    MEALIE_URL: Optional[str] = None
+    PRICEBUDDY_URL: Optional[str] = None
+    CHANGEDETECTION_URL: Optional[str] = None
+    HOMEBOX_USERNAME: Optional[str] = None
+    HOMEBOX_EMAIL: Optional[str] = None
+    HOMEBOX_PASSWORD: Optional[str] = None
+    MEALIE_API_TOKEN: Optional[str] = None
+    PRICEBUDDY_API_KEY: Optional[str] = None
+    CHANGEDETECTION_API_KEY: Optional[str] = None
+
+class ServiceMappingInfo(BaseModel):
+    service: str
+    external_id: str
+    url: Optional[str] = None
+
+class ItemSearchInfo(BaseModel):
+    id: str
+    status: str
+    image_path: str
+    raw_image_path: Optional[str] = None
+    product_type: str = "unknown"
+    ai_output: Optional[Dict[str, Any]] = None
+    user_overrides: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    mappings: List[ServiceMappingInfo]
+    # For compatibility with frontend Asset type
+    product_name: Optional[str] = None
+    brand: Optional[str] = None
+
+class SearchResponse(BaseModel):
+    items: List[ItemSearchInfo]
+
+class HealthResponse(BaseModel):
+    status: str = "ok"
+
+class LocationInfo(BaseModel):
+    id: str
+    name: str
+
+class LocationsResponse(BaseModel):
+    success: bool
+    locations: Optional[List[Any]] = None
+    error: Optional[str] = None
+
+class SessionLogsResponse(BaseModel):
+    logs: List[Dict[str, Any]]
+
+class ServicePreviewResponse(BaseModel):
+    service: str
+    payload: Dict[str, Any]

@@ -7,24 +7,32 @@ import logging
 import asyncio
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, UploadFile, File, Form, Request, BackgroundTasks, Depends, APIRouter
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, Depends, APIRouter
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, update
 from PIL import Image, ImageOps
 
-from pipelines import get_pipeline as get_pipeline_factory, get_all_pipelines
+from cryptography.fernet import Fernet
+from dotenv import load_dotenv
+
+# Load environment variables FIRST before other imports
+# Search for .env in current or parent directory
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
 from database import init_db, AsyncSessionLocal, Batch, Item, ServiceMapping, ConfigSecret
+from schemas import (
+    PipelineListResponse, ModelListResponse, ConfigResponse, ConfigUpdateRequest,
+    SearchResponse, HealthResponse, LocationsResponse, SessionLogsResponse,
+    ServicePreviewResponse
+)
 from services.homebox import HomeboxService
 from services.mealie import MealieService
 from services.enrichers import PriceBuddyService, ChangeDetectionService
 from logger import session_logger
-from cryptography.fernet import Fernet
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # Get or create encryption key
 MASTER_KEY = os.getenv("ENCRYPTION_KEY")
@@ -42,6 +50,150 @@ def encrypt_secret(val: str) -> str:
 
 def decrypt_secret(val: str) -> str:
     return cipher.decrypt(val.encode()).decode()
+
+
+def normalize_prompt_templates(value: Any) -> List[Dict[str, str]]:
+    if isinstance(value, list):
+        normalized = []
+        for template in value:
+            if isinstance(template, dict):
+                normalized.append({
+                    "id": str(template.get("id", uuid.uuid4())),
+                    "name": str(template.get("name", "Untitled Template")),
+                    "prompt": str(template.get("prompt", ""))
+                })
+        return normalized
+
+    if isinstance(value, dict):
+        normalized = []
+        for key, prompt in value.items():
+            if isinstance(prompt, dict):
+                normalized.append({
+                    "id": str(prompt.get("id", key)),
+                    "name": str(prompt.get("name", key.replace("_", " ").title())),
+                    "prompt": str(prompt.get("prompt", ""))
+                })
+            else:
+                normalized.append({
+                    "id": str(key),
+                    "name": key.replace("_", " ").title(),
+                    "prompt": str(prompt)
+                })
+        return normalized
+
+    return []
+
+
+def merge_unique_str_lists(*values: Any) -> List[str]:
+    merged: List[str] = []
+    for value in values:
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, str) and item and item not in merged:
+                    merged.append(item)
+    return merged
+
+
+def extract_model_favorites(config_data: Dict[str, Any]) -> List[str]:
+    nested_registry = []
+    model_registry = config_data.get("model_registry")
+    if isinstance(model_registry, list):
+        nested_registry = [
+            model.get("id") for model in model_registry
+            if isinstance(model, dict) and isinstance(model.get("id"), str)
+        ]
+
+    return merge_unique_str_lists(
+        config_data.get("model_favorites"),
+        config_data.get("favorite_models"),
+        config_data.get("configured_models"),
+        config_data.get("models"),
+        nested_registry,
+    )
+
+
+def load_json_file(path: str) -> Dict[str, Any]:
+    if not os.path.exists(path):
+        return {}
+
+    try:
+        with open(path, "r") as f:
+            loaded = json.load(f)
+            return loaded if isinstance(loaded, dict) else {}
+    except Exception as exc:
+        logger.warning("Failed to read config file %s: %s", path, exc)
+        return {}
+
+
+def load_merged_user_config() -> Dict[str, Any]:
+    legacy_path = "config/user_settings.json"
+    current_path = "config/user_config.json"
+
+    legacy = load_json_file(legacy_path)
+    current = load_json_file(current_path)
+
+    merged = {**legacy, **current}
+
+    merged["model_favorites"] = merge_unique_str_lists(
+        extract_model_favorites(legacy),
+        extract_model_favorites(current),
+    )
+    merged["starred_models"] = merge_unique_str_lists(
+        legacy.get("starred_models"),
+        current.get("starred_models"),
+    )
+    merged["prompt_templates"] = normalize_prompt_templates(
+        (legacy.get("prompt_templates") or legacy.get("prompts") or legacy.get("templates"))
+    ) + normalize_prompt_templates(
+        (current.get("prompt_templates") or current.get("prompts") or current.get("templates"))
+    )
+
+    if merged["prompt_templates"]:
+        deduped: Dict[str, Dict[str, str]] = {}
+        for template in merged["prompt_templates"]:
+            deduped[str(template.get("id", uuid.uuid4()))] = {
+                "id": str(template.get("id", uuid.uuid4())),
+                "name": str(template.get("name", "Untitled Template")),
+                "prompt": str(template.get("prompt", "")),
+            }
+        merged["prompt_templates"] = list(deduped.values())
+
+    if not merged.get("image_optimization") and isinstance(legacy.get("image_optimization"), dict):
+        merged["image_optimization"] = legacy.get("image_optimization")
+
+    merged["custom_pipelines"] = (current.get("custom_pipelines") if isinstance(current.get("custom_pipelines"), list) else legacy.get("custom_pipelines")) or []
+
+    return merged
+
+
+CONFIG_SECRET_KEYS = [
+    "OPENROUTER_API_KEY",
+    "SEARXNG_URL",
+    "HOMEBOX_URL",
+    "MEALIE_URL",
+    "PRICEBUDDY_URL",
+    "CHANGEDETECTION_URL",
+    "HOMEBOX_USERNAME",
+    "HOMEBOX_PASSWORD",
+    "MEALIE_API_TOKEN",
+    "PRICEBUDDY_API_KEY",
+    "CHANGEDETECTION_API_KEY"
+]
+
+
+def get_secret_value(key: str) -> str:
+    if key == "HOMEBOX_USERNAME":
+        return os.getenv("HOMEBOX_USERNAME") or os.getenv("HOMEBOX_EMAIL") or ""
+    return os.getenv(key) or ""
+
+
+def set_secret_value(key: str, val: str) -> None:
+    if key == "HOMEBOX_USERNAME":
+        os.environ["HOMEBOX_USERNAME"] = val
+        # Keep compatibility with existing Homebox email-based setups.
+        os.environ["HOMEBOX_EMAIL"] = val
+    else:
+        os.environ[key] = val
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
@@ -113,8 +265,8 @@ def get_pipeline(pipeline_id: str):
 
 # --- Endpoints ---
 
-@api_router.get("/pipelines")
-async def list_pipelines():
+@api_router.get("/pipelines", response_model=PipelineListResponse)
+async def list_pipelines() -> PipelineListResponse:
     from pipelines import get_all_pipelines
     try:
         base = get_all_pipelines()
@@ -125,50 +277,55 @@ async def list_pipelines():
                 config = json.load(f)
                 custom = config.get("custom_pipelines", [])
         
-        return {"success": True, "pipelines": base + custom}
+        return PipelineListResponse(success=True, pipelines=base + custom)
     except Exception as e:
         logger.error(f"Error listing pipelines: {e}")
-        return {"success": False, "error": str(e)}
+        return PipelineListResponse(success=False, error=str(e), pipelines=[])
 
-@api_router.get("/models")
-async def list_models():
-    return {"success": True, "models": [
-        {"id": "qwen/qwen2.5-vl-72b-instruct", "name": "Qwen 2.5 VL 72B (OpenRouter)"},
-        {"id": "google/gemini-2.0-flash-001", "name": "Gemini 2.0 Flash (OpenRouter)"},
-        {"id": "anthropic/claude-3.5-sonnet", "name": "Claude 3.5 Sonnet (OpenRouter)"}
-    ]}
+@api_router.get("/models", response_model=ModelListResponse)
+async def list_models() -> ModelListResponse:
+    from schemas import ModelInfo
+    return ModelListResponse(success=True, models=[
+        ModelInfo(id="qwen/qwen2.5-vl-72b-instruct", name="Qwen 2.5 VL 72B (OpenRouter)"),
+        ModelInfo(id="google/gemini-2.0-flash-001", name="Gemini 2.0 Flash (OpenRouter)"),
+        ModelInfo(id="anthropic/claude-3.5-sonnet", name="Claude 3.5 Sonnet (OpenRouter)")
+    ])
 
-@api_router.get("/config")
-async def get_config():
-    config_path = "config/user_config.json"
-    data = {}
-    if os.path.exists(config_path):
-        with open(config_path, "r") as f:
-            data = json.load(f)
+@api_router.get("/config", response_model=ConfigResponse)
+async def get_config() -> ConfigResponse:
+    data = load_merged_user_config()
+    data["prompt_templates"] = normalize_prompt_templates(data.get("prompt_templates"))
 
     # Mask secrets - return only presence status
     secrets_status = {}
-    for key in ["OPENROUTER_API_KEY", "SEARXNG_URL", "HOMEBOX_API_KEY", "HOMEBOX_EMAIL", "HOMEBOX_PASSWORD", "MEALIE_API_TOKEN", "PRICEBUDDY_API_KEY", "CHANGEDETECTION_API_KEY"]:
-        val = os.getenv(key)
+    for key in CONFIG_SECRET_KEYS:
+        val = get_secret_value(key)
         if val:
-            if "URL" in key: secrets_status[key] = f"{val[:15]}..."
-            else: secrets_status[key] = "********"
+            if "URL" in key:
+                secrets_status[key] = val
+            else:
+                secrets_status[key] = "********"
         else:
             secrets_status[key] = ""
 
-    data["secrets_status"] = secrets_status
-    return data
+    return ConfigResponse(**data, secrets_status=secrets_status)
 
 @api_router.post("/config")
-async def update_config(data: Dict, db: AsyncSession = Depends(get_db)):
+async def update_config(data: ConfigUpdateRequest, db: AsyncSession = Depends(get_db)):
     # Separate secrets from general config
     keys_to_persist = ["prompt_templates", "model_favorites", "starred_models", "image_optimization", "custom_pipelines"]
-    config_to_save = {k: data[k] for k in keys_to_persist if k in data}
+    data_dict = data.model_dump(exclude_unset=True)
+    if "prompt_templates" in data_dict:
+        data_dict["prompt_templates"] = normalize_prompt_templates(data_dict.get("prompt_templates"))
+    current_config_path = "config/user_config.json"
+    existing_config = load_json_file(current_config_path)
+    config_to_save = {**existing_config, **{k: data_dict[k] for k in keys_to_persist if k in data_dict}}
 
-    for key in ["OPENROUTER_API_KEY", "SEARXNG_URL", "HOMEBOX_API_KEY", "HOMEBOX_EMAIL", "HOMEBOX_PASSWORD", "MEALIE_API_TOKEN", "PRICEBUDDY_API_KEY", "CHANGEDETECTION_API_KEY"]:
-        if key in data and data[key] and data[key] != "********":
-            os.environ[key] = data[key]
-            encrypted = encrypt_secret(data[key])
+    for key in CONFIG_SECRET_KEYS:
+        val = getattr(data, key, None)
+        if val and val != "********":
+            set_secret_value(key, val)
+            encrypted = encrypt_secret(val)
             
             # Upsert into database
             res = await db.execute(select(ConfigSecret).where(ConfigSecret.key == key))
@@ -177,6 +334,19 @@ async def update_config(data: Dict, db: AsyncSession = Depends(get_db)):
                 secret_obj.encrypted_value = encrypted # type: ignore
             else:
                 db.add(ConfigSecret(key=key, encrypted_value=encrypted))
+
+    # Backward compatibility for older payloads.
+    legacy_homebox_email = getattr(data, "HOMEBOX_EMAIL", None)
+    if legacy_homebox_email and legacy_homebox_email != "********":
+        set_secret_value("HOMEBOX_USERNAME", legacy_homebox_email)
+        encrypted = encrypt_secret(legacy_homebox_email)
+        for legacy_key in ["HOMEBOX_USERNAME", "HOMEBOX_EMAIL"]:
+            res = await db.execute(select(ConfigSecret).where(ConfigSecret.key == legacy_key))
+            secret_obj = res.scalar_one_or_none()
+            if secret_obj:
+                secret_obj.encrypted_value = encrypted # type: ignore
+            else:
+                db.add(ConfigSecret(key=legacy_key, encrypted_value=encrypted))
     await db.commit()
 
     config_path = "config/user_config.json"
@@ -186,9 +356,10 @@ async def update_config(data: Dict, db: AsyncSession = Depends(get_db)):
 
     return {"success": True}
 
-@api_router.get("/search")
-async def search_items(query: str, db: AsyncSession = Depends(get_db)):
+@api_router.get("/search", response_model=SearchResponse)
+async def search_items(query: str, db: AsyncSession = Depends(get_db)) -> SearchResponse:
     from sqlalchemy import or_
+    from schemas import ItemSearchInfo, ServiceMappingInfo
     # Simple JSON search for product name and brand
     stmt = select(Item).where(
         or_(
@@ -206,54 +377,71 @@ async def search_items(query: str, db: AsyncSession = Depends(get_db)):
         stmt_map = select(ServiceMapping).where(ServiceMapping.item_id == item.id)
         map_res = await db.execute(stmt_map)
         mappings = map_res.scalars().all()
+
+        user_overrides: Dict[str, Any] = item.user_overrides if isinstance(item.user_overrides, dict) else {}
+        ai_output: Dict[str, Any] = item.ai_output if isinstance(item.ai_output, dict) else {}
+        llm_output = ai_output.get("llm_output") if isinstance(ai_output.get("llm_output"), dict) else {}
+        merged_data = user_overrides or llm_output
         
-        item_dict = {
-            "id": item.id,
-            "status": item.status,
-            "image_path": item.image_path,
-            "product_name": (item.user_overrides or item.ai_output.get("llm_output", {})).get("product_name"),
-            "brand": (item.user_overrides or item.ai_output.get("llm_output", {})).get("brand"),
-            "created_at": item.created_at,
-            "mappings": [{"service": m.service_name, "external_id": m.external_id, "url": m.external_url} for m in mappings]
-        }
-        res.append(item_dict)
-    return {"items": res}
+        item_data = ItemSearchInfo(
+            id=str(item.id), # type: ignore
+            status=item.status, # type: ignore
+            image_path=item.image_path, # type: ignore
+            raw_image_path=item.raw_image_path, # type: ignore
+            product_type=item.product_type, # type: ignore
+            ai_output=ai_output,
+            user_overrides=user_overrides,
+            product_name=merged_data.get("product_name") if isinstance(merged_data, dict) else None,
+            brand=merged_data.get("brand") if isinstance(merged_data, dict) else None,
+            created_at=item.created_at, # type: ignore
+            mappings=[ServiceMappingInfo(service=m.service_name, external_id=m.external_id, url=m.external_url)  # type: ignore
+                      for m in mappings]
+        )
+        res.append(item_data)
+    return SearchResponse(items=res)
 
-@api_router.get("/health")
-def health():
-    return {"status": "ok"}
+@api_router.get("/health", response_model=HealthResponse)
+def health() -> HealthResponse:
+    return HealthResponse(status="ok")
 
 
-@api_router.get("/locations")
-async def get_locations():
+@api_router.get("/locations", response_model=LocationsResponse)
+async def get_locations() -> LocationsResponse:
     try:
-        headers = SERVICES["homebox"]._get_headers()
-        if not headers: return {"success": False, "error": "No API Key"}
+        homebox = SERVICES["homebox"]
+        # Type narrowing for mypy
+        if not hasattr(homebox, "_get_headers") or not hasattr(homebox, "api_url"):
+            return LocationsResponse(success=False, error="Homebox service misconfigured")
+            
+        headers = homebox._get_headers() # type: ignore
+        if not headers: return LocationsResponse(success=False, error="No API Key")
         import requests
-        resp = requests.get(f"{SERVICES['homebox'].api_url}/locations", headers=headers, timeout=5)
-        return {"success": True, "locations": resp.json()}
+        resp = requests.get(f"{homebox.api_url}/locations", headers=headers, timeout=5) # type: ignore
+        return LocationsResponse(success=True, locations=resp.json())
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return LocationsResponse(success=False, error=str(e))
 
-@api_router.get("/logs/{session_id}")
-async def get_session_logs(session_id: str):
-    return {"logs": session_logger.get_logs(session_id)}
+@api_router.get("/logs/{session_id}", response_model=SessionLogsResponse)
+async def get_session_logs(session_id: str) -> SessionLogsResponse:
+    logs = session_logger.get_logs(session_id)
+    # Convert list of strings to list of dicts for Pydantic
+    return SessionLogsResponse(logs=[{"message": log} for log in logs])
 
-@api_router.get("/preview/{service_name}")
-async def get_service_preview(service_name: str, item_id: int):
+@api_router.get("/preview/{service_name}", response_model=ServicePreviewResponse)
+async def get_service_preview(service_name: str, item_id: int) -> ServicePreviewResponse:
     if service_name not in SERVICES:
-        return JSONResponse(status_code=404, content={"error": "Service not found"})
+        return JSONResponse(status_code=404, content={"error": "Service not found"}) # type: ignore
     
     async with AsyncSessionLocal() as db:
         res = await db.execute(select(Item).where(Item.id == item_id))
         item = res.scalar_one_or_none()
         if not item:
-            return JSONResponse(status_code=404, content={"error": "Item not found"})
+            return JSONResponse(status_code=404, content={"error": "Item not found"}) # type: ignore
         
         data = item.user_overrides or item.ai_output.get("llm_output", {})
     
     payload = SERVICES[service_name].get_payload(data)
-    return {"service": service_name, "payload": payload}
+    return ServicePreviewResponse(service=service_name, payload=payload)
 
 # --- Core Processing ---
 
@@ -489,7 +677,10 @@ async def process_item_task(item_id: int, pipeline_id: str = "default", settings
 
 @api_router.get("/queue")
 async def get_queue(status: str = "pending", db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Item).where(Item.status == status).order_by(Item.created_at.desc()))
+    stmt = select(Item)
+    if status != "all":
+        stmt = stmt.where(Item.status == status)
+    result = await db.execute(stmt.order_by(Item.created_at.desc()))
     items = result.scalars().all()
     return {"items": items}
 
@@ -534,6 +725,10 @@ async def bulk_approve(data: dict, db: AsyncSession = Depends(get_db)):
     return results
 
 app.include_router(api_router)
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/docs")
 
 if __name__ == "__main__":
     import uvicorn

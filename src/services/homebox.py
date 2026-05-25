@@ -9,8 +9,7 @@ logger = logging.getLogger(__name__)
 class HomeboxService(BaseService):
     def __init__(self):
         self.api_url = os.getenv("HOMEBOX_URL", "http://homebox:7745/api/v1")
-        self.api_key = os.getenv("HOMEBOX_API_KEY")
-        self.email = os.getenv("HOMEBOX_EMAIL")
+        self.username = os.getenv("HOMEBOX_USERNAME") or os.getenv("HOMEBOX_EMAIL")
         self.password = os.getenv("HOMEBOX_PASSWORD")
         self._cached_token = None
 
@@ -19,18 +18,18 @@ class HomeboxService(BaseService):
         return "homebox"
 
     def _get_headers(self):
-        if self.api_key:
-            return {"Authorization": f"Bearer {self.api_key}"}
-            
-        if self.email and self.password:
+        if self.username and self.password:
             if not self._cached_token:
                 try:
-                    resp = requests.post(f"{self.api_url}/users/login", json={
-                        "email": self.email,
-                        "password": self.password
-                    }, timeout=5)
-                    resp.raise_for_status()
-                    self._cached_token = resp.json().get('token')
+                    payloads = [{"username": self.username, "password": self.password}]
+                    if "@" in self.username:
+                        payloads.append({"email": self.username, "password": self.password})
+
+                    for payload in payloads:
+                        resp = requests.post(f"{self.api_url}/users/login", json=payload, timeout=5)
+                        if resp.ok:
+                            self._cached_token = resp.json().get('token')
+                            break
                 except Exception as e:
                     logger.error(f"Homebox login failed: {e}")
                     return None
@@ -60,7 +59,7 @@ class HomeboxService(BaseService):
     async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
         headers = self._get_headers()
         if not headers:
-            return {"success": False, "error": "No API Key"}
+            return {"success": False, "error": "Homebox credentials are missing or invalid"}
 
         try:
             item_id = external_id

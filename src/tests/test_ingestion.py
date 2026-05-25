@@ -10,11 +10,13 @@ from dotenv import load_dotenv
 # Add src to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pipeline import VisionPipeline
+from pipelines.base import BasePipeline
 
 def test_pipeline_logic():
     print("--- Testing Pipeline Logic ---")
-    pipeline = VisionPipeline()
+    # Using DefaultPipeline instead of the non-existent VisionPipeline
+    from pipelines.default import DefaultPipeline
+    pipeline = DefaultPipeline()
     
     # Create a dummy image
     img = Image.new('RGB', (100, 100), color = (73, 109, 137))

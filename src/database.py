@@ -1,10 +1,14 @@
 import os
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, ForeignKey, Text, Table
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncAttrs
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, relationship
-import uuid
+from dotenv import load_dotenv
+
+# Search for .env in current or parent directory
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 # Load DATABASE_URL from env, fallback to SQLite for local tests if needed (though we'll use Postgres mostly now)
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://vision:vision_pass@db:5432/vision_pipeline")
