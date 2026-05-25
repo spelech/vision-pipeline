@@ -4,10 +4,12 @@ An automated product identification and enrichment system that bridges physical 
 
 ## Core Mandates
 
+- **One-Stop UI:** We are developing a single React/TypeScript frontend for all interactions.
+- **Service Standard:** All external integrations must use clean service wrappers with explicit interfaces.
+- **Pydantic & Typing:** ALL new Python code MUST use Pydantic models for data validation and complete type hinting (`typing`).
+- **Validation:** Every change MUST be verified through unit/E2E tests, `pylint`, and `mypy` before being considered complete.
 - **Feature Preservation:** NEVER remove existing features or logic unless explicitly instructed by the user.
-- **No Legacy Shims:** Do not maintain shims, "just-in-case" alternatives, or unused code for backwards compatibility. Prioritize a clean, modern, and lean codebase.
-- **Testing Requirement:** ALL API calls and service integrations MUST have corresponding tests (e.g., using `pytest` and `httpx` or `pytest-asyncio`).
-- **Validation:** Every change must be verified through tests and project-standard linting before being considered complete.
+- **No Legacy Shims:** Do not maintain shims or unused code. Prioritize a lean codebase.
 
 ## Feature Development Workflow
 
@@ -36,12 +38,12 @@ Vision Pipeline captures or uploads images, processes them through a multi-stage
 
 ## Tech Stack
 
--   **Language:** Python 3.x
+-   **Language:** Python 3.x, TypeScript
 -   **Web Framework:** FastAPI + Uvicorn
--   **Database:** SQLite + SQLAlchemy + AioSqlite
+-   **Database:** PostgreSQL + SQLAlchemy + Asyncpg
 -   **Image Processing:** OpenCV, Pillow, pyzbar
 -   **AI/LLM:** OpenRouter (OpenAI-compatible SDK)
--   **Frontend:** Alpine.js, Tailwind CSS (CDN), Cropper.js
+-   **Frontend:** React 18+ (Vite), Tailwind CSS
 
 ## Getting Started
 

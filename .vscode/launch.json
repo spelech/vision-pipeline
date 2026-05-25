@@ -2,23 +2,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: FastAPI (Local)",
-            "type": "python",
-            "request": "launch",
-            "module": "uvicorn",
-            "args": [
-                "app:app",
-                "--host",
-                "0.0.0.0",
-                "--port",
-                "8460",
-                "--reload"
-            ],
-            "cwd": "${workspaceFolder}/src",
-            "jinja": true,
-            "envFile": "${workspaceFolder}/.env"
-        },
-        {
             "name": "Python: FastAPI (Remote)",
             "type": "python",
             "request": "launch",
@@ -34,6 +17,23 @@
             "cwd": "${workspaceFolder}/src",
             "jinja": true,
             "envFile": "${workspaceFolder}/.env.remote"
+        },
+        {
+            "name": "Python: FastAPI (Local)",
+            "type": "python",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "app:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8460",
+                "--reload"
+            ],
+            "cwd": "${workspaceFolder}/src",
+            "jinja": true,
+            "envFile": "${workspaceFolder}/.env"
         },
         {
             "name": "Python: Current File",
@@ -83,6 +83,22 @@
                 ],
                 "service": "vision-pipeline"
             }
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Full Stack (Remote Services)",
+            "configurations": [
+                "Python: FastAPI (Remote)"
+            ],
+            "preLaunchTask": "Vite: Dev (web)"
+        },
+        {
+            "name": "Full Stack (Local DB)",
+            "configurations": [
+                "Python: FastAPI (Local)"
+            ],
+            "preLaunchTask": "Prep: Local Dev (DB + Web)"
         }
     ]
 }

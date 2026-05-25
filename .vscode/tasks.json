@@ -6,6 +6,15 @@
 			"type": "shell",
 			"command": "docker compose build",
 			"group": "build",
+			"options": {
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
 			"problemMatcher": []
 		},
 		{
@@ -13,6 +22,15 @@
 			"type": "shell",
 			"command": "docker compose up -d",
 			"group": "none",
+			"options": {
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
 			"problemMatcher": []
 		},
 		{
@@ -20,6 +38,31 @@
 			"type": "shell",
 			"command": "docker compose --env-file .env.remote up -d",
 			"group": "none",
+			"options": {
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Docker: DB Up",
+			"type": "shell",
+			"command": "docker compose up -d db",
+			"group": "none",
+			"options": {
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
 			"problemMatcher": []
 		},
 		{
@@ -27,12 +70,30 @@
 			"type": "shell",
 			"command": "docker compose down",
 			"group": "none",
+			"options": {
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
 			"problemMatcher": []
 		},
 		{
 			"label": "Python: Install Requirements",
 			"type": "shell",
 			"command": "${command:python.interpreterPath} -m pip install -r src/requirements.txt",
+			"options": {
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
 			"problemMatcher": []
 		},
 		{
@@ -40,12 +101,30 @@
 			"type": "shell",
 			"command": "${command:python.interpreterPath} -m pytest src/tests",
 			"group": "test",
+			"options": {
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
 			"problemMatcher": []
 		},
 		{
 			"label": "Python: Lint",
 			"type": "shell",
 			"command": "${command:python.interpreterPath} -m pylint src",
+			"options": {
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
 			"problemMatcher": [
 				"$pylint"
 			]
@@ -54,6 +133,15 @@
 			"label": "Python: Typecheck",
 			"type": "shell",
 			"command": "${command:python.interpreterPath} -m mypy src",
+			"options": {
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
 			"problemMatcher": [
 				"$mypy"
 			]
@@ -61,7 +149,77 @@
 		{
 			"label": "Cleanup old files",
 			"type": "shell",
-			"command": "rm -rf src/templates src/.nicegui src/test_output.py"
+			"command": "if exist src\\templates rd /s /q src\\templates && if exist src\\.nicegui rd /s /q src\\.nicegui && if exist src\\test_output.py del /q src\\test_output.py",
+			"options": {
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			}
+		},
+		{
+			"label": "Prep: Local Dev (DB + Web)",
+			"dependsOn": [
+				"Docker: DB Up",
+				"Vite: Dev (web)"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "Vite: Dev (web)",
+			"type": "shell",
+			"command": "npm run dev",
+			"options": {
+				"cwd": "${workspaceFolder}/web",
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
+			"isBackground": true,
+			"problemMatcher": [
+				{
+					"owner": "typescript",
+					"fileLocation": "relative",
+					"pattern": {
+						"regexp": "^([^\\s].*)\\((\\d+|\\d+,\\d+|\\d+,\\d+,\\d+,\\d+)\\):\\s+(error|warning|info)\\s+(TS\\d+)\\s*:\\s*(.*)$",
+						"file": 1,
+						"location": 2,
+						"severity": 3,
+						"code": 4,
+						"message": 5
+					},
+					"background": {
+						"activeOnStart": true,
+						"beginsPattern": "^\\s*VITE v",
+						"endsPattern": "ready in \\d+ ms$"
+					}
+				}
+			]
+		},
+		{
+			"label": "Vite: Dev (web) cmd fallback",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev"
+			],
+			"isBackground": true,
+			"group": "none"
+		},
+		{
+			"label": "Vite: Dev (web) cmd fallback 2",
+			"type": "shell",
+			"command": "cd web && npm run dev",
+			"isBackground": true,
+			"group": "none"
 		}
 	]
 }
