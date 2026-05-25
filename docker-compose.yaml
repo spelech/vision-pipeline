@@ -8,6 +8,8 @@ services:
       - POSTGRES_DB=${DB_NAME:-vision_pipeline}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     networks:
       - default
     restart: unless-stopped
