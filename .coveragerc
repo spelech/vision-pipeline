@@ -1,0 +1,12 @@
+[run]
+branch = True
+source =
+    src
+omit =
+    src/tests/*
+
+[report]
+show_missing = True
+skip_covered = False
+omit =
+    src/tests/*

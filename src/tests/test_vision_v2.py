@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from services.homebox import HomeboxService
 from services.mealie import MealieService
 
@@ -8,7 +8,7 @@ from services.mealie import MealieService
 async def test_homebox_execution():
     """Test Homebox service execution flow."""
     service = HomeboxService()
-    service.api_key = "test_key"
+    service._cached_token = "test-token"
     
     data = {
         "product_name": "Test Item",
@@ -17,16 +17,19 @@ async def test_homebox_execution():
         "description": "A test description"
     }
 
-    with patch("requests.post") as mock_post, \
+    with patch.object(service, "_get_headers_async", AsyncMock(return_value={"Authorization": "Bearer test-token"})), \
+         patch("requests.post") as mock_post, \
          patch("requests.put") as mock_put, \
-         patch.object(service, "find_or_create_location", return_value="loc_123"):
+         patch.object(service, "find_or_create_location_async", AsyncMock(return_value="loc_123")):
         
         # Mock item creation
         mock_post.return_value.status_code = 201
         mock_post.return_value.json.return_value = {"id": "item_abc"}
+        mock_post.return_value.raise_for_status.return_value = None
         
         # Mock update
         mock_put.return_value.status_code = 200
+        mock_put.return_value.raise_for_status.return_value = None
         
         result = await service.execute(data)
         

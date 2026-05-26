@@ -18,9 +18,11 @@ async def test_mealie_execution_new_recipe():
         # Mock creating recipe
         mock_post.return_value.status_code = 201
         mock_post.return_value.json.return_value = {"id": "recipe-id-123"}
+        mock_post.return_value.raise_for_status.return_value = None
         
         # Mock updating recipe with data
         mock_put.return_value.status_code = 200
+        mock_put.return_value.raise_for_status.return_value = None
 
         result = await service.execute(data)
         
@@ -53,3 +55,25 @@ async def test_mealie_pre_enrichment():
         res = await service.get_pre_enrichment({"product_name": "Found Recipe"})
         assert "existing_recipes" in res
         assert res["existing_recipes"][0]["id"] == "recipe-id-123"
+
+
+def test_mealie_get_payload():
+    service = MealieService()
+
+    payload = service.get_payload(
+        {
+            "product_name": "Tomato Soup",
+            "description": "Simple soup",
+            "recipe_ingredients_raw": "2 tomatoes\n1 tsp salt\n",
+            "recipe_instructions_raw": "Blend\nSimmer\n",
+            "yield": "2 servings",
+        }
+    )
+
+    assert payload == {
+        "name": "Tomato Soup",
+        "description": "Simple soup",
+        "recipeIngredients": [{"note": "2 tomatoes"}, {"note": "1 tsp salt"}],
+        "recipeInstructions": [{"text": "Blend"}, {"text": "Simmer"}],
+        "yield": "2 servings",
+    }
