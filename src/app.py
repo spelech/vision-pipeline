@@ -7,10 +7,11 @@ import logging
 import asyncio
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, Depends, APIRouter
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, Depends, APIRouter, HTTPException
+from fastapi.responses import JSONResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from PIL import Image, ImageOps
@@ -726,9 +727,21 @@ async def bulk_approve(data: dict, db: AsyncSession = Depends(get_db)):
 
 app.include_router(api_router)
 
-@app.get("/")
-async def root():
-    return RedirectResponse(url="/docs")
+# Serve built frontend if available
+UI_DIR = os.path.join(os.path.dirname(__file__), "..", "web", "dist")
+
+@app.exception_handler(StarletteHTTPException)
+async def spa_fallback(request, exc):
+    if exc.status_code == 404 and os.path.exists(os.path.join(UI_DIR, "index.html")):
+        return FileResponse(os.path.join(UI_DIR, "index.html"))
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+if os.path.exists(UI_DIR):
+    app.mount("/", StaticFiles(directory=UI_DIR, html=True), name="ui")
+else:
+    @app.get("/")
+    async def root():
+        return RedirectResponse(url="/docs")
 
 if __name__ == "__main__":
     import uvicorn

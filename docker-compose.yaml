@@ -30,6 +30,7 @@ services:
       - ./src:/app
       - ./config:/app/config
       - ./data:/app/data
+      - ./web:/web
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://vision:vision_pass@db:5432/vision_pipeline}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
