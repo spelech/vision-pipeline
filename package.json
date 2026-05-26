@@ -1,13 +1,15 @@
 {
   "name": "vision-pipeline",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "An automated product identification and enrichment system that bridges physical items with digital home services.",
   "main": "index.js",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Use Python pytest or web Vitest directly\"",
+    "test:e2e": "playwright test",
+    "test:e2e:coverage": "node scripts/run-playwright-with-coverage.mjs"
   },
   "repository": {
     "type": "git",

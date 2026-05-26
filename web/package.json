@@ -1,7 +1,7 @@
 {
   "name": "web",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
@@ -9,8 +9,10 @@
     "lint": "eslint .",
     "lint:tests": "eslint --no-config-lookup --config eslint.config.js \"src/**/*.{test,spec}.{ts,tsx}\"",
     "test": "vitest",
+    "test:coverage": "vitest run --coverage.enabled",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
+    "test:e2e:coverage": "node ../scripts/run-playwright-with-coverage.mjs web",
     "preview": "vite preview"
   },
   "dependencies": {
