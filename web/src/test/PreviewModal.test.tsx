@@ -17,14 +17,14 @@ describe('PreviewModal', () => {
     payload: { test_key: 'test_value' }
   };
 
-  it('renders correctly and shows payload', () => {
+  it('Feature: preview-modal-render | renders correctly and shows payload', () => {
     render(<PreviewModal preview={mockPreview} onClose={vi.fn()} onConfirm={vi.fn()} />);
     expect(screen.getByText('Pre-flight Review')).toBeInTheDocument();
     expect(screen.getByText('homebox')).toBeInTheDocument();
     expect(screen.getByDisplayValue(/test_key/)).toBeInTheDocument();
   });
 
-  it('calls onClose when close button clicked', () => {
+  it('Feature: preview-modal-close | calls onClose when close button clicked', () => {
     const handleClose = vi.fn();
     render(<PreviewModal preview={mockPreview} onClose={handleClose} onConfirm={vi.fn()} />);
     
@@ -32,7 +32,7 @@ describe('PreviewModal', () => {
     expect(handleClose).toHaveBeenCalled();
   });
 
-  it('allows payload editing and confirms', () => {
+  it('Feature: preview-modal-confirm | allows payload editing and confirms', () => {
     const handleConfirm = vi.fn();
     render(<PreviewModal preview={mockPreview} onClose={vi.fn()} onConfirm={handleConfirm} />);
     

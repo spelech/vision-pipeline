@@ -16,7 +16,7 @@ describe('AssetCard', () => {
     selected_services: ['homebox']
   };
 
-  it('renders collapsed state correctly', () => {
+  it('Feature: asset-card-collapsed | renders collapsed state correctly', () => {
     render(<AssetCard item={mockItem} onPreview={vi.fn()} onExecute={vi.fn()} />);
     expect(screen.getByText('Test Food')).toBeInTheDocument();
     expect(screen.getByText('test-image.jpg')).toBeInTheDocument();
@@ -26,7 +26,7 @@ describe('AssetCard', () => {
     expect(screen.queryByLabelText('Brand')).not.toBeInTheDocument();
   });
 
-  it('expands when clicking the chevron', () => {
+  it('Feature: asset-card-expand | expands when clicking the chevron', () => {
     render(<AssetCard item={mockItem} onPreview={vi.fn()} onExecute={vi.fn()} />);
     const expandBtn = screen.getByLabelText('Expand Asset');
     fireEvent.click(expandBtn);
@@ -36,7 +36,7 @@ describe('AssetCard', () => {
     expect(screen.getByDisplayValue('desc')).toBeInTheDocument();
   });
 
-  it('updates edit data and fires onExecute with overrides', () => {
+  it('Feature: asset-card-execute | updates edit data and fires onExecute with overrides', () => {
     const handleExecute = vi.fn();
     render(<AssetCard item={mockItem} onPreview={vi.fn()} onExecute={handleExecute} />);
     
@@ -53,7 +53,7 @@ describe('AssetCard', () => {
     );
   });
 
-  it('toggles selection', () => {
+  it('Feature: asset-card-select | toggles selection', () => {
     const handleToggleSelect = vi.fn();
     const { container } = render(<AssetCard item={mockItem} isSelected={false} onToggleSelect={handleToggleSelect} onPreview={vi.fn()} onExecute={vi.fn()} />);
     
@@ -62,5 +62,35 @@ describe('AssetCard', () => {
     const toggleDiv = container.querySelector('.cursor-pointer');
     fireEvent.click(toggleDiv!);
     expect(handleToggleSelect).toHaveBeenCalled();
+  });
+
+  it('Feature: asset-card-preview | uses first selected service for preview', () => {
+    const handlePreview = vi.fn();
+    render(<AssetCard item={mockItem} onPreview={handlePreview} onExecute={vi.fn()} />);
+
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByText(/Preview Payload/i));
+
+    expect(handlePreview).toHaveBeenCalledWith('homebox', expect.objectContaining({ product_name: 'Test Food' }));
+  });
+
+  it('Feature: asset-card-technical-toggle | shows technical payload JSON when toggled', () => {
+    render(<AssetCard item={mockItem} onPreview={vi.fn()} onExecute={vi.fn()} />);
+
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByText(/Show Technical Data/i));
+
+    expect(screen.getByText(/"llm_output"/i)).toBeInTheDocument();
+  });
+
+  it('Feature: asset-card-service-empty | disables actions when no services are selected', () => {
+    render(<AssetCard item={mockItem} onPreview={vi.fn()} onExecute={vi.fn()} />);
+
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+
+    fireEvent.click(screen.getByRole('button', { name: /Homebox/i }));
+
+    expect(screen.getByRole('button', { name: /Preview Payload/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Execute & Sync/i })).toBeDisabled();
   });
 });

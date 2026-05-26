@@ -1,12 +1,14 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Settings } from '../components/Settings';
+import { normalizePromptTemplates, derivePromptTemplatesFromPipelines } from '../components/settingsUtils';
 
 describe('Settings', () => {
   beforeEach(() => {
     globalThis.fetch = vi.fn().mockImplementation((url) => {
       if (url === '/api/config') {
         return Promise.resolve({
+          ok: true,
           json: () => Promise.resolve({
             secrets_status: { OPENROUTER_API_KEY: true },
             model_favorites: ['qwen/qwen2.5-vl-72b-instruct'],
@@ -16,11 +18,26 @@ describe('Settings', () => {
           })
         });
       }
-      return Promise.resolve({ json: () => Promise.resolve({}) });
+      if (url === '/api/models') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            success: true,
+            models: [{ id: 'qwen/qwen2.5-vl-72b-instruct' }],
+          }),
+        });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true, pipelines: [] }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
   });
 
-  it('renders correctly and loads data', async () => {
+  it('Feature: settings-load | renders correctly and loads data', async () => {
     render(<Settings />);
     expect(await screen.findByText('System Settings')).toBeInTheDocument();
     
@@ -28,13 +45,10 @@ describe('Settings', () => {
     expect(await screen.findByText('qwen2.5-vl-72b-instruct')).toBeInTheDocument();
     
     // Wait for prompts to load
-    await waitFor(() => {
-      const inputs = screen.getAllByRole('textbox');
-      expect(inputs.some(i => (i as HTMLInputElement).value === 'Default')).toBe(true);
-    });
+    expect(await screen.findByDisplayValue('Default')).toBeInTheDocument();
   });
 
-  it('allows adding a new model', async () => {
+  it('Feature: settings-model-add | allows adding a new model', async () => {
     render(<Settings />);
     await screen.findByText('System Settings');
 
@@ -48,13 +62,14 @@ describe('Settings', () => {
     expect(await screen.findByText('model')).toBeInTheDocument();
   });
 
-  it('allows saving settings', async () => {
+  it('Feature: settings-save | allows saving settings', async () => {
     globalThis.fetch = vi.fn().mockImplementation((url, opts) => {
       if (url === '/api/config' && opts?.method === 'POST') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       }
       if (url === '/api/config') {
         return Promise.resolve({
+          ok: true,
           json: () => Promise.resolve({
             secrets_status: {},
             model_favorites: [],
@@ -64,7 +79,13 @@ describe('Settings', () => {
           })
         });
       }
-      return Promise.resolve({ json: () => Promise.resolve({}) });
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, models: [] }) });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, pipelines: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
 
     render(<Settings />);
@@ -84,5 +105,215 @@ describe('Settings', () => {
     expect(spyAlert).toHaveBeenCalledWith('Settings saved successfully!');
     // cleanup
     spyAlert.mockRestore();
+  });
+
+  it('Feature: settings-derived-prompts | derives prompt templates from pipeline schema when config templates are absent', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/config') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            secrets_status: {},
+            model_favorites: [],
+            starred_models: [],
+            image_optimization: { max_dimension: 1024, quality: 85 },
+            prompt_templates: []
+          })
+        });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, models: [] }) });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            success: true,
+            pipelines: [
+              {
+                id: 'default',
+                name: 'Default Vision Pipeline',
+                schema: {
+                  vision_prompt: { default: 'vision instructions' },
+                  refine_prompt: { default: 'refine instructions' }
+                }
+              }
+            ]
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<Settings />);
+    expect(await screen.findByDisplayValue(/Default Vision Pipeline vision prompt/i)).toBeInTheDocument();
+    expect(await screen.findByDisplayValue(/Default Vision Pipeline refine prompt/i)).toBeInTheDocument();
+  });
+
+  it('Feature: settings-star-remove | toggles star and removes model from registry', async () => {
+    render(<Settings />);
+    await screen.findByText('System Settings');
+
+    const emptyStar = screen.getByText('☆');
+    fireEvent.click(emptyStar);
+    expect(screen.getByText('★')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('✕'));
+    expect(screen.queryByText('qwen2.5-vl-72b-instruct')).not.toBeInTheDocument();
+  });
+
+  it('Feature: settings-save-error | shows error alert when save fails', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url, opts) => {
+      if (url === '/api/config' && opts?.method === 'POST') {
+        return Promise.reject(new Error('save failed'));
+      }
+      if (url === '/api/config') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            secrets_status: {},
+            model_favorites: [],
+            starred_models: [],
+            image_optimization: { max_dimension: 1024, quality: 85 },
+            prompt_templates: []
+          })
+        });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, models: [] }) });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, pipelines: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    render(<Settings />);
+    await screen.findByText('System Settings');
+
+    fireEvent.click(screen.getByText('Apply Full Configuration'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith('Failed to save settings.');
+    });
+    alertSpy.mockRestore();
+  });
+
+  it('Feature: settings-save-without-templates | omits prompt_templates when none are configured', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url, opts) => {
+      if (url === '/api/config' && opts?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      if (url === '/api/config') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            secrets_status: {},
+            model_favorites: [],
+            starred_models: [],
+            image_optimization: { max_dimension: 1024, quality: 85 },
+            prompt_templates: []
+          })
+        });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: false, models: [] }) });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, pipelines: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    render(<Settings />);
+    await screen.findByText('System Settings');
+
+    fireEvent.click(screen.getByText('Apply Full Configuration'));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/config', expect.objectContaining({ method: 'POST' }));
+    });
+
+    const postCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0] === '/api/config' && call[1]?.method === 'POST'
+    );
+    expect(postCall).toBeDefined();
+
+    const payload = JSON.parse((postCall?.[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(payload, 'prompt_templates')).toBe(false);
+
+    alertSpy.mockRestore();
+  });
+
+  it('Feature: settings-template-format-add | formats and creates prompt templates from the editor', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    render(<Settings />);
+    await screen.findByText('System Settings');
+
+    const promptTextAreas = screen.getAllByRole('textbox').filter((el) => el.tagName.toLowerCase() === 'textarea');
+    fireEvent.change(promptTextAreas[0], { target: { value: '  Keep this trimmed  ' } });
+    fireEvent.click(screen.getByText('Format'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith('Formatted template!');
+    });
+    expect((promptTextAreas[0] as HTMLTextAreaElement).value).toBe('Keep this trimmed');
+
+    fireEvent.click(screen.getByText('Delete'));
+    fireEvent.click(screen.getByText('Initialize Template'));
+
+    expect(await screen.findByDisplayValue('NEW TEMPLATE')).toBeInTheDocument();
+    alertSpy.mockRestore();
+  });
+
+  it('Feature: settings-template-normalize | normalizes array/object and handles invalid template values', () => {
+    expect(normalizePromptTemplates([{ id: '1', name: 'A', prompt: 'P' }])).toEqual([{ id: '1', name: 'A', prompt: 'P' }]);
+
+    expect(normalizePromptTemplates({
+      my_prompt: 'Use this prompt',
+      secondary_prompt: 'Second',
+    })).toEqual([
+      { id: 'my_prompt', name: 'MY PROMPT', prompt: 'Use this prompt' },
+      { id: 'secondary_prompt', name: 'SECONDARY PROMPT', prompt: 'Second' },
+    ]);
+
+    expect(normalizePromptTemplates('invalid')).toEqual([]);
+    expect(normalizePromptTemplates(null)).toEqual([]);
+  });
+
+  it('Feature: settings-template-derive | derives prompt templates from pipeline schema prompt keys only', () => {
+    const derived = derivePromptTemplatesFromPipelines([
+      {
+        id: 'default',
+        name: 'Default Vision Pipeline',
+        schema: {
+          vision_prompt: { default: 'vision text' },
+          refine_prompt: { default: 'refine text' },
+          vision_model: { default: 'qwen/x' },
+        },
+      },
+      {
+        id: 'secondary',
+        name: 'Secondary',
+        schema: {},
+      },
+    ]);
+
+    expect(derived).toEqual([
+      {
+        id: 'default-vision_prompt',
+        name: 'Default Vision Pipeline vision prompt',
+        prompt: 'vision text',
+      },
+      {
+        id: 'default-refine_prompt',
+        name: 'Default Vision Pipeline refine prompt',
+        prompt: 'refine text',
+      },
+    ]);
+
+    expect(derivePromptTemplatesFromPipelines(undefined)).toEqual([]);
   });
 });
