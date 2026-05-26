@@ -685,6 +685,15 @@ async def get_queue(status: str = "pending", db: AsyncSession = Depends(get_db))
     items = result.scalars().all()
     return {"items": items}
 
+@api_router.get("/items/{item_id}")
+async def get_item(item_id: int, db: AsyncSession = Depends(get_db)):
+    stmt = select(Item).where(Item.id == item_id)
+    result = await db.execute(stmt)
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return item
+
 @api_router.post("/items/{item_id}/update")
 async def update_item_data(item_id: int, data: dict, db: AsyncSession = Depends(get_db)):
     query = update(Item).where(Item.id == item_id).values(**data)

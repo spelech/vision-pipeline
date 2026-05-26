@@ -21,13 +21,14 @@ export default function App() {
   const [queue, setQueue] = useState<Asset[]>([]);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('review');
+  const [activeTab, setActiveTab] = useState('identify');
   const [queueStatus, setQueueStatus] = useState<'all' | 'pending' | 'approved' | 'processing'>('all');
   const [previewItem, setPreviewItem] = useState<{item: Asset, service: string, payload: Record<string, unknown>} | null>(null);
   const [pipelines, setPipelines] = useState<PipelineSummary[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState('default');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState('');
+  const [lastIdentifyResult, setLastIdentifyResult] = useState<Asset | null>(null);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -206,7 +207,20 @@ export default function App() {
           body: formData,
         });
         if (resp.ok) {
+          const resultData = await resp.json();
           showToast('Image uploaded for analysis', 'success');
+          
+          if (resultData.item_id) {
+            try {
+              const itemResp = await fetch(`/api/items/${resultData.item_id}`);
+              if (itemResp.ok) {
+                const item = await itemResp.json();
+                setLastIdentifyResult(item);
+              }
+            } catch (err) {
+              console.error('Failed to fetch item details', err);
+            }
+          }
           await fetchQueue(queueStatus);
         } else {
           showToast('Upload failed', 'error');
@@ -532,6 +546,29 @@ export default function App() {
                     accept="image/*"
                   />
                 </div>
+
+                {lastIdentifyResult && (
+                  <div className="space-y-6 pt-8 border-t border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+                    <div className="flex items-center justify-between">
+                      <h3 className="label-apple">Last Identification Result</h3>
+                      <button 
+                        onClick={() => setLastIdentifyResult(null)}
+                        className="text-[10px] font-black uppercase tracking-widest text-white/20 hover:text-white/60 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <AssetCard
+                      item={lastIdentifyResult}
+                      isSelected={false}
+                      onPreview={(svc, overrides) => handlePreview(lastIdentifyResult, svc, overrides)}
+                      onExecute={(svcs, overrides) => executeItem(lastIdentifyResult, svcs, overrides)}
+                    />
+                    <p className="text-[10px] text-center text-white/20 font-medium">
+                      This item is also available in the <button onClick={() => setActiveTab('review')} className="text-blue-500/50 hover:text-blue-500 transition-colors font-black uppercase">Review Queue</button>
+                    </p>
+                  </div>
+                )}
               </div>
             ) : activeTab === 'batch' ? (
               <div className="space-y-8">
