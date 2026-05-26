@@ -201,9 +201,15 @@ export function Settings() {
 
   return (
     <div className="space-y-12 pb-32">
-      <header>
-        <h2 className="text-4xl font-extrabold tracking-tight mb-2">System Settings</h2>
-        <p className="text-white/40 font-medium italic">Configure external APIs, vision parameters, models, and prompts.</p>
+      <header className="flex justify-between items-end">
+        <div>
+          <h2 className="text-4xl font-extrabold tracking-tight mb-2">System Settings</h2>
+          <p className="text-white/40 font-medium italic">Configure external APIs, vision parameters, models, and prompts.</p>
+        </div>
+        <div className="text-right">
+          <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/20">Version</span>
+          <p className="text-lg font-black tracking-tighter text-white/40">3.3.0</p>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
