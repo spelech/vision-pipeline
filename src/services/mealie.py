@@ -1,7 +1,9 @@
-import os
-import requests
+import asyncio
 import logging
+import os
 from typing import Any, Dict, Optional
+
+import requests
 from .base import BaseService
 
 logger = logging.getLogger(__name__)
@@ -20,6 +22,10 @@ class MealieService(BaseService):
             return None
         return {"Authorization": f"Bearer {self.api_key}"}
 
+    async def _request(self, method: str, endpoint: str, **kwargs: Any) -> requests.Response:
+        request_method = getattr(requests, method.lower())
+        return await asyncio.to_thread(request_method, f"{self.api_url}{endpoint}", **kwargs)
+
     async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
         headers = self._get_headers()
         if not headers:
@@ -30,7 +36,7 @@ class MealieService(BaseService):
             
             # Check if exists
             if recipe_id:
-                check = requests.get(f"{self.api_url}/recipes/{recipe_id}", headers=headers, timeout=5)
+                check = await self._request("GET", f"/recipes/{recipe_id}", headers=headers, timeout=5)
                 if check.status_code == 404:
                     recipe_id = None
 
@@ -51,10 +57,10 @@ class MealieService(BaseService):
             }
 
             if recipe_id:
-                resp = requests.put(f"{self.api_url}/recipes/{recipe_id}", headers=headers, json=recipe_payload, timeout=10)
+                resp = await self._request("PUT", f"/recipes/{recipe_id}", headers=headers, json=recipe_payload, timeout=10)
                 resp.raise_for_status()
             else:
-                resp = requests.post(f"{self.api_url}/recipes", headers=headers, json=recipe_payload, timeout=10)
+                resp = await self._request("POST", "/recipes", headers=headers, json=recipe_payload, timeout=10)
                 resp.raise_for_status()
                 recipe = resp.json()
                 recipe_id = recipe.get('id')
@@ -76,7 +82,7 @@ class MealieService(BaseService):
         name = data.get('product_name') or data.get('name')
         if not name: return {}
         try:
-            resp = requests.get(f"{self.api_url}/recipes", headers=headers, params={"query": name}, timeout=5)
+            resp = await self._request("GET", "/recipes", headers=headers, params={"query": name}, timeout=5)
             recipes = resp.json().get('items', []) if resp.status_code == 200 else []
             return {"existing_recipes": recipes}
         except Exception:

@@ -15,4 +15,5 @@ cryptography
 jinja2
 pytest
 pytest-asyncio
+pytest-cov
 httpx

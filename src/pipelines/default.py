@@ -1,5 +1,3 @@
-import os
-import json
 import logging
 from .base import BasePipeline
 from .nodes import scan_barcode, vision_identify, web_search, data_refine

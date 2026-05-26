@@ -1,7 +1,9 @@
-import os
-import requests
+import asyncio
 import logging
+import os
 from typing import Any, Dict, Optional
+
+import requests
 from .base import BaseService
 
 logger = logging.getLogger(__name__)
@@ -38,6 +40,9 @@ class HomeboxService(BaseService):
                 
         return None
 
+    async def _get_headers_async(self) -> Optional[Dict[str, str]]:
+        return await asyncio.to_thread(self._get_headers)
+
     def find_or_create_location(self, name: str) -> Optional[str]:
         headers = self._get_headers()
         if not headers: return None
@@ -56,8 +61,15 @@ class HomeboxService(BaseService):
             logger.error(f"Homebox location error: {e}")
             return None
 
+    async def find_or_create_location_async(self, name: str) -> Optional[str]:
+        return await asyncio.to_thread(self.find_or_create_location, name)
+
+    async def _request(self, method: str, endpoint: str, **kwargs: Any) -> requests.Response:
+        request_method = getattr(requests, method.lower())
+        return await asyncio.to_thread(request_method, f"{self.api_url}{endpoint}", **kwargs)
+
     async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
-        headers = self._get_headers()
+        headers = await self._get_headers_async()
         if not headers:
             return {"success": False, "error": "Homebox credentials are missing or invalid"}
 
@@ -66,13 +78,13 @@ class HomeboxService(BaseService):
             
             # Check if item exists if external_id provided
             if item_id:
-                check = requests.get(f"{self.api_url}/items/{item_id}", headers=headers, timeout=5)
+                check = await self._request("GET", f"/items/{item_id}", headers=headers, timeout=5)
                 if check.status_code == 404:
                     item_id = None # Force recreation
             
             location_id = None
             if data.get('location'):
-                location_id = self.find_or_create_location(data['location'])
+                location_id = await self.find_or_create_location_async(data['location'])
 
             base_payload = {
                 "name": data.get('product_name') or data.get('name'),
@@ -94,12 +106,12 @@ class HomeboxService(BaseService):
 
             if item_id:
                 # Update existing
-                resp = requests.put(f"{self.api_url}/items/{item_id}", headers=headers, json=base_payload, timeout=5)
+                resp = await self._request("PUT", f"/items/{item_id}", headers=headers, json=base_payload, timeout=5)
                 resp.raise_for_status()
             else:
                 # Create new
                 # Step 1: Create basic
-                resp = requests.post(f"{self.api_url}/items", headers=headers, json={
+                resp = await self._request("POST", "/items", headers=headers, json={
                     "name": base_payload["name"],
                     "quantity": base_payload["quantity"],
                     "description": base_payload["description"],
@@ -110,14 +122,21 @@ class HomeboxService(BaseService):
                 item_id = item['id']
                 
                 # Step 2: Update extended
-                requests.put(f"{self.api_url}/items/{item_id}", headers=headers, json=base_payload, timeout=5)
+                await self._request("PUT", f"/items/{item_id}", headers=headers, json=base_payload, timeout=5)
 
             # Upload attachment if image_path exists
             if image_path and os.path.exists(f"data/uploads/{image_path}"):
                 with open(f"data/uploads/{image_path}", "rb") as f:
                     files = {"file": (image_path, f, "image/jpeg")}
                     attach_data = {"type": "photo", "name": "Vision Capture"}
-                    requests.post(f"{self.api_url}/items/{item_id}/attachments", headers=headers, files=files, data=attach_data, timeout=10)
+                    await self._request(
+                        "POST",
+                        f"/items/{item_id}/attachments",
+                        headers=headers,
+                        files=files,
+                        data=attach_data,
+                        timeout=10,
+                    )
 
             return {
                 "success": True, 
@@ -129,12 +148,12 @@ class HomeboxService(BaseService):
             return {"success": False, "error": str(e)}
 
     async def get_pre_enrichment(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        headers = self._get_headers()
+        headers = await self._get_headers_async()
         if not headers: return {}
         name = data.get('product_name') or data.get('name')
         if not name: return {}
         try:
-            resp = requests.get(f"{self.api_url}/items", headers=headers, params={"q": name}, timeout=5)
+            resp = await self._request("GET", "/items", headers=headers, params={"q": name}, timeout=5)
             resp.raise_for_status()
             return {"existing_items": resp.json().get('items', [])}
         except Exception:
