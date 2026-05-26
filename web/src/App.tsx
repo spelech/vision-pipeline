@@ -28,6 +28,7 @@ export default function App() {
   const [selectedPipelineId, setSelectedPipelineId] = useState('default');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState('');
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const batchInputRef = useRef<HTMLInputElement>(null);
@@ -136,11 +137,15 @@ export default function App() {
         body: JSON.stringify({ item_ids: selectedItems })
       });
       if (resp.ok) {
+        showToast(`Approved ${selectedItems.length} items`, 'success');
         setQueue(q => q.filter(i => !selectedItems.includes(i.id)));
         setSelectedItems([]);
+      } else {
+        showToast('Bulk approval failed', 'error');
       }
     } catch (e) {
       console.error('Bulk approve failed', e);
+      showToast('Error during bulk approval', 'error');
     } finally {
       setLoading(false);
     }
@@ -160,6 +165,7 @@ export default function App() {
 
   const executeItem = async (item: Asset, services: string[], overrides?: Record<string, unknown>) => {
     try {
+      showToast('Syncing to services...', 'info');
       const resp = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -170,11 +176,15 @@ export default function App() {
         })
       });
       if (resp.ok) {
+        showToast('Successfully synced!', 'success');
         setQueue(q => q.filter(i => i.id !== item.id));
         setPreviewItem(null);
+      } else {
+        showToast('Sync failed', 'error');
       }
     } catch (e) {
       console.error('Execution failed', e);
+      showToast('Error executing sync', 'error');
     }
   };
 
@@ -182,6 +192,7 @@ export default function App() {
     if (files.length === 0) return;
 
     setLoading(true);
+    showToast(files.length === 1 ? 'Uploading image...' : `Uploading ${files.length} images...`, 'info');
     
     try {
       if (files.length === 1) {
@@ -195,7 +206,10 @@ export default function App() {
           body: formData,
         });
         if (resp.ok) {
+          showToast('Image uploaded for analysis', 'success');
           await fetchQueue(queueStatus);
+        } else {
+          showToast('Upload failed', 'error');
         }
       } else {
         const formData = new FormData();
@@ -207,11 +221,15 @@ export default function App() {
           body: formData,
         });
         if (resp.ok) {
+          showToast(`Batch of ${files.length} images uploaded!`, 'success');
           await fetchQueue(queueStatus);
+        } else {
+          showToast('Batch upload failed', 'error');
         }
       }
     } catch (e) {
       console.error('Upload failed', e);
+      showToast('Error during upload', 'error');
     } finally {
       setLoading(false);
     }
@@ -251,6 +269,11 @@ export default function App() {
       setCameraError('Camera permission was denied or is unavailable. Falling back to file upload.');
       cameraInputRef.current?.click();
     }
+  };
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
   };
 
   const capturePhoto = async () => {
@@ -610,6 +633,19 @@ export default function App() {
           onClose={() => setPreviewItem(null)} 
           onConfirm={(overrides) => executeItem(previewItem.item, [previewItem.service], overrides)}
         />
+      )}
+
+      {/* Toast Notifications */}
+      {toast && (
+        <div className="fixed bottom-32 left-1/2 -translate-x-1/2 z-[2000] animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className={`px-8 py-4 rounded-[2rem] shadow-2xl flex items-center gap-4 border backdrop-blur-3xl ${
+            toast.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-200' : 
+            toast.type === 'success' ? 'bg-green-500/20 border-green-500/50 text-green-200' :
+            'bg-blue-500/20 border-blue-500/50 text-blue-100'
+          }`}>
+            <span className="text-sm font-black uppercase tracking-widest">{toast.message}</span>
+          </div>
+        </div>
       )}
     </div>
   );
