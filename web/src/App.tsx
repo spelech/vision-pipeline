@@ -504,28 +504,28 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => void openCamera()}
-                    className="glass rounded-[2rem] p-8 flex items-center justify-center gap-4 border border-white/10 hover:border-blue-500/30 transition-all"
+                    className="glass rounded-[2rem] p-6 sm:p-8 flex items-center justify-center gap-4 border border-white/10 hover:border-blue-500/30 transition-all min-h-[120px] sm:min-h-0"
                   >
-                    <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/40">
-                      <Camera className="w-6 h-6 text-white" />
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/40 shrink-0">
+                      <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </div>
                     <div className="text-left">
                       <p className="text-sm font-black uppercase tracking-widest">Open Camera</p>
-                      <p className="text-[10px] text-white/50">Requests camera access when supported, otherwise falls back to file upload</p>
+                      <p className="text-[10px] text-white/50 leading-tight">Requests camera access or falls back to file upload</p>
                     </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => galleryInputRef.current?.click()}
-                    className="glass rounded-[2rem] p-8 flex items-center justify-center gap-4 border border-white/10 hover:border-blue-500/30 transition-all"
+                    className="glass rounded-[2rem] p-6 sm:p-8 flex items-center justify-center gap-4 border border-white/10 hover:border-blue-500/30 transition-all min-h-[120px] sm:min-h-0"
                   >
-                    <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                      <Camera className="w-6 h-6 text-white" />
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/10 rounded-2xl flex items-center justify-center shrink-0">
+                      <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </div>
                     <div className="text-left">
                       <p className="text-sm font-black uppercase tracking-widest">Upload Files</p>
-                      <p className="text-[10px] text-white/50">Choose one or many images from gallery/files</p>
+                      <p className="text-[10px] text-white/50 leading-tight">Choose one or many images from gallery/files</p>
                     </div>
                   </button>
 

@@ -362,7 +362,7 @@ export function Settings() {
                         return n;
                       });
                     }}
-                    className="w-full h-[24rem] bg-white/5 border border-white/10 rounded-[2rem] p-8 text-sm font-mono text-white/80 focus:outline-none focus:border-blue-500/40 leading-relaxed shadow-inner"
+                    className="w-full h-[18rem] sm:h-[24rem] bg-white/5 border border-white/10 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-8 text-[12px] sm:text-sm font-mono text-white/80 focus:outline-none focus:border-blue-500/40 leading-relaxed shadow-inner"
                     spellCheck={false}
                   />
               </div>

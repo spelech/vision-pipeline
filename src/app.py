@@ -754,5 +754,7 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8501)
+    import os
+    port = int(os.getenv("APP_PORT", 8460))
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
