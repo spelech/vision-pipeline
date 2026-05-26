@@ -215,7 +215,7 @@ async def lifespan(app: FastAPI):
     yield
 
 # --- Setup ---
-app = FastAPI(lifespan=lifespan, title="Vision Pipeline API", version="3.3.1")
+app = FastAPI(lifespan=lifespan, title="Vision Pipeline API", version="3.4.0")
 api_router = APIRouter(prefix="/api")
 
 # Registry of available services

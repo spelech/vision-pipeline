@@ -160,7 +160,7 @@ export function Settings() {
         </div>
         <div className="text-right">
           <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/20">Version</span>
-          <p className="text-lg font-black tracking-tighter text-white/40">3.3.1</p>
+          <p className="text-lg font-black tracking-tighter text-white/40">3.4.0</p>
         </div>
       </header>
 
