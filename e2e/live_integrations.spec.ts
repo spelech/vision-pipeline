@@ -1,6 +1,8 @@
-import { test, expect } from '@playwright/test';
+import coverage from '../test-utils/playwrightCoverage';
 import path from 'path';
 require('dotenv').config({ path: '.env.remote' });
+
+const { test, expect } = coverage;
 
 test.describe('Live Integrations E2E', () => {
   test('Complete End-to-End Flow with Mealie and Homebox', async ({ page }) => {

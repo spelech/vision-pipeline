@@ -14,4 +14,9 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
+  webServer: {
+    command: 'cd web && npm run dev -- --port 5175',
+    url: 'http://localhost:5175',
+    reuseExistingServer: !process.env.CI,
+  },
 });

@@ -1,11 +1,13 @@
-import { test, expect } from '@playwright/test';
+import coverage from '../test-utils/playwrightCoverage';
+
+const { test, expect } = coverage;
 
 test.describe('Vision Pipeline Review Flow', () => {
   test.beforeEach(async ({ page }) => {
     page.on('console', msg => console.log(`BROWSER LOG: ${msg.text()}`));
     page.on('pageerror', err => console.log(`BROWSER ERROR: ${err.message}`));
     // Mock the queue API for consistent UI testing
-    await page.route('**/api/queue', async route => {
+    await page.route('**/api/queue**', async route => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -13,14 +15,17 @@ test.describe('Vision Pipeline Review Flow', () => {
           items: [
             {
               id: 'test-item-1',
-              filename: 'raw_9940b71b-4565-4014-8e1c-6fe79ea5febf.jpg',
+              image_path: 'raw_9940b71b-4565-4014-8e1c-6fe79ea5febf.jpg',
               product_type: 'food',
-              edit_data: {
-                product_name: 'Premium Coffee Beans',
-                brand: 'Vibe Cafe',
-                category: 'Beverages',
-                description: 'Freshly roasted beans for a perfect vibe.'
+              ai_output: {
+                llm_output: {
+                  product_name: 'Premium Coffee Beans',
+                  brand: 'Vibe Cafe',
+                  category: 'Beverages',
+                  description: 'Freshly roasted beans for a perfect vibe.'
+                }
               },
+              user_overrides: {},
               selected_services: ['homebox']
             }
           ]
@@ -29,6 +34,8 @@ test.describe('Vision Pipeline Review Flow', () => {
     });
 
     await page.goto('/');
+    await page.getByRole('button', { name: 'Open menu' }).click();
+    await page.getByRole('button', { name: 'review', exact: true }).click();
   });
 
   test('should display assets in the queue', async ({ page }) => {

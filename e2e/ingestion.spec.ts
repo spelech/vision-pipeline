@@ -1,5 +1,7 @@
-import { test, expect } from '@playwright/test';
+import coverage from '../test-utils/playwrightCoverage';
 import path from 'path';
+
+const { test, expect } = coverage;
 
 test.describe('Vision Pipeline E2E', () => {
   test('Complete End-to-End Flow', async ({ page }) => {
