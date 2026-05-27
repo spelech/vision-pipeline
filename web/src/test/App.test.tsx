@@ -471,5 +471,6 @@ describe('Vision Pipeline App', () => {
 
     expect(await screen.findByText(/Bulk approval failed/i)).toBeInTheDocument();
   });
+
 });
 

@@ -93,4 +93,15 @@ describe('AssetCard', () => {
     expect(screen.getByRole('button', { name: /Preview Payload/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Execute & Sync/i })).toBeDisabled();
   });
+
+  it('Feature: asset-card-open-image | opens original upload in new tab from thumbnail', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const { container } = render(<AssetCard item={mockItem} onPreview={vi.fn()} onExecute={vi.fn()} />);
+
+    const imagePanel = container.querySelector('.w-24.h-24.cursor-pointer') as HTMLElement;
+    fireEvent.click(imagePanel);
+
+    expect(openSpy).toHaveBeenCalledWith('/uploads/test-image.jpg', '_blank');
+    openSpy.mockRestore();
+  });
 });
