@@ -9,7 +9,10 @@
   "scripts": {
     "test": "echo \"Use Python pytest or web Vitest directly\"",
     "test:e2e": "playwright test",
-    "test:e2e:coverage": "node scripts/run-playwright-with-coverage.mjs"
+    "test:e2e:coverage": "node scripts/run-playwright-with-coverage.mjs",
+    "coverage:web:check-regression": "node scripts/check-frontend-coverage-regression.mjs",
+    "docs:test-index": "node scripts/update-test-requirements-index.mjs",
+    "docs:test-index:check": "node scripts/update-test-requirements-index.mjs --check"
   },
   "repository": {
     "type": "git",

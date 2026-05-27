@@ -283,3 +283,161 @@ Latest validated backend coverage:
 - Add explicit `Feature:` docstrings to older backend tests in `test_api.py`, `test_homebox.py`, `test_mealie.py`, `test_enrichers.py`, etc., for consistency.
 - Add an automated CI check that fails if new tests are missing feature metadata.
 - Generate this document from a script (parsing test titles/docstrings) to keep it always current.
+
+<!-- AUTO-GENERATED-TEST-INDEX:START -->
+## 9. Auto-Generated Test Index
+Updated by script: scripts/update-test-requirements-index.mjs
+
+### 9.1 Frontend Feature Tests
+- web/src/test/App.test.tsx
+  - identify-shell | renders progress text and header
+  - review-navigation | fetches and displays the queue
+  - review-empty-state | shows empty state when queue is empty
+  - review-filters | changes queue filter from review controls
+  - identify-upload-single | uploads a single file and fetches item details
+  - batch-upload | uploads batch files in batch tab
+  - review-bulk-approve | approves selected pending items in bulk
+  - camera-open-close | opens camera modal and closes it cleanly
+  - pipeline-fallback | falls back to default pipeline option when pipeline fetch fails
+  - identify-upload-failure | handles failed identify upload response
+  - camera-fallback-input | falls back to capture input when camera access fails
+  - camera-capture-not-ready | shows readiness error when capture is attempted too early
+  - batch-upload-failure | shows error toast when batch upload request fails
+  - camera-no-media-devices-fallback | uses capture file input when media devices are unavailable
+  - review-bulk-approve-error | surfaces error toast when bulk approve endpoint returns non-OK
+- web/src/test/AssetCard.test.tsx
+  - asset-card-collapsed | renders collapsed state correctly
+  - asset-card-expand | expands when clicking the chevron
+  - asset-card-execute | updates edit data and fires onExecute with overrides
+  - asset-card-select | toggles selection
+  - asset-card-preview | uses first selected service for preview
+  - asset-card-technical-toggle | shows technical payload JSON when toggled
+  - asset-card-service-empty | disables actions when no services are selected
+- web/src/test/PipelineEditor.test.tsx
+  - pipeline-editor-list | renders pipelines
+  - pipeline-editor-create | can create a new pipeline
+  - pipeline-editor-sync | triggers registry sync fetch
+  - pipeline-editor-edit-nodes | edits nodes by removing and adding blocks
+  - pipeline-editor-save-error | shows alert when save fails
+  - pipeline-editor-save-copy-success | saves a non-custom pipeline as a custom copy
+  - pipeline-editor-vision-config | updates vision prompt through node settings and saves
+  - pipeline-editor-helpers | resolves node lists for configured, advanced, and fallback pipelines
+  - pipeline-editor-helper-prompts | detects persistence flags and prompt fallbacks
+  - pipeline-editor-helper-preview | formats prompt preview text for empty and long values
+- web/src/test/PreviewModal.test.tsx
+  - preview-modal-render | renders correctly and shows payload
+  - preview-modal-close | calls onClose when close button clicked
+  - preview-modal-confirm | allows payload editing and confirms
+- web/src/test/Settings.test.tsx
+  - settings-load | renders correctly and loads data
+  - settings-model-add | allows adding a new model
+  - settings-save | allows saving settings
+  - settings-derived-prompts | derives prompt templates from pipeline schema when config templates are absent
+  - settings-star-remove | toggles star and removes model from registry
+  - settings-save-error | shows error alert when save fails
+  - settings-save-without-templates | omits prompt_templates when none are configured
+  - settings-template-format-add | formats and creates prompt templates from the editor
+  - settings-template-normalize | normalizes array/object and handles invalid template values
+  - settings-template-derive | derives prompt templates from pipeline schema prompt keys only
+
+### 9.2 Backend Feature Tests
+- src/tests/test_advanced_pipeline.py
+  - Feature labels:
+    - run advanced pipeline end-to-end with search/scrape/refine context path.
+    - guard search/scrape path when query cannot be trusted.
+    - skip scraping/refine when search returns no candidate URLs.
+  - Test functions:
+    - test_advanced_pipeline_runs_full_search_scrape_refine_flow
+    - test_advanced_pipeline_skips_search_when_query_unknown
+    - test_advanced_pipeline_handles_no_search_results
+- src/tests/test_api.py
+  - Test functions:
+    - test_health_endpoint
+    - test_identify_endpoint
+    - test_get_locations_endpoint
+    - test_preview_endpoint
+    - test_execute_endpoint
+    - test_batch_upload_endpoint
+    - test_bulk_approve_endpoint
+    - test_queue_endpoint_all_status_returns_items
+    - test_get_item_endpoint_returns_item
+    - test_update_and_rerun_item_endpoints
+    - test_identify_returns_500_when_pipeline_run_fails
+    - test_models_endpoint_returns_catalog
+    - test_pipelines_endpoint_handles_success_and_error
+    - test_get_config_masks_and_preserves_url_secrets
+    - test_update_config_persists_custom_pipelines_and_secret
+    - test_search_endpoint_returns_merged_item_data
+    - test_logs_endpoint_wraps_messages
+    - test_locations_endpoint_handles_missing_headers
+    - test_pipelines_endpoint_merges_custom_from_config_file
+    - test_preview_endpoint_item_not_found
+    - test_delete_item_endpoint_deletes_files_and_item
+    - test_update_config_handles_legacy_homebox_email
+- src/tests/test_app_utils.py
+  - Feature labels:
+    - normalize mixed prompt template representations into stable objects.
+    - convert prompt maps into UI-friendly template arrays.
+    - collect deduplicated configured model favorites from legacy and nested config shapes.
+    - safely parse config files while tolerating missing and malformed content.
+    - merge legacy/current user config and dedupe templates and model favorites.
+    - keep Homebox username/email environment variables in sync.
+    - select composable pipeline when custom pipeline id is configured.
+    - resolve registered pipeline ids and fallback to default for unknown ids.
+  - Test functions:
+    - test_normalize_prompt_templates_from_list_and_dict
+    - test_normalize_prompt_templates_from_mapping
+    - test_merge_unique_and_extract_model_favorites
+    - test_load_json_file_handles_missing_invalid_and_nondict
+    - test_load_merged_user_config_merges_and_dedupes
+    - test_secret_get_set_homebox_username
+    - test_get_pipeline_uses_custom_pipeline_when_config_matches
+    - test_get_pipeline_uses_registry_and_default_fallback
+- src/tests/test_composable_pipeline.py
+  - Test functions:
+    - test_pipeline_respects_custom_order
+    - test_pipeline_skips_search_if_no_query
+    - test_pipeline_skips_scrape_if_no_url
+    - test_double_refinement_pass
+- src/tests/test_enrichers.py
+  - Test functions:
+    - test_pricebuddy_execution
+    - test_changedetection_execution
+    - test_enrichers_pre_enrichment
+- src/tests/test_homebox.py
+  - Test functions:
+    - test_homebox_execution_new_item
+    - test_homebox_execution_update_item
+    - test_homebox_auth_email_password
+    - test_homebox_get_payload
+- src/tests/test_ingestion.py
+  - Test functions:
+    - test_pipeline_logic
+    - test_api_endpoint
+- src/tests/test_mealie.py
+  - Test functions:
+    - test_mealie_execution_new_recipe
+    - test_mealie_pre_enrichment
+    - test_mealie_get_payload
+- src/tests/test_validation.py
+  - Test functions:
+    - test_pipeline_validation_logic
+- src/tests/test_vision_v2.py
+  - Test functions:
+    - test_homebox_execution
+    - test_concurrent_execution
+
+### 9.3 End-to-End Scenarios
+- e2e/ingestion.spec.ts
+  - Complete End-to-End Flow
+- e2e/live_integrations.spec.ts
+  - Complete End-to-End Flow with Mealie and Homebox
+- web/e2e/app.spec.ts
+  - should display assets in the queue
+  - should expand asset card and edit fields
+  - should open and close the preview modal
+  - should execute and remove item from queue
+- web/e2e/integration.spec.ts
+  - should upload an image and appear in queue
+  - should allow editing and executing an asset
+<!-- AUTO-GENERATED-TEST-INDEX:END -->
