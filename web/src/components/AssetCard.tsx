@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronDown, Search, Send, Box, Utensils, Eye, DollarSign, Info } from 'lucide-react';
 import type { Asset, AssetEditData } from '../types';
 import { Field } from './Field';
@@ -11,6 +11,8 @@ interface AssetCardProps {
   onExecute: (services: string[], overrides: Record<string, unknown>) => void;
 }
 
+type PipelineStageId = 'barcode' | 'vision' | 'search' | 'refine' | 'sync';
+
 export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecute }: AssetCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [editData, setEditData] = useState<AssetEditData>(
@@ -22,6 +24,66 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
     item.selected_services?.length ? item.selected_services : [item.product_type === 'food' ? 'mealie' : 'homebox']
   );
   const [showTechnical, setShowTechnical] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
+  const aiSessionId = typeof item.ai_output?.session_id === 'string' ? item.ai_output.session_id : undefined;
+
+  useEffect(() => {
+    if (!isExpanded) return;
+    
+    const sessionId = aiSessionId || `batch-item-${item.id}`;
+    
+    const fetchLogs = async () => {
+      try {
+        const resp = await fetch(`/api/logs/${sessionId}`);
+        if (resp && resp.ok) {
+          const data = await resp.json();
+          if (data && Array.isArray(data.logs)) {
+            setLogs(data.logs.map((l: { message: string }) => l.message));
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch logs', e);
+      }
+    };
+    
+    void fetchLogs();
+  }, [isExpanded, item.id, aiSessionId]);
+
+  const getStageStatus = (stage: PipelineStageId) => {
+    const hasLog = (text: string) => logs.some(log => log.includes(text));
+
+    const barcodeStarted = hasLog('[Node: Barcode]');
+    const visionStarted = hasLog('[Node: Vision]');
+    const searchStarted = hasLog('[Node: Search]');
+    const refineStarted = hasLog('[Node: Refine]');
+    const syncStarted = hasLog('Checking for existing entries') || hasLog('existing entries');
+    const finished = hasLog('🏁') || hasLog('finished') || hasLog('UI updating');
+
+    switch (stage) {
+      case 'barcode':
+        if (visionStarted || searchStarted || refineStarted || syncStarted || finished) return 'completed';
+        if (barcodeStarted) return 'active';
+        return 'pending';
+      case 'vision':
+        if (searchStarted || refineStarted || syncStarted || finished) return 'completed';
+        if (visionStarted) return 'active';
+        return 'pending';
+      case 'search':
+        if (refineStarted || syncStarted || finished) return 'completed';
+        if (searchStarted) return 'active';
+        return 'pending';
+      case 'refine':
+        if (syncStarted || finished) return 'completed';
+        if (refineStarted) return 'active';
+        return 'pending';
+      case 'sync':
+        if (finished) return 'completed';
+        if (syncStarted) return 'active';
+        return 'pending';
+      default:
+        return 'pending';
+    }
+  };
 
   const toggleService = (svc: string) => {
     setSelectedServices(prev => 
@@ -107,6 +169,78 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
                 value={editData.description || ""}
                 onChange={(e) => setEditData({...editData, description: e.target.value})}
               />
+            </div>
+          </div>
+
+          {/* Pipeline Dashboard & Logs */}
+          <div className="pt-6 border-t border-white/5 space-y-4">
+            <h4 className="label-apple">Pipeline Ingestion History</h4>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Pipeline Stages */}
+              <div className="lg:col-span-1 space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/30">Stages</p>
+                <div className="space-y-2">
+                  {([
+                    { id: 'barcode', label: 'Barcode Scanning', icon: '🔍' },
+                    { id: 'vision', label: 'Vision Identification', icon: '🤖' },
+                    { id: 'search', label: 'Web Enrichment', icon: '🌐' },
+                    { id: 'refine', label: 'Data Refinement', icon: '🧠' },
+                    { id: 'sync', label: 'Services Sync Check', icon: '🔌' }
+                  ] as Array<{ id: PipelineStageId; label: string; icon: string }>).map((stage) => {
+                    const status = getStageStatus(stage.id);
+                    return (
+                      <div
+                        key={stage.id}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 ${
+                          status === 'active' ? 'bg-cyan-950/20 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.05)]' :
+                          status === 'completed' ? 'bg-green-950/10 border-green-500/20' :
+                          'bg-white/5 border-white/5 opacity-50'
+                        }`}
+                      >
+                        <span className="text-base shrink-0">{stage.icon}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-bold text-white leading-tight truncate">{stage.label}</p>
+                          <p className={`text-[8px] font-black uppercase tracking-wider mt-0.5 ${
+                            status === 'active' ? 'text-cyan-400 animate-pulse' :
+                            status === 'completed' ? 'text-green-400' :
+                            'text-white/30'
+                          }`}>
+                            {status === 'active' ? 'Processing' : status === 'completed' ? 'Completed' : 'Pending'}
+                          </p>
+                        </div>
+                        <div className="shrink-0">
+                          {status === 'active' ? (
+                            <div className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                          ) : status === 'completed' ? (
+                            <div className="w-2 h-2 rounded-full bg-green-500 flex items-center justify-center text-[6px] text-black font-black">✓</div>
+                          ) : (
+                            <div className="w-2 h-2 rounded-full bg-white/10" />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Logs Console */}
+              <div className="lg:col-span-2 flex flex-col space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/30">Logs</p>
+                <div className="flex-1 bg-black/40 rounded-2xl border border-white/5 p-4 font-mono text-[10px] text-white/70 overflow-y-auto max-h-[190px] space-y-1 scrollbar-thin scrollbar-thumb-white/10 no-scrollbar min-h-[150px]">
+                  {logs.length === 0 ? (
+                    <p className="text-white/20 italic">No logs available for this session.</p>
+                  ) : (
+                    logs.map((log, index) => (
+                      <div key={index} className="leading-relaxed border-l border-white/5 pl-2">
+                        <span className="text-white/30 mr-2">[{index + 1}]</span>
+                        <span className={log.includes('❌') || log.includes('⚠️') ? 'text-red-400' : log.includes('✨') || log.includes('🏁') ? 'text-green-400 font-semibold' : 'text-white/80'}>
+                          {log}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 

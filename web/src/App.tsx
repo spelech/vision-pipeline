@@ -15,6 +15,8 @@ interface PipelineSummary {
   name: string;
 }
 
+type PipelineStageId = 'barcode' | 'vision' | 'search' | 'refine' | 'sync';
+
 const DEFAULT_PIPELINE_OPTION: PipelineSummary = { id: 'default', name: 'Default Vision Pipeline' };
 
 export default function App() {
@@ -36,6 +38,50 @@ export default function App() {
   const listParentRef = useRef<HTMLDivElement>(null);
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
+
+  const [processingFile, setProcessingFile] = useState<File | null>(null);
+  const [processingFileUrl, setProcessingFileUrl] = useState<string>('');
+  const [processingSessionId, setProcessingSessionId] = useState<string | null>(null);
+  const [processingLogs, setProcessingLogs] = useState<string[]>([]);
+  const [processingError, setProcessingError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (processingFile) {
+      const url = typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(processingFile) : '';
+      setProcessingFileUrl(url);
+      return () => {
+        if (url && typeof URL !== 'undefined' && URL.revokeObjectURL) {
+          URL.revokeObjectURL(url);
+        }
+      };
+    } else {
+      setProcessingFileUrl('');
+    }
+  }, [processingFile]);
+
+  useEffect(() => {
+    if (!processingSessionId) return;
+
+    let isSubscribed = true;
+    const pollInterval = setInterval(async () => {
+      try {
+        const resp = await fetch(`/api/logs/${processingSessionId}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (isSubscribed && data && Array.isArray(data.logs)) {
+          const messages = data.logs.map((l: { message: string }) => l.message);
+          setProcessingLogs(messages);
+        }
+      } catch (err) {
+        console.error('Failed to fetch logs', err);
+      }
+    }, 800);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(pollInterval);
+    };
+  }, [processingSessionId]);
 
   const fetchQueue = useCallback(async (status: 'all' | 'pending' | 'approved' | 'processing' = 'all') => {
     try {
@@ -193,14 +239,23 @@ export default function App() {
     if (files.length === 0) return;
 
     setLoading(true);
-    showToast(files.length === 1 ? 'Uploading image...' : `Uploading ${files.length} images...`, 'info');
+    if (files.length > 1) {
+      showToast(`Uploading ${files.length} images...`, 'info');
+    }
     
     try {
       if (files.length === 1) {
+        const sessionId = 'session-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+        setProcessingFile(files[0]);
+        setProcessingSessionId(sessionId);
+        setProcessingLogs([]);
+        setProcessingError(null);
+
         const formData = new FormData();
         formData.append('file', files[0]);
         formData.append('pipeline_id', selectedPipelineId);
         formData.append('settings', '{}');
+        formData.append('session_id', sessionId);
         
         const resp = await fetch('/api/identify', {
           method: 'POST',
@@ -208,7 +263,6 @@ export default function App() {
         });
         if (resp.ok) {
           const resultData = await resp.json();
-          showToast('Image uploaded for analysis', 'success');
           
           if (resultData.item_id) {
             try {
@@ -222,8 +276,14 @@ export default function App() {
             }
           }
           await fetchQueue(queueStatus);
+          
+          // Clear processing state on success
+          setProcessingFile(null);
+          setProcessingSessionId(null);
         } else {
           showToast('Upload failed', 'error');
+          setProcessingError('The pipeline failed to process the image. Please check logs or try another image.');
+          setProcessingSessionId(null);
         }
       } else {
         const formData = new FormData();
@@ -244,6 +304,8 @@ export default function App() {
     } catch (e) {
       console.error('Upload failed', e);
       showToast('Error during upload', 'error');
+      setProcessingError(e instanceof Error ? e.message : 'Error during upload');
+      setProcessingSessionId(null);
     } finally {
       setLoading(false);
     }
@@ -400,6 +462,166 @@ export default function App() {
     );
   };
 
+  const getStageStatus = (stage: PipelineStageId) => {
+    const hasLog = (text: string) => processingLogs.some(log => log.includes(text));
+
+    const barcodeStarted = hasLog('[Node: Barcode]');
+    const visionStarted = hasLog('[Node: Vision]');
+    const searchStarted = hasLog('[Node: Search]');
+    const refineStarted = hasLog('[Node: Refine]');
+    const syncStarted = hasLog('Checking for existing entries') || hasLog('existing entries');
+    const finished = hasLog('🏁') || hasLog('finished') || hasLog('UI updating');
+
+    switch (stage) {
+      case 'barcode':
+        if (visionStarted || searchStarted || refineStarted || syncStarted || finished) return 'completed';
+        if (barcodeStarted) return 'active';
+        return 'pending';
+      case 'vision':
+        if (searchStarted || refineStarted || syncStarted || finished) return 'completed';
+        if (visionStarted) return 'active';
+        return 'pending';
+      case 'search':
+        if (refineStarted || syncStarted || finished) return 'completed';
+        if (searchStarted) return 'active';
+        return 'pending';
+      case 'refine':
+        if (syncStarted || finished) return 'completed';
+        if (refineStarted) return 'active';
+        return 'pending';
+      case 'sync':
+        if (finished) return 'completed';
+        if (syncStarted) return 'active';
+        return 'pending';
+      default:
+        return 'pending';
+    }
+  };
+
+  const renderProcessingDashboard = () => {
+    if (!processingFile) return null;
+
+    const stages: Array<{ id: PipelineStageId; label: string; icon: string }> = [
+      { id: 'barcode', label: 'Barcode Scanning', icon: '🔍' },
+      { id: 'vision', label: 'Vision Identification', icon: '🤖' },
+      { id: 'search', label: 'Web Enrichment', icon: '🌐' },
+      { id: 'refine', label: 'Data Refinement', icon: '🧠' },
+      { id: 'sync', label: 'Services Integration', icon: '🔌' }
+    ];
+
+    return (
+      <div className="glass rounded-[2rem] p-6 sm:p-8 border border-white/10 animate-in fade-in duration-500 space-y-6">
+        <div className="flex flex-col md:flex-row gap-8">
+          {/* Left Pane: Image Preview with scanning line */}
+          <div className="w-full md:w-1/3 flex flex-col items-center justify-center">
+            <p className="label-apple mb-4">Ingested Image</p>
+            <div className="relative w-full max-w-[280px] aspect-square rounded-2xl overflow-hidden bg-black/40 border border-white/10 shadow-inner">
+              {processingFileUrl && (
+                <img src={processingFileUrl} className="w-full h-full object-contain" alt="Processing preview" />
+              )}
+              {/* Laser Scan Line Animation */}
+              {!processingError && (
+                <div className="absolute left-0 w-full h-[3px] bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)] animate-scan" />
+              )}
+              {/* Pulsing overlay */}
+              <div className="absolute inset-0 bg-cyan-500/5 animate-pulse mix-blend-overlay" />
+            </div>
+            {processingError ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setProcessingFile(null);
+                  setProcessingSessionId(null);
+                  setProcessingError(null);
+                }}
+                className="mt-6 bg-red-600/20 hover:bg-red-600/30 text-red-200 border border-red-500/30 px-6 py-3 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all"
+              >
+                Dismiss Error
+              </button>
+            ) : (
+              <div className="mt-4 flex items-center gap-2 text-cyan-400/80 text-[10px] font-black tracking-widest uppercase animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                Pipeline Processing...
+              </div>
+            )}
+          </div>
+
+          {/* Right Pane: Stages Tracker & Live Logs */}
+          <div className="flex-1 flex flex-col space-y-6">
+            <div>
+              <p className="label-apple">Pipeline Stages</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {stages.map((stage) => {
+                  const status = getStageStatus(stage.id);
+                  return (
+                    <div
+                      key={stage.id}
+                      className={`flex items-center gap-3 p-4 rounded-2xl border transition-all duration-300 ${
+                        status === 'active' ? 'bg-cyan-950/20 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.05)]' :
+                        status === 'completed' ? 'bg-green-950/10 border-green-500/20' :
+                        'bg-white/5 border-white/5 opacity-50'
+                      }`}
+                    >
+                      <span className="text-xl shrink-0">{stage.icon}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-white leading-tight truncate">{stage.label}</p>
+                        <p className={`text-[9px] font-black uppercase tracking-wider mt-1 ${
+                          status === 'active' ? 'text-cyan-400 animate-pulse' :
+                          status === 'completed' ? 'text-green-400' :
+                          'text-white/30'
+                        }`}>
+                          {status === 'active' ? 'Processing' : status === 'completed' ? 'Completed' : 'Pending'}
+                        </p>
+                      </div>
+                      <div className="shrink-0">
+                        {status === 'active' ? (
+                          <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+                        ) : status === 'completed' ? (
+                          <div className="w-2.5 h-2.5 rounded-full bg-green-500 flex items-center justify-center text-[7px] text-black font-black">✓</div>
+                        ) : (
+                          <div className="w-2.5 h-2.5 rounded-full bg-white/10" />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Console Logs */}
+            <div className="flex-1 flex flex-col space-y-2 min-h-[180px]">
+              <div className="flex justify-between items-center">
+                <p className="label-apple">Real-Time Pipeline Logs</p>
+                {processingSessionId && (
+                  <span className="text-[9px] font-mono text-white/30 font-bold uppercase tracking-wider">ID: {processingSessionId}</span>
+                )}
+              </div>
+              <div className="flex-1 bg-black/60 rounded-2xl border border-white/5 p-4 font-mono text-[11px] text-white/70 overflow-y-auto max-h-[220px] space-y-1.5 scrollbar-thin scrollbar-thumb-white/10 no-scrollbar">
+                {processingLogs.length === 0 ? (
+                  <p className="text-white/20 italic animate-pulse">Initializing pipeline session...</p>
+                ) : (
+                  processingLogs.map((log, index) => (
+                    <div key={index} className="leading-relaxed border-l border-white/5 pl-2 hover:bg-white/5 transition-colors">
+                      <span className="text-white/30 mr-2">[{index + 1}]</span>
+                      <span className={log.includes('❌') || log.includes('⚠️') ? 'text-red-400' : log.includes('✨') || log.includes('🏁') ? 'text-green-400 font-semibold' : 'text-white/80'}>
+                        {log}
+                      </span>
+                    </div>
+                  ))
+                )}
+                {processingError && (
+                  <div className="mt-2 p-2 bg-red-950/20 border border-red-500/30 rounded-lg text-red-300 font-bold">
+                    ⚠️ Error: {processingError}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const selectedPipelineName = pipelines.find((pipeline) => pipeline.id === selectedPipelineId)?.name || DEFAULT_PIPELINE_OPTION.name;
 
   return (
@@ -500,52 +722,56 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <button
-                    type="button"
-                    onClick={() => void openCamera()}
-                    className="glass rounded-[2rem] p-6 sm:p-8 flex items-center justify-center gap-4 border border-white/10 hover:border-blue-500/30 transition-all min-h-[120px] sm:min-h-0"
-                  >
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/40 shrink-0">
-                      <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-black uppercase tracking-widest">Open Camera</p>
-                      <p className="text-[10px] text-white/50 leading-tight">Requests camera access or falls back to file upload</p>
-                    </div>
-                  </button>
+                {processingFile ? (
+                  renderProcessingDashboard()
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in duration-500">
+                    <button
+                      type="button"
+                      onClick={() => void openCamera()}
+                      className="glass rounded-[2rem] p-6 sm:p-8 flex items-center justify-center gap-4 border border-white/10 hover:border-blue-500/30 transition-all min-h-[120px] sm:min-h-0"
+                    >
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/40 shrink-0">
+                        <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-black uppercase tracking-widest">Open Camera</p>
+                        <p className="text-[10px] text-white/50 leading-tight">Requests camera access or falls back to file upload</p>
+                      </div>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => galleryInputRef.current?.click()}
-                    className="glass rounded-[2rem] p-6 sm:p-8 flex items-center justify-center gap-4 border border-white/10 hover:border-blue-500/30 transition-all min-h-[120px] sm:min-h-0"
-                  >
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/10 rounded-2xl flex items-center justify-center shrink-0">
-                      <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-black uppercase tracking-widest">Upload Files</p>
-                      <p className="text-[10px] text-white/50 leading-tight">Choose one or many images from gallery/files</p>
-                    </div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => galleryInputRef.current?.click()}
+                      className="glass rounded-[2rem] p-6 sm:p-8 flex items-center justify-center gap-4 border border-white/10 hover:border-blue-500/30 transition-all min-h-[120px] sm:min-h-0"
+                    >
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/10 rounded-2xl flex items-center justify-center shrink-0">
+                        <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-black uppercase tracking-widest">Upload Files</p>
+                        <p className="text-[10px] text-white/50 leading-tight">Choose one or many images from gallery/files</p>
+                      </div>
+                    </button>
 
-                  <input
-                    ref={cameraInputRef}
-                    type="file"
-                    onChange={handleUpload}
-                    className="hidden"
-                    accept="image/*"
-                    capture="environment"
-                  />
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      onChange={handleUpload}
+                      className="hidden"
+                      accept="image/*"
+                      capture="environment"
+                    />
 
-                  <input
-                    ref={galleryInputRef}
-                    type="file"
-                    onChange={handleUpload}
-                    className="hidden"
-                    accept="image/*"
-                  />
-                </div>
+                    <input
+                      ref={galleryInputRef}
+                      type="file"
+                      onChange={handleUpload}
+                      className="hidden"
+                      accept="image/*"
+                    />
+                  </div>
+                )}
 
                 {lastIdentifyResult && (
                   <div className="space-y-6 pt-8 border-t border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-1000">
