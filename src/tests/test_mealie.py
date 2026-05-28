@@ -77,3 +77,53 @@ def test_mealie_get_payload():
         "recipeInstructions": [{"text": "Blend"}, {"text": "Simmer"}],
         "yield": "2 servings",
     }
+
+
+@pytest.mark.asyncio
+async def test_mealie_execute_without_api_key_returns_error():
+    service = MealieService()
+    service.api_key = None
+
+    result = await service.execute({"product_name": "No Key"})
+    assert result == {"success": False, "error": "No API Key"}
+
+
+@pytest.mark.asyncio
+async def test_mealie_execute_external_id_404_falls_back_to_create():
+    service = MealieService()
+    service.api_key = "test_key"
+
+    with patch("requests.get") as mock_get, patch("requests.post") as mock_post:
+        mock_get.return_value.status_code = 404
+        mock_post.return_value.status_code = 201
+        mock_post.return_value.raise_for_status.return_value = None
+        mock_post.return_value.json.return_value = {"id": "new-id"}
+
+        result = await service.execute({"product_name": "Fallback"}, external_id="old-id")
+
+        assert result["success"] is True
+        assert result["item_id"] == "new-id"
+        assert mock_get.called
+        assert mock_post.called
+
+
+@pytest.mark.asyncio
+async def test_mealie_pre_enrichment_guard_paths():
+    service = MealieService()
+    service.api_key = None
+    assert await service.get_pre_enrichment({"product_name": "Anything"}) == {}
+
+    service.api_key = "test_key"
+    assert await service.get_pre_enrichment({}) == {}
+
+
+@pytest.mark.asyncio
+async def test_mealie_pre_enrichment_non_200_returns_empty_items():
+    service = MealieService()
+    service.api_key = "test_key"
+
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.status_code = 500
+        mock_get.return_value.json.return_value = {}
+        res = await service.get_pre_enrichment({"product_name": "x"})
+        assert res == {"existing_recipes": []}

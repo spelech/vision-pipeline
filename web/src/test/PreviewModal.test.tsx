@@ -32,6 +32,15 @@ describe('PreviewModal', () => {
     expect(handleClose).toHaveBeenCalled();
   });
 
+  it('Feature: preview-modal-close-icon | calls onClose when header close icon clicked', () => {
+    const handleClose = vi.fn();
+    const { container } = render(<PreviewModal preview={mockPreview} onClose={handleClose} onConfirm={vi.fn()} />);
+
+    const closeIconButton = container.querySelector('div.p-6 button') as HTMLButtonElement;
+    fireEvent.click(closeIconButton);
+    expect(handleClose).toHaveBeenCalled();
+  });
+
   it('Feature: preview-modal-confirm | allows payload editing and confirms', () => {
     const handleConfirm = vi.fn();
     render(<PreviewModal preview={mockPreview} onClose={vi.fn()} onConfirm={handleConfirm} />);
@@ -41,5 +50,20 @@ describe('PreviewModal', () => {
 
     fireEvent.click(screen.getByText(/Confirm & Transmit to/));
     expect(handleConfirm).toHaveBeenCalledWith({ test_key: 'new_value' });
+  });
+
+  it('Feature: preview-modal-invalid-json | shows error on bad JSON and clears when editing', () => {
+    const handleConfirm = vi.fn();
+    render(<PreviewModal preview={mockPreview} onClose={vi.fn()} onConfirm={handleConfirm} />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: '{bad json' } });
+    fireEvent.click(screen.getByText(/Confirm & Transmit to/));
+
+    expect(screen.getByText(/Invalid JSON format/i)).toBeInTheDocument();
+    expect(handleConfirm).not.toHaveBeenCalled();
+
+    fireEvent.change(textarea, { target: { value: '{"fixed": true}' } });
+    expect(screen.queryByText(/Invalid JSON format/i)).not.toBeInTheDocument();
   });
 });
