@@ -17,7 +17,7 @@ def test_default_pipeline_refines_when_search_has_results(monkeypatch: pytest.Mo
     monkeypatch.setattr("pipelines.default.web_search", lambda query, log_cb=None: [{"url": "https://example.com"}])
     monkeypatch.setattr(
         "pipelines.default.data_refine",
-        lambda llm_output, context, log_cb=None: {**llm_output, "refined": True},
+        lambda llm_output, context, model=None, log_cb=None: {**llm_output, "refined": True},
     )
 
     pipeline = DefaultPipeline()

@@ -152,6 +152,63 @@ def extract_model_favorites(config_data: Dict[str, Any]) -> List[str]:
     )
 
 
+MODEL_ID_ALIASES: Dict[str, str] = {
+    "qwen/qwen2.5-72b-instruct": "qwen/qwen3-235b-a22b-2507",
+    "qwen/qwen2.5-32b-instruct": "qwen/qwen3-235b-a22b-2507",
+}
+
+
+def normalize_model_id(value: Any) -> Any:
+    if isinstance(value, str):
+        return MODEL_ID_ALIASES.get(value, value)
+    return value
+
+
+def normalize_pipeline_schema(schema: Any) -> Any:
+    if not isinstance(schema, dict):
+        return schema
+
+    normalized = dict(schema)
+    for model_field in ["vision_model", "refine_model"]:
+        model_config = normalized.get(model_field)
+        if isinstance(model_config, dict) and "default" in model_config:
+            updated_config = dict(model_config)
+            updated_config["default"] = normalize_model_id(
+                updated_config.get("default")
+            )
+            normalized[model_field] = updated_config
+
+    return normalized
+
+
+def normalize_pipeline_settings(settings: Any) -> Dict[str, Any]:
+    if not isinstance(settings, dict):
+        return {}
+
+    normalized = dict(settings)
+    for model_field in ["vision_model", "refine_model"]:
+        if model_field in normalized:
+            normalized[model_field] = normalize_model_id(normalized.get(model_field))
+    return normalized
+
+
+def normalize_pipeline_list(pipeline_list: Any) -> List[Dict[str, Any]]:
+    if not isinstance(pipeline_list, list):
+        return []
+
+    normalized: List[Dict[str, Any]] = []
+    for pipeline_entry in pipeline_list:
+        if not isinstance(pipeline_entry, dict):
+            continue
+
+        updated = dict(pipeline_entry)
+        if "schema" in updated:
+            updated["schema"] = normalize_pipeline_schema(updated.get("schema"))
+        normalized.append(updated)
+
+    return normalized
+
+
 def load_json_file(path: str) -> Dict[str, Any]:
     if not os.path.exists(path):
         return {}
@@ -315,13 +372,13 @@ def get_pipeline(pipeline_id: str):
 @api_router.get("/pipelines", response_model=PipelineListResponse)
 async def list_pipelines() -> PipelineListResponse:
     try:
-        base = pipelines.get_all_pipelines()
+        base = normalize_pipeline_list(pipelines.get_all_pipelines())
         config_path = "config/user_config.json"
-        custom = []
+        custom: List[Dict[str, Any]] = []
         if os.path.exists(config_path):
             with open(config_path, "r", encoding="utf-8") as fh:
                 config = json.load(fh)
-                custom = config.get("custom_pipelines", [])
+                custom = normalize_pipeline_list(config.get("custom_pipelines", []))
 
         return PipelineListResponse(success=True, pipelines=base + custom)
     except (
@@ -389,6 +446,10 @@ async def update_config(
     if "prompt_templates" in data_dict:
         data_dict["prompt_templates"] = normalize_prompt_templates(
             data_dict.get("prompt_templates"))
+    if "custom_pipelines" in data_dict:
+        data_dict["custom_pipelines"] = normalize_pipeline_list(
+            data_dict.get("custom_pipelines", [])
+        )
     current_config_path = "config/user_config.json"
     existing_config = load_json_file(current_config_path)
     config_to_save = {**existing_config, **
@@ -610,6 +671,8 @@ async def identify(
     except json.JSONDecodeError:
         pipeline_settings = {}
 
+    pipeline_settings = normalize_pipeline_settings(pipeline_settings)
+
     try:
         lasso_points = json.loads(lasso_polygon) if lasso_polygon else None
     except json.JSONDecodeError:
@@ -639,15 +702,40 @@ async def identify(
         # type: ignore
         results = await run_in_threadpool(core_pipeline.run, img, text, pipeline_settings, log_it)
 
-        log_it("🔌 Checking for existing entries in services...")
+        llm_output = results.get("llm_output") or {}
+        enrich_all_services = os.getenv("ENRICH_ALL_SERVICES", "false").lower() in {
+            "1", "true", "yes", "on"
+        }
+        if enrich_all_services:
+            target_service_names = list(SERVICES.keys())
+        else:
+            default_target = "mealie" if llm_output.get("is_food") else "homebox"
+            target_service_names = [default_target]
+
+        log_it(
+            "🔌 Checking for existing entries in services: "
+            + ", ".join(target_service_names)
+        )
         enrichment_tasks = [
-            s.get_pre_enrichment(
-                results['llm_output']) for s in SERVICES.values()]
-        enrichments = await asyncio.gather(*enrichment_tasks)
-        results["service_enrichments"] = {
-            list(
-                SERVICES.keys())[i]: enrichments[i] for i in range(
-                len(enrichments))}
+            SERVICES[name].get_pre_enrichment(llm_output) for name in target_service_names
+        ]
+        enrichments = await asyncio.gather(*enrichment_tasks, return_exceptions=True)
+        service_enrichments: Dict[str, Any] = {}
+        for index, service_name in enumerate(target_service_names):
+            enrichment = enrichments[index]
+            if isinstance(enrichment, Exception):
+                log_it(f"⚠️ [Enrichment: {service_name}] Failed: {str(enrichment)}")
+                service_enrichments[service_name] = {}
+            elif isinstance(enrichment, dict):
+                service_enrichments[service_name] = enrichment
+            else:
+                log_it(
+                    f"⚠️ [Enrichment: {service_name}] Unexpected result type: "
+                    f"{type(enrichment).__name__}"
+                )
+                service_enrichments[service_name] = {}
+
+        results["service_enrichments"] = service_enrichments
         results["session_id"] = sid
         results["logs"] = session_logger.get_logs(sid)
 
@@ -769,7 +857,7 @@ async def execute_services(data: Dict):  # pylint: disable=too-many-locals
                     mapping.external_id = new_ext_id
                     mapping.external_url = ext_url
                     mapping.last_sync_payload = final_data
-                    mapping.synced_at = datetime.now(UTC)
+                    mapping.synced_at = datetime.now(UTC).replace(tzinfo=None)
                 else:
                     mapping = ServiceMapping(
                         item_id=item_id,

@@ -114,7 +114,10 @@ class MealieService(BaseService):
                 timeout=5,
             )
             recipes = resp.json().get('items', []) if resp.status_code == 200 else []
-            return {"existing_recipes": recipes}
+            return {
+                "existing_recipes": recipes[:5],
+                "existing_recipes_total": len(recipes),
+            }
         except requests.RequestException:
             return {}
 

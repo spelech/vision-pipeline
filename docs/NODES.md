@@ -32,6 +32,6 @@ Nodes are the atomic units of execution in the Vision Pipeline. Each node perfor
 
 ## 🧠 Data Refine Node
 **Technology**: Text-based LLMs
-**Default Model**: `qwen/qwen2.5-72b-instruct`
+**Default Model**: `qwen/qwen3-235b-a22b-2507`
 **Function**: Merges the initial Vision data with the Search and Scrape context.
 - **Logic**: Corrects errors from the Vision pass, fills in missing MSRP/URL fields, and formats ingredient lists or technical specs into clean, structured JSON.

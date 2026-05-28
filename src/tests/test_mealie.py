@@ -55,6 +55,7 @@ async def test_mealie_pre_enrichment():
         res = await service.get_pre_enrichment({"product_name": "Found Recipe"})
         assert "existing_recipes" in res
         assert res["existing_recipes"][0]["id"] == "recipe-id-123"
+        assert res["existing_recipes_total"] == 1
 
 
 def test_mealie_get_payload():
@@ -126,4 +127,4 @@ async def test_mealie_pre_enrichment_non_200_returns_empty_items():
         mock_get.return_value.status_code = 500
         mock_get.return_value.json.return_value = {}
         res = await service.get_pre_enrichment({"product_name": "x"})
-        assert res == {"existing_recipes": []}
+        assert res == {"existing_recipes": [], "existing_recipes_total": 0}

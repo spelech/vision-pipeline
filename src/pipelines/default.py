@@ -28,6 +28,15 @@ class DefaultPipeline(BasePipeline):
                 "options": [
                     "qwen/qwen2.5-vl-72b-instruct",
                     "google/gemini-2.0-flash-001"]},
+            "refine_model": {
+                "type": "string",
+                "label": "Refine Model",
+                "default": "qwen/qwen3-235b-a22b-2507",
+                "options": [
+                    "qwen/qwen3-235b-a22b-2507",
+                    "qwen/qwen2.5-vl-72b-instruct",
+                    "google/gemini-2.0-flash-001",
+                    "anthropic/claude-3.5-sonnet"]},
             "custom_prompt": {
                 "type": "textarea",
                 "label": "System Prompt Override",
@@ -65,8 +74,13 @@ class DefaultPipeline(BasePipeline):
 
             # 4. Refine
             if results["searxng_results"]:
+                refine_model = settings.get("refine_model") if settings else None
                 results["llm_output"] = data_refine(
-                    results["llm_output"], results["searxng_results"], log_cb=log_cb)
+                    results["llm_output"],
+                    results["searxng_results"],
+                    model=refine_model,
+                    log_cb=log_cb,
+                )
 
         if log_cb:
             log_cb("🏁 Default Pipeline finished.")

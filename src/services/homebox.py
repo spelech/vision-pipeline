@@ -198,8 +198,18 @@ class HomeboxService(BaseService):
                 timeout=5,
             )
             resp.raise_for_status()
-            return {"existing_items": resp.json().get('items', [])}
-        except requests.RequestException:
+            payload = resp.json()
+            if isinstance(payload, dict):
+                items = payload.get('items', [])
+            elif isinstance(payload, list):
+                items = payload
+            else:
+                items = []
+            return {
+                "existing_items": items[:5],
+                "existing_items_total": len(items),
+            }
+        except (requests.RequestException, ValueError, TypeError, AttributeError):
             return {}
 
     def get_payload(self, data: Dict[str, Any]) -> Dict[str, Any]:

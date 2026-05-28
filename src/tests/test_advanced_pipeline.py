@@ -25,7 +25,7 @@ def test_advanced_pipeline_runs_full_search_scrape_refine_flow(monkeypatch: pyte
     )
     monkeypatch.setattr(
         "pipelines.advanced.data_refine",
-        lambda llm_output, context, log_cb=None: {**llm_output, "refined": True},
+        lambda llm_output, context, model=None, log_cb=None: {**llm_output, "refined": True},
     )
 
     pipeline = AdvancedPipeline()

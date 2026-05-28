@@ -28,6 +28,15 @@ class AdvancedPipeline(BasePipeline):
                 "options": [
                     "qwen/qwen2.5-vl-72b-instruct",
                     "google/gemini-2.0-flash-001"]},
+            "refine_model": {
+                "type": "string",
+                "label": "Refine Model",
+                "default": "qwen/qwen3-235b-a22b-2507",
+                "options": [
+                    "qwen/qwen3-235b-a22b-2507",
+                    "qwen/qwen2.5-vl-72b-instruct",
+                    "google/gemini-2.0-flash-001",
+                    "anthropic/claude-3.5-sonnet"]},
             "scrape_wait_time": {
                 "type": "string",
                 "label": "Playwright JS Wait Time (ms)",
@@ -84,8 +93,9 @@ class AdvancedPipeline(BasePipeline):
                 context = {
                     "search": results["searxng_results"],
                     "scrape": results["scraped_content"]}
+                refine_model = settings.get("refine_model") if settings else None
                 results["llm_output"] = data_refine(
-                    results["llm_output"], context, log_cb=log_cb)
+                    results["llm_output"], context, model=refine_model, log_cb=log_cb)
 
         if log_cb:
             log_cb("🏁 Advanced Pipeline finished.")

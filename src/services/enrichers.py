@@ -24,8 +24,7 @@ class PriceBuddyService(BaseService):
         if not self.api_key:
             return None
         return {
-            "Authorization": f"Bearer {
-                self.api_key}",
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"}
 
     async def execute(self,

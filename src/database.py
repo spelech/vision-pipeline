@@ -21,15 +21,18 @@ class Base(AsyncAttrs, DeclarativeBase):
     pass
 
 
+def utc_now_naive() -> datetime:
+    """Return UTC time without tzinfo for TIMESTAMP WITHOUT TIME ZONE columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
 class Batch(Base):
     __tablename__ = "batches"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(
-        String, default=lambda: f"Batch {
-            datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    name = Column(String, default=lambda: f"Batch {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    created_at = Column(DateTime, default=utc_now_naive)
     status = Column(String, default="processing")  # processing, completed
 
     items = relationship(
@@ -59,11 +62,11 @@ class Item(Base):
     # Store the points for re-editing
     lasso_polygon = Column(JSONB, nullable=True)
 
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    created_at = Column(DateTime, default=utc_now_naive)
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC))
+        default=utc_now_naive,
+        onupdate=utc_now_naive)
 
     batch = relationship("Batch", back_populates="items")
     mappings = relationship(
@@ -82,7 +85,7 @@ class ServiceMapping(Base):
     external_id = Column(String)  # ID in the external system
     external_url = Column(String, nullable=True)  # Link to external UI
     last_sync_payload = Column(JSONB, nullable=True)
-    synced_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    synced_at = Column(DateTime, default=utc_now_naive)
 
     item = relationship("Item", back_populates="mappings")
 

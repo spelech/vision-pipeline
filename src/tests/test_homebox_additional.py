@@ -134,7 +134,8 @@ async def test_get_pre_enrichment_paths():
         service, "_request", AsyncMock(return_value=good_resp)
     ):
         assert await service.get_pre_enrichment({"product_name": "milk"}) == {
-            "existing_items": [{"id": 1}]
+            "existing_items": [{"id": 1}],
+            "existing_items_total": 1,
         }
 
     with patch.object(service, "_get_headers_async", AsyncMock(return_value={"Authorization": "Bearer t"})), patch.object(

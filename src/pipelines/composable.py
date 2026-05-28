@@ -43,6 +43,11 @@ class ComposablePipeline(BasePipeline):
                 "label": "Refine Prompt",
                 "default": ""
             },
+            "refine_model": {
+                "type": "string",
+                "label": "Refine Model",
+                "default": "qwen/qwen3-235b-a22b-2507"
+            },
             "scrape_wait_time": {
                 "type": "number",
                 "label": "Scrape Wait (ms)",
@@ -130,8 +135,14 @@ class ComposablePipeline(BasePipeline):
                         "search": results["searxng_results"],
                         "scrape": results["scraped_content"]}
                     prompt = settings.get("refine_prompt")
+                    refine_model = settings.get("refine_model")
                     results["llm_output"] = data_refine(
-                        results["llm_output"], context, prompt=prompt, log_cb=log_cb)
+                        results["llm_output"],
+                        context,
+                        model=refine_model,
+                        prompt=prompt,
+                        log_cb=log_cb,
+                    )
                 else:
                     if log_cb:
                         log_cb(
