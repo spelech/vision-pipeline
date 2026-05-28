@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncAttrs
@@ -29,7 +29,7 @@ class Batch(Base):
         String, default=lambda: f"Batch {
             datetime.now().strftime('%Y-%m-%d %H:%M')}")
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     status = Column(String, default="processing")  # processing, completed
 
     items = relationship(
@@ -59,11 +59,11 @@ class Item(Base):
     # Store the points for re-editing
     lasso_polygon = Column(JSONB, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow)
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC))
 
     batch = relationship("Batch", back_populates="items")
     mappings = relationship(
@@ -82,7 +82,7 @@ class ServiceMapping(Base):
     external_id = Column(String)  # ID in the external system
     external_url = Column(String, nullable=True)  # Link to external UI
     last_sync_payload = Column(JSONB, nullable=True)
-    synced_at = Column(DateTime, default=datetime.utcnow)
+    synced_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
     item = relationship("Item", back_populates="mappings")
 

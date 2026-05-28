@@ -4,7 +4,7 @@ import json
 import uuid
 import base64
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 from types import SimpleNamespace
 
@@ -36,6 +36,7 @@ async def test_identify_endpoint():
 
     with patch('app.AsyncSessionLocal') as mock_session_factory:
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
 
         # Mock database select result for Batch
@@ -340,6 +341,7 @@ async def test_get_config_masks_and_preserves_url_secrets():
 @pytest.mark.asyncio
 async def test_update_config_persists_custom_pipelines_and_secret():
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
     mock_session.execute.return_value = mock_result
@@ -379,7 +381,7 @@ async def test_search_endpoint_returns_merged_item_data():
         product_type="food",
         ai_output={"llm_output": {"product_name": "Sriracha", "brand": "Huy Fong"}},
         user_overrides={},
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
     )
     mock_mapping = SimpleNamespace(service_name="mealie", external_id="r-1", external_url="http://x")
 
@@ -490,6 +492,7 @@ async def test_delete_item_endpoint_deletes_files_and_item():
 @pytest.mark.asyncio
 async def test_update_config_handles_legacy_homebox_email():
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
     mock_session.execute.return_value = mock_result

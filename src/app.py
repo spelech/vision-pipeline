@@ -5,7 +5,7 @@ import uuid
 import base64
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional, List, Dict, Any
 import requests
 from fastapi import (
@@ -24,10 +24,13 @@ from fastapi.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, or_
+from sqlalchemy.exc import SQLAlchemyError
 from PIL import Image, ImageOps
 
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
+
+# pylint: disable=too-many-lines
 
 # Load environment variables FIRST before other imports
 # Search for .env in current or parent directory
@@ -321,7 +324,14 @@ async def list_pipelines() -> PipelineListResponse:
                 custom = config.get("custom_pipelines", [])
 
         return PipelineListResponse(success=True, pipelines=base + custom)
-    except Exception as e:
+    except (
+        OSError,
+        TypeError,
+        KeyError,
+        AttributeError,
+        json.JSONDecodeError,
+        RuntimeError,
+    ) as e:
         logger.error("Error listing pipelines: %s", e)
         return PipelineListResponse(success=False, error=str(e), pipelines=[])
 
@@ -367,6 +377,7 @@ async def get_config() -> ConfigResponse:
 async def update_config(
         data: ConfigUpdateRequest,
         db: AsyncSession = Depends(get_db)):
+    # pylint: disable=too-many-locals
     # Separate secrets from general config
     keys_to_persist = [
         "prompt_templates",
@@ -422,7 +433,8 @@ async def update_config(
 @api_router.get("/search", response_model=SearchResponse)
 async def search_items(
         query: str,
-        db: AsyncSession = Depends(get_db)) -> SearchResponse:
+    db: AsyncSession = Depends(get_db)) -> SearchResponse:
+    # pylint: disable=too-many-locals
     # Simple JSON search for product name and brand
     stmt = select(Item).where(
         or_(
@@ -545,7 +557,7 @@ async def get_session_logs(
                     if isinstance(db_logs, list):
                         return SessionLogsResponse(
                             logs=[{"message": str(log)} for log in db_logs])
-    except Exception as e:
+    except (SQLAlchemyError, TypeError, ValueError, AttributeError) as e:
         logger.error(
             "Error querying logs from DB for session %s: %s",
             session_id,
@@ -591,6 +603,8 @@ async def identify(
     settings: str = Form("{}"),
     lasso_polygon: str = Form(None)
 ):
+    # Endpoint signatures are intentionally explicit for multipart/form fields.
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-statements
     try:
         pipeline_settings = json.loads(settings)
     except json.JSONDecodeError:
@@ -677,7 +691,14 @@ async def identify(
             "results": results,
             "ai_preview": f"data:image/png;base64,{b64_img}"
         }
-    except Exception as e:
+    except (
+        OSError,
+        ValueError,
+        TypeError,
+        RuntimeError,
+        SQLAlchemyError,
+        requests.RequestException,
+    ) as e:
         log_it(f"❌ Fatal Error: {str(e)}")
         logger.error("Identification failed: %s", e, exc_info=True)
         session_logger.end_session(sid)
@@ -690,7 +711,7 @@ async def identify(
 
 
 @api_router.post("/execute")
-async def execute_services(data: Dict):
+async def execute_services(data: Dict):  # pylint: disable=too-many-locals
     item_id = data.get("item_id")
     service_names = data.get("service_names", [])
     overrides = data.get("overrides", {})
@@ -748,7 +769,7 @@ async def execute_services(data: Dict):
                     mapping.external_id = new_ext_id
                     mapping.external_url = ext_url
                     mapping.last_sync_payload = final_data
-                    mapping.synced_at = datetime.utcnow()
+                    mapping.synced_at = datetime.now(UTC)
                 else:
                     mapping = ServiceMapping(
                         item_id=item_id,
@@ -775,7 +796,7 @@ async def batch_upload(
     pipeline_id: str = Form("default"),
     settings: str = Form("{}"),
     db: AsyncSession = Depends(get_db)
-):
+):  # pylint: disable=too-many-arguments,too-many-positional-arguments
     new_batch = Batch(description=text)
     db.add(new_batch)
     await db.commit()
@@ -808,6 +829,7 @@ async def process_item_task(
         item_id: int,
         pipeline_id: str = "default",
         settings_str: str = "{}"):
+    # pylint: disable=too-many-locals
     try:
         settings = json.loads(settings_str)
     except json.JSONDecodeError:
@@ -849,7 +871,14 @@ async def process_item_task(
             item.product_type = "food" if results.get(
                 "llm_output", {}).get("is_food") else "product"
             item.status = "pending"
-        except Exception as e:
+        except (
+            OSError,
+            ValueError,
+            TypeError,
+            RuntimeError,
+            SQLAlchemyError,
+            requests.RequestException,
+        ) as e:
             log_it(f"❌ Error: {str(e)}")
             logger.error("Processing failed for item %s: %s", item_id, e)
             item.status = "error"
@@ -874,7 +903,14 @@ async def process_item_task_safe(
     """
     try:
         await process_item_task(item_id, pipeline_id, settings_str)
-    except Exception as e:
+    except (
+        OSError,
+        ValueError,
+        TypeError,
+        RuntimeError,
+        SQLAlchemyError,
+        requests.RequestException,
+    ) as e:
         logger.error(
             "Background processing failed for item %s: %s",
             item_id,

@@ -81,6 +81,7 @@ class HomeboxService(BaseService):
         request_method = getattr(requests, method.lower())
         return await asyncio.to_thread(request_method, f"{self.api_url}{endpoint}", **kwargs)
 
+    # pylint: disable=too-many-locals
     async def execute(self,
                       data: Dict[str,
                                  Any],

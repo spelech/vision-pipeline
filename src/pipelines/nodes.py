@@ -45,7 +45,7 @@ def scan_barcode(image, log_cb=None):
             return barcodes[0].data.decode("utf-8")
 
         return None
-    except Exception as e:
+    except (TypeError, ValueError, AttributeError, RuntimeError) as e:
         if log_cb:
             log_cb(f"❌ [Node: Barcode] Error: {str(e)}")
         return None
@@ -102,7 +102,14 @@ def vision_identify(
         json_str = match.group() if match else content
         json_str = re.sub(r'[\x00-\x1F\x7F]', '', json_str)
         return json.loads(json_str)
-    except Exception as e:
+    except (
+        TypeError,
+        ValueError,
+        AttributeError,
+        RuntimeError,
+        json.JSONDecodeError,
+        requests.RequestException,
+    ) as e:
         if log_cb:
             log_cb(f"❌ [Node: Vision] Error: {str(e)}")
         return {"error": str(e)}
@@ -177,7 +184,14 @@ def data_refine(
         json_str = match.group() if match else content
         json_str = re.sub(r'[\x00-\x1F\x7F]', '', json_str)
         return json.loads(json_str)
-    except Exception as e:
+    except (
+        TypeError,
+        ValueError,
+        AttributeError,
+        RuntimeError,
+        json.JSONDecodeError,
+        requests.RequestException,
+    ) as e:
         if log_cb:
             log_cb(f"⚠️ [Node: Refine] Failed: {str(e)}")
         return current_data

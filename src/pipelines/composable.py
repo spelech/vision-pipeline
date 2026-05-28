@@ -56,6 +56,7 @@ class ComposablePipeline(BasePipeline):
             text_description=None,
             settings=None,
             log_cb=None):
+        # pylint: disable=too-many-branches
         if not settings:
             settings = {}
 
