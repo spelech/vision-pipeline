@@ -19,7 +19,12 @@ class BasePipeline:
         """
         return {}
 
-    def run(self, image=None, text_description=None, settings=None, log_cb=None) -> dict:
+    def run(
+            self,
+            image=None,
+            text_description=None,
+            settings=None,
+            log_cb=None) -> dict:
         """
         Executes the pipeline and returns a standardized result dictionary:
         {

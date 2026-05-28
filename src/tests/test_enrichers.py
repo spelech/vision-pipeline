@@ -6,7 +6,7 @@ from services.enrichers import PriceBuddyService, ChangeDetectionService
 async def test_pricebuddy_execution():
     service = PriceBuddyService()
     service.api_key = "test_key"
-    
+
     data = {
         "product_name": "Test Product",
         "barcode": "123456789",
@@ -16,9 +16,9 @@ async def test_pricebuddy_execution():
     with patch("requests.post") as mock_post:
         mock_post.return_value.status_code = 201
         mock_post.return_value.json.return_value = {"id": 1, "name": "Test Product"}
-        
+
         result = await service.execute(data)
-        
+
         assert result["success"] is True
         assert result["data"]["id"] == 1
         assert mock_post.called
@@ -32,7 +32,7 @@ async def test_pricebuddy_execution():
 async def test_changedetection_execution():
     service = ChangeDetectionService()
     service.api_key = "test_key"
-    
+
     data = {
         "product_name": "Test Product",
         "product_url": "https://example.com/item"
@@ -41,9 +41,9 @@ async def test_changedetection_execution():
     with patch("requests.post") as mock_post:
         mock_post.return_value.status_code = 201
         mock_post.return_value.json.return_value = {"uuid": "abc-123"}
-        
+
         result = await service.execute(data)
-        
+
         assert result["success"] is True
         assert "abc-123" in str(result["data"])
         assert mock_post.called
@@ -64,7 +64,7 @@ async def test_enrichers_pre_enrichment():
         # Mock PriceBuddy search
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = [{"id": 1, "name": "Found"}]
-        
+
         pb_res = await pb_service.get_pre_enrichment({"barcode": "123"})
         assert "existing_product" in pb_res
 

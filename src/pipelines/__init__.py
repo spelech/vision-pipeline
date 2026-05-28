@@ -9,9 +9,11 @@ PIPELINE_REGISTRY = {
     ComposablePipeline.get_id(): ComposablePipeline
 }
 
+
 def get_pipeline(pipeline_id: str) -> BasePipeline:
-    PipelineClass = PIPELINE_REGISTRY.get(pipeline_id, DefaultPipeline)
-    return PipelineClass()
+    pipeline_class = PIPELINE_REGISTRY.get(pipeline_id, DefaultPipeline)
+    return pipeline_class()
+
 
 def get_all_pipelines():
     return [

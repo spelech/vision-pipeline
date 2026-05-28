@@ -6,7 +6,7 @@ from services.mealie import MealieService
 async def test_mealie_execution_new_recipe():
     service = MealieService()
     service.api_key = "test_key"
-    
+
     data = {
         "product_name": "Test Recipe",
         "description": "A delicious test",
@@ -19,19 +19,19 @@ async def test_mealie_execution_new_recipe():
         mock_post.return_value.status_code = 201
         mock_post.return_value.json.return_value = {"id": "recipe-id-123"}
         mock_post.return_value.raise_for_status.return_value = None
-        
+
         # Mock updating recipe with data
         mock_put.return_value.status_code = 200
         mock_put.return_value.raise_for_status.return_value = None
 
         result = await service.execute(data)
-        
+
         assert result["success"] is True
         assert result["item_id"] == "recipe-id-123"
         assert mock_post.called
         # Note: In the actual implementation, it only posts, it doesn't do a secondary put if no external_id is provided.
         assert not mock_put.called
-        
+
         # Verify post payload
         args, kwargs = mock_post.call_args
         payload = kwargs["json"]
@@ -51,7 +51,7 @@ async def test_mealie_pre_enrichment():
         mock_get.return_value.json.return_value = {
             "items": [{"id": "recipe-id-123", "name": "Found Recipe"}]
         }
-        
+
         res = await service.get_pre_enrichment({"product_name": "Found Recipe"})
         assert "existing_recipes" in res
         assert res["existing_recipes"][0]["id"] == "recipe-id-123"

@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel
 
 
 class PromptTemplateConfig(BaseModel):
@@ -8,23 +9,28 @@ class PromptTemplateConfig(BaseModel):
     name: str
     prompt: str
 
+
 class PipelineInfo(BaseModel):
     id: str
     name: str = "Unknown Pipeline"
     description: Optional[str] = None
+
 
 class PipelineListResponse(BaseModel):
     success: bool
     pipelines: List[Dict[str, Any]]
     error: Optional[str] = None
 
+
 class ModelInfo(BaseModel):
     id: str
     name: str
 
+
 class ModelListResponse(BaseModel):
     success: bool
     models: List[ModelInfo]
+
 
 class ConfigSecretStatus(BaseModel):
     OPENROUTER_API_KEY: str = ""
@@ -39,6 +45,7 @@ class ConfigSecretStatus(BaseModel):
     PRICEBUDDY_API_KEY: str = ""
     CHANGEDETECTION_API_KEY: str = ""
 
+
 class ConfigResponse(BaseModel):
     prompt_templates: Optional[List[PromptTemplateConfig]] = None
     model_favorites: Optional[List[str]] = None
@@ -46,6 +53,7 @@ class ConfigResponse(BaseModel):
     image_optimization: Optional[Dict[str, Any]] = None
     custom_pipelines: Optional[List[Dict[str, Any]]] = None
     secrets_status: Optional[Dict[str, str]] = None
+
 
 class ConfigUpdateRequest(BaseModel):
     prompt_templates: Optional[List[PromptTemplateConfig]] = None
@@ -67,10 +75,12 @@ class ConfigUpdateRequest(BaseModel):
     PRICEBUDDY_API_KEY: Optional[str] = None
     CHANGEDETECTION_API_KEY: Optional[str] = None
 
+
 class ServiceMappingInfo(BaseModel):
     service: str
     external_id: str
     url: Optional[str] = None
+
 
 class ItemSearchInfo(BaseModel):
     id: str
@@ -86,23 +96,29 @@ class ItemSearchInfo(BaseModel):
     product_name: Optional[str] = None
     brand: Optional[str] = None
 
+
 class SearchResponse(BaseModel):
     items: List[ItemSearchInfo]
+
 
 class HealthResponse(BaseModel):
     status: str = "ok"
 
+
 class LocationInfo(BaseModel):
     id: str
     name: str
+
 
 class LocationsResponse(BaseModel):
     success: bool
     locations: Optional[List[Any]] = None
     error: Optional[str] = None
 
+
 class SessionLogsResponse(BaseModel):
     logs: List[Dict[str, Any]]
+
 
 class ServicePreviewResponse(BaseModel):
     service: str

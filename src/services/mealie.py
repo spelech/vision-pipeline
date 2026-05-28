@@ -8,6 +8,7 @@ from .base import BaseService
 
 logger = logging.getLogger(__name__)
 
+
 class MealieService(BaseService):
     def __init__(self):
         self.api_url = os.getenv("MEALIE_URL", "http://mealie:9000/api")
@@ -22,28 +23,36 @@ class MealieService(BaseService):
             return None
         return {"Authorization": f"Bearer {self.api_key}"}
 
-    async def _request(self, method: str, endpoint: str, **kwargs: Any) -> requests.Response:
+    async def _request(self, method: str, endpoint: str, **
+                       kwargs: Any) -> requests.Response:
         request_method = getattr(requests, method.lower())
         return await asyncio.to_thread(request_method, f"{self.api_url}{endpoint}", **kwargs)
 
-    async def execute(self, data: Dict[str, Any], image_path: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
+    async def execute(self,
+                      data: Dict[str,
+                                 Any],
+                      image_path: Optional[str] = None,
+                      external_id: Optional[str] = None) -> Dict[str,
+                                                                 Any]:
         headers = self._get_headers()
         if not headers:
             return {"success": False, "error": "No API Key"}
 
         try:
             recipe_id = external_id
-            
+
             # Check if exists
             if recipe_id:
-                check = await self._request("GET", f"/recipes/{recipe_id}", headers=headers, timeout=5)
+                check = await self._request(
+                    "GET", f"/recipes/{recipe_id}", headers=headers, timeout=5
+                )
                 if check.status_code == 404:
                     recipe_id = None
 
             ingredients = data.get('recipe_ingredients', [])
             if not ingredients and data.get('recipe_ingredients_raw'):
                 ingredients = data['recipe_ingredients_raw'].split('\n')
-                
+
             instructions = data.get('recipe_instructions', [])
             if not instructions and data.get('recipe_instructions_raw'):
                 instructions = data['recipe_instructions_raw'].split('\n')
@@ -57,42 +66,63 @@ class MealieService(BaseService):
             }
 
             if recipe_id:
-                resp = await self._request("PUT", f"/recipes/{recipe_id}", headers=headers, json=recipe_payload, timeout=10)
+                resp = await self._request(
+                    "PUT",
+                    f"/recipes/{recipe_id}",
+                    headers=headers,
+                    json=recipe_payload,
+                    timeout=10,
+                )
                 resp.raise_for_status()
             else:
-                resp = await self._request("POST", "/recipes", headers=headers, json=recipe_payload, timeout=10)
+                resp = await self._request(
+                    "POST",
+                    "/recipes",
+                    headers=headers,
+                    json=recipe_payload,
+                    timeout=10,
+                )
                 resp.raise_for_status()
                 recipe = resp.json()
                 recipe_id = recipe.get('id')
-            
-            # TODO: Handle image upload
-            
+
+            # Image upload not yet supported by Mealie API integration.
+
             return {
-                "success": True, 
+                "success": True,
                 "item_id": recipe_id,
-                "url": f"{self.api_url.replace('/api', '')}/recipe/{recipe_id}" # UI URL
+                # UI URL
+                "url": f"{self.api_url.replace('/api', '')}/recipe/{recipe_id}"
             }
-        except Exception as e:
-            logger.error(f"Mealie execution failed: {e}")
+        except requests.RequestException as e:
+            logger.error("Mealie execution failed: %s", e)
             return {"success": False, "error": str(e)}
 
     async def get_pre_enrichment(self, data: Dict[str, Any]) -> Dict[str, Any]:
         headers = self._get_headers()
-        if not headers: return {}
+        if not headers:
+            return {}
         name = data.get('product_name') or data.get('name')
-        if not name: return {}
+        if not name:
+            return {}
         try:
-            resp = await self._request("GET", "/recipes", headers=headers, params={"query": name}, timeout=5)
+            resp = await self._request(
+                "GET",
+                "/recipes",
+                headers=headers,
+                params={"query": name},
+                timeout=5,
+            )
             recipes = resp.json().get('items', []) if resp.status_code == 200 else []
             return {"existing_recipes": recipes}
-        except Exception:
+        except requests.RequestException:
             return {}
 
     def get_payload(self, data: Dict[str, Any]) -> Dict[str, Any]:
         ingredients = data.get('recipe_ingredients', [])
         if not ingredients and data.get('recipe_ingredients_raw'):
             ingredients = data['recipe_ingredients_raw'].split('\n')
-            
+
         instructions = data.get('recipe_instructions', [])
         if not instructions and data.get('recipe_instructions_raw'):
             instructions = data['recipe_instructions_raw'].split('\n')

@@ -4,13 +4,13 @@ from unittest.mock import MagicMock
 def test_pipeline_validation_logic():
     # Mocking the frontend logic behavior
     model_favorites = ["qwen/qwen2.5-vl-72b-instruct", "google/gemini-2.0-flash-001"]
-    
+
     # Case 1: Valid Pipeline
     p_valid = {
         "id": "default",
         "schema": {"vision_model": {"default": "qwen/qwen2.5-vl-72b-instruct"}}
     }
-    
+
     # Frontend logic: isPipelineInvalid()
     selected_pipeline = "default"
     p = p_valid if selected_pipeline == "default" else None

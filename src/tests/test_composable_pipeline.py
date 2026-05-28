@@ -36,7 +36,7 @@ def test_pipeline_respects_custom_order(
     # (Note: Barcode is usually first, but we test reordering)
     custom_sequence = ["vision", "search", "barcode", "refine"]
     settings = {"active_nodes": custom_sequence}
-    
+
     # Track call order using a list
     call_order = []
     mock_barcode.side_effect = lambda *args, **kwargs: call_order.append("barcode") or "123456"
@@ -63,7 +63,7 @@ def test_pipeline_skips_search_if_no_query(
     # If we run Search BEFORE Vision or Barcode, it should skip
     custom_sequence = ["search", "vision"]
     settings = {"active_nodes": custom_sequence}
-    
+
     # Mock Vision to return data LATER
     mock_vision.return_value = {"product_name": "Found Product"}
     mock_barcode.return_value = None
@@ -80,7 +80,7 @@ def test_pipeline_skips_scrape_if_no_url(
 ):
     # Run Scrape in isolation
     settings = {"active_nodes": ["scrape"]}
-    
+
     results = pipeline.run(image=mock_image, settings=settings)
 
     assert not mock_scrape.called
@@ -94,7 +94,7 @@ def test_double_refinement_pass(
     # Test a weird case: Vision -> Refine -> Refine
     custom_sequence = ["vision", "refine", "refine"]
     settings = {"active_nodes": custom_sequence}
-    
+
     mock_vision.return_value = {"product_name": "Initial"}
     mock_refine.return_value = {"product_name": "Refined"}
 

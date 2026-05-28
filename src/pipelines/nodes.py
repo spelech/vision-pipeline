@@ -1,15 +1,17 @@
-import os
-import json
 import base64
-import requests
+import json
 import logging
+import os
 import re
 from io import BytesIO
+
+import requests
+from openai import OpenAI
 from PIL import ImageEnhance, ImageFilter
 from pyzbar.pyzbar import decode  # type: ignore
-from openai import OpenAI
 
 logger = logging.getLogger("PipelineNodes")
+
 
 def get_client():
     return OpenAI(
@@ -17,34 +19,48 @@ def get_client():
         api_key=os.getenv("OPENROUTER_API_KEY"),
     )
 
+
 def scan_barcode(image, log_cb=None):
-    if image is None: return None
-    if log_cb: log_cb("🔍 [Node: Barcode] Scanning...")
+    if image is None:
+        return None
+    if log_cb:
+        log_cb("🔍 [Node: Barcode] Scanning...")
     try:
         # Pass 1: Raw
         barcodes = decode(image)
-        if barcodes: return barcodes[0].data.decode("utf-8")
-        
+        if barcodes:
+            return barcodes[0].data.decode("utf-8")
+
         # Pass 2: Grayscale
         gray = image.convert('L')
         barcodes = decode(gray)
-        if barcodes: return barcodes[0].data.decode("utf-8")
-            
+        if barcodes:
+            return barcodes[0].data.decode("utf-8")
+
         # Pass 3: High Contrast
         enhancer = ImageEnhance.Contrast(gray)
         sharp = enhancer.enhance(2.5).filter(ImageFilter.SHARPEN)
         barcodes = decode(sharp)
-        if barcodes: return barcodes[0].data.decode("utf-8")
-        
+        if barcodes:
+            return barcodes[0].data.decode("utf-8")
+
         return None
     except Exception as e:
-        if log_cb: log_cb(f"❌ [Node: Barcode] Error: {str(e)}")
+        if log_cb:
+            log_cb(f"❌ [Node: Barcode] Error: {str(e)}")
         return None
 
-def vision_identify(image, text_description=None, model="qwen/qwen2.5-vl-72b-instruct", prompt=None, log_cb=None):
-    if log_cb: log_cb(f"🤖 [Node: Vision] Calling {model}...")
+
+def vision_identify(
+        image,
+        text_description=None,
+        model="qwen/qwen2.5-vl-72b-instruct",
+        prompt=None,
+        log_cb=None):
+    if log_cb:
+        log_cb(f"🤖 [Node: Vision] Calling {model}...")
     client = get_client()
-    
+
     if not prompt:
         prompt = """
         Analyze the provided image of a product or food item.
@@ -73,7 +89,8 @@ def vision_identify(image, text_description=None, model="qwen/qwen2.5-vl-72b-ins
         {"type": "image_url", "image_url": {"url": image_data_url}}
     ]
     if text_description:
-        content_list.append({"type": "text", "text": f"Context: {text_description}"})
+        content_list.append(
+            {"type": "text", "text": f"Context: {text_description}"})
 
     try:
         response = client.chat.completions.create(
@@ -86,36 +103,60 @@ def vision_identify(image, text_description=None, model="qwen/qwen2.5-vl-72b-ins
         json_str = re.sub(r'[\x00-\x1F\x7F]', '', json_str)
         return json.loads(json_str)
     except Exception as e:
-        if log_cb: log_cb(f"❌ [Node: Vision] Error: {str(e)}")
+        if log_cb:
+            log_cb(f"❌ [Node: Vision] Error: {str(e)}")
         return {"error": str(e)}
+
 
 def web_search(query, log_cb=None):
     searxng_url = os.getenv("SEARXNG_URL")
-    if not searxng_url: return []
-    if log_cb: log_cb(f"🌐 [Node: Search] Looking up '{query}'...")
+    if not searxng_url:
+        return []
+    if log_cb:
+        log_cb(f"🌐 [Node: Search] Looking up '{query}'...")
     try:
         params = {"q": query, "format": "json", "categories": "general"}
-        response = requests.get(f"{searxng_url}/search", params=params, timeout=10)
+        response = requests.get(
+            f"{searxng_url}/search",
+            params=params,
+            timeout=10)
         data = response.json()
-        return [{"title": r['title'], "url": r['url'], "snippet": r.get('content', '')} for r in data.get('results', [])[:5]]
-    except Exception as e:
-        if log_cb: log_cb(f"⚠️ [Node: Search] Failed: {str(e)}")
+        return [{"title": r['title'], "url": r['url'], "snippet": r.get(
+            'content', '')} for r in data.get('results', [])[:5]]
+    except requests.RequestException as e:
+        if log_cb:
+            log_cb(f"⚠️ [Node: Search] Failed: {str(e)}")
         return []
 
+
 def web_scrape(url, wait_time=2000, log_cb=None):
-    if log_cb: log_cb(f"🕸️ [Node: Scrape] Scraping {url}...")
+    if log_cb:
+        log_cb(f"🕸️ [Node: Scrape] Scraping {url}...")
     try:
-        resp = requests.post("http://playwright-scraper:3000/scrape", json={"url": url, "wait_time": int(wait_time)}, timeout=40)
+        resp = requests.post(
+            "http://playwright-scraper:3000/scrape",
+            json={
+                "url": url,
+                "wait_time": int(wait_time)},
+            timeout=40)
         data = resp.json()
         if data.get("success"):
             return data.get("text", "")[:10000]
         return None
-    except Exception as e:
-        if log_cb: log_cb(f"⚠️ [Node: Scrape] Failed: {str(e)}")
+    except requests.RequestException as e:
+        if log_cb:
+            log_cb(f"⚠️ [Node: Scrape] Failed: {str(e)}")
         return None
 
-def data_refine(current_data, context_data, model="qwen/qwen2.5-vl-72b-instruct", prompt=None, log_cb=None):
-    if log_cb: log_cb(f"🧠 [Node: Refine] Finalizing with {model}...")
+
+def data_refine(
+        current_data,
+        context_data,
+        model="qwen/qwen2.5-vl-72b-instruct",
+        prompt=None,
+        log_cb=None):
+    if log_cb:
+        log_cb(f"🧠 [Node: Refine] Finalizing with {model}...")
     client = get_client()
 
     if not prompt:
@@ -137,5 +178,6 @@ def data_refine(current_data, context_data, model="qwen/qwen2.5-vl-72b-instruct"
         json_str = re.sub(r'[\x00-\x1F\x7F]', '', json_str)
         return json.loads(json_str)
     except Exception as e:
-        if log_cb: log_cb(f"⚠️ [Node: Refine] Failed: {str(e)}")
+        if log_cb:
+            log_cb(f"⚠️ [Node: Refine] Failed: {str(e)}")
         return current_data
