@@ -96,7 +96,7 @@ describe('AssetCard', () => {
 
     fireEvent.click(screen.getByLabelText('Expand Asset'));
 
-    fireEvent.click(screen.getByRole('button', { name: /Homebox/i }));
+    fireEvent.click(screen.getByLabelText(/Enable Homebox/i));
 
     expect(screen.getByRole('button', { name: /Preview Payload/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Execute & Sync/i })).toBeDisabled();
@@ -155,13 +155,14 @@ describe('AssetCard', () => {
     });
   });
 
-  it('Feature: asset-card-default-service | defaults to mealie for food items when no selected services', () => {
+  it('Feature: asset-card-default-service | does not enable any default service when none are selected', () => {
     const handlePreview = vi.fn();
     render(<AssetCard item={{ ...mockItem, selected_services: [] }} onPreview={handlePreview} onExecute={vi.fn()} />);
 
     fireEvent.click(screen.getByLabelText('Expand Asset'));
-    fireEvent.click(screen.getByText(/Preview Payload/i));
+    expect(screen.getByRole('button', { name: /Preview Payload/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Execute & Sync/i })).toBeDisabled();
 
-    expect(handlePreview).toHaveBeenCalledWith('mealie', expect.any(Object));
+    expect(handlePreview).not.toHaveBeenCalled();
   });
 });

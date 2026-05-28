@@ -21,8 +21,14 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
       : ((item.ai_output?.llm_output as AssetEditData) || {})
   );
   const [selectedServices, setSelectedServices] = useState<string[]>(
-    item.selected_services?.length ? item.selected_services : [item.product_type === 'food' ? 'mealie' : 'homebox']
+    item.selected_services?.length ? item.selected_services : []
   );
+  const [expandedServices, setExpandedServices] = useState<Record<string, boolean>>({
+    homebox: false,
+    mealie: false,
+    changedetection: false,
+    pricebuddy: false,
+  });
   const [showTechnical, setShowTechnical] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const aiSessionId = typeof item.ai_output?.session_id === 'string' ? item.ai_output.session_id : undefined;
@@ -51,6 +57,12 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
 
   const getStageStatus = (stage: PipelineStageId) => {
     const hasLog = (text: string) => logs.some(log => log.includes(text));
+    const hasFailure = (nodeLabel: string) =>
+      logs.some(
+        (log) =>
+          (log.includes('❌') || log.toLowerCase().includes('error')) &&
+          log.includes(`[Node: ${nodeLabel}]`)
+      );
 
     const barcodeStarted = hasLog('[Node: Barcode]');
     const visionStarted = hasLog('[Node: Vision]');
@@ -61,22 +73,27 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
 
     switch (stage) {
       case 'barcode':
+        if (hasFailure('Barcode')) return 'failed';
         if (visionStarted || searchStarted || refineStarted || syncStarted || finished) return 'completed';
         if (barcodeStarted) return 'active';
         return 'pending';
       case 'vision':
+        if (hasFailure('Vision')) return 'failed';
         if (searchStarted || refineStarted || syncStarted || finished) return 'completed';
         if (visionStarted) return 'active';
         return 'pending';
       case 'search':
+        if (hasFailure('Search')) return 'failed';
         if (refineStarted || syncStarted || finished) return 'completed';
         if (searchStarted) return 'active';
         return 'pending';
       case 'refine':
+        if (hasFailure('Refine')) return 'failed';
         if (syncStarted || finished) return 'completed';
         if (refineStarted) return 'active';
         return 'pending';
       case 'sync':
+        if (logs.some((log) => log.includes('❌') || log.toLowerCase().includes('error'))) return 'failed';
         if (finished) return 'completed';
         if (syncStarted) return 'active';
         return 'pending';
@@ -86,9 +103,18 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
   };
 
   const toggleService = (svc: string) => {
-    setSelectedServices(prev => 
-      prev.includes(svc) ? prev.filter(s => s !== svc) : [...prev, svc]
-    );
+    setSelectedServices((prev) => {
+      const isEnabled = prev.includes(svc);
+      if (isEnabled) {
+        return prev.filter((s) => s !== svc);
+      }
+      return [...prev, svc];
+    });
+    setExpandedServices((prev) => ({ ...prev, [svc]: true }));
+  };
+
+  const toggleServiceExpanded = (svc: string) => {
+    setExpandedServices((prev) => ({ ...prev, [svc]: !prev[svc] }));
   };
 
   const services = [
@@ -97,6 +123,107 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
     { id: 'changedetection', name: 'CD.io', icon: Eye, color: 'text-purple-400' },
     { id: 'pricebuddy', name: 'Price', icon: DollarSign, color: 'text-green-400' },
   ];
+
+  const renderServiceFields = (serviceId: string) => {
+    if (serviceId === 'homebox') {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Field label="Location" value={String(editData.location || 'pantry')} onChange={(v) => setEditData({ ...editData, location: v })} />
+          <Field label="Quantity" value={String(editData.quantity || '1')} onChange={(v) => setEditData({ ...editData, quantity: v })} />
+          <Field label="Purchase Price" value={String(editData.purchase_price || '')} onChange={(v) => setEditData({ ...editData, purchase_price: v })} />
+          <Field label="Serial Number" value={String(editData.serial_number || '')} onChange={(v) => setEditData({ ...editData, serial_number: v })} />
+          <Field label="Manufacturer" value={String(editData.manufacturer || editData.brand || '')} onChange={(v) => setEditData({ ...editData, manufacturer: v })} />
+          <Field label="Model Number" value={String(editData.model_number || '')} onChange={(v) => setEditData({ ...editData, model_number: v })} />
+          <div className="md:col-span-2">
+            <label htmlFor="homebox-notes" className="label-apple">Homebox Notes</label>
+            <textarea
+              id="homebox-notes"
+              className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm h-28 focus:outline-none focus:border-blue-500/30 transition-colors"
+              value={String(editData.notes || '')}
+              onChange={(e) => setEditData({ ...editData, notes: e.target.value })}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label htmlFor="homebox-tech" className="label-apple">Technical Details</label>
+            <textarea
+              id="homebox-tech"
+              className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm h-24 focus:outline-none focus:border-blue-500/30 transition-colors"
+              value={String(editData.technical_details || '')}
+              onChange={(e) => setEditData({ ...editData, technical_details: e.target.value })}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (serviceId === 'mealie') {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Field label="Yield" value={String(editData.yield || '1 serving')} onChange={(v) => setEditData({ ...editData, yield: v })} />
+          <Field label="Prep Time" value={String(editData.prep_time || '')} onChange={(v) => setEditData({ ...editData, prep_time: v })} />
+          <Field label="Cook Time" value={String(editData.cook_time || '')} onChange={(v) => setEditData({ ...editData, cook_time: v })} />
+          <Field label="Total Time" value={String(editData.total_time || '')} onChange={(v) => setEditData({ ...editData, total_time: v })} />
+          <div className="md:col-span-2">
+            <label htmlFor="mealie-ingredients" className="label-apple">Ingredients (one per line)</label>
+            <textarea
+              id="mealie-ingredients"
+              className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm h-28 focus:outline-none focus:border-blue-500/30 transition-colors"
+              value={String(editData.recipe_ingredients_raw || '')}
+              onChange={(e) => setEditData({ ...editData, recipe_ingredients_raw: e.target.value })}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label htmlFor="mealie-instructions" className="label-apple">Instructions (one per line)</label>
+            <textarea
+              id="mealie-instructions"
+              className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm h-28 focus:outline-none focus:border-blue-500/30 transition-colors"
+              value={String(editData.recipe_instructions_raw || '')}
+              onChange={(e) => setEditData({ ...editData, recipe_instructions_raw: e.target.value })}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label htmlFor="mealie-tags" className="label-apple">Tags (comma separated)</label>
+            <input
+              id="mealie-tags"
+              className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none"
+              value={String(editData.tags || '')}
+              onChange={(e) => setEditData({ ...editData, tags: e.target.value })}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (serviceId === 'changedetection') {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Field label="Product URL" value={String(editData.product_url || '')} onChange={(v) => setEditData({ ...editData, product_url: v })} />
+          <Field label="Tag" value={String(editData.category || 'Vision Pipeline')} onChange={(v) => setEditData({ ...editData, category: v })} />
+          <Field label="Check Every (hours)" value={String(editData.check_every_hours || '12')} onChange={(v) => setEditData({ ...editData, check_every_hours: v })} />
+          <Field label="Fetch Backend" value={String(editData.fetch_backend || 'html_requests')} onChange={(v) => setEditData({ ...editData, fetch_backend: v })} />
+          <div className="md:col-span-2 p-4 rounded-xl border border-white/10 bg-white/5 text-[11px] text-white/60">
+            ChangeDetection uses the product URL and title. Add a URL above to generate a meaningful payload preview.
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Field label="Barcode" value={String(editData.barcode || '')} onChange={(v) => setEditData({ ...editData, barcode: v })} />
+        <Field label="Category Tag" value={String(editData.category || '')} onChange={(v) => setEditData({ ...editData, category: v })} />
+        <Field label="Primary URL" value={String(editData.product_url || '')} onChange={(v) => setEditData({ ...editData, product_url: v })} />
+        <Field label="Target Price" value={String(editData.target_price || '')} onChange={(v) => setEditData({ ...editData, target_price: v })} />
+        <Field label="Currency" value={String(editData.currency || 'USD')} onChange={(v) => setEditData({ ...editData, currency: v })} />
+        <Field label="Retailer" value={String(editData.retailer || '')} onChange={(v) => setEditData({ ...editData, retailer: v })} />
+        <div className="md:col-span-2 p-4 rounded-xl border border-white/10 bg-white/5 text-[11px] text-white/60">
+          Price tracking improves when barcode and shopping URLs are provided.
+        </div>
+      </div>
+    );
+  };
+
+  const previewService = selectedServices.find((svc) => expandedServices[svc]) || selectedServices[0] || null;
 
   return (
     <div className={`glass rounded-[2rem] overflow-hidden transition-all ${isSelected ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'hover:border-white/20'}`}>
@@ -138,19 +265,40 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
           {/* Service Selection */}
           <div className="space-y-4">
             <h4 className="label-apple">Destination Services</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="space-y-3">
               {services.map(svc => {
                 const Icon = svc.icon;
                 const active = selectedServices.includes(svc.id);
+                const expanded = expandedServices[svc.id];
                 return (
-                  <button
+                  <div
                     key={svc.id}
-                    onClick={() => toggleService(svc.id)}
-                    className={`p-3 rounded-2xl border transition-all flex flex-col items-center gap-2 ${active ? 'bg-white/10 border-blue-500/50 shadow-lg shadow-blue-500/10' : 'bg-white/5 border-white/5 opacity-40 hover:opacity-100'}`}
+                    className={`rounded-2xl border transition-all ${active ? 'border-blue-500/60 bg-blue-500/10 shadow-[0_0_16px_rgba(59,130,246,0.2)]' : 'border-white/10 bg-white/[0.02]'}`}
                   >
-                    <Icon className={`w-5 h-5 ${active ? svc.color : 'text-white'}`} />
-                    <span className="text-[9px] font-black uppercase tracking-wider">{svc.name}</span>
-                  </button>
+                    <div className="p-4 flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`Enable ${svc.name}`}
+                        checked={active}
+                        onChange={() => toggleService(svc.id)}
+                        className="h-4 w-4 rounded border-white/30 bg-transparent accent-blue-500"
+                      />
+                      <Icon className={`w-4 h-4 ${active ? svc.color : 'text-white/60'}`} />
+                      <span className="text-[10px] font-black uppercase tracking-widest flex-1">{svc.name}</span>
+                      <button
+                        onClick={() => toggleServiceExpanded(svc.id)}
+                        aria-label={`Expand ${svc.name} details`}
+                        className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5"
+                      >
+                        <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
+                    {expanded && (
+                      <div className="px-4 pb-4 border-t border-white/10 pt-4">
+                        {renderServiceFields(svc.id)}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -193,6 +341,7 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
                         key={stage.id}
                         className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 ${
                           status === 'active' ? 'bg-cyan-950/20 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.05)]' :
+                          status === 'failed' ? 'bg-red-950/20 border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.08)]' :
                           status === 'completed' ? 'bg-green-950/10 border-green-500/20' :
                           'bg-white/5 border-white/5 opacity-50'
                         }`}
@@ -202,15 +351,18 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
                           <p className="text-[11px] font-bold text-white leading-tight truncate">{stage.label}</p>
                           <p className={`text-[8px] font-black uppercase tracking-wider mt-0.5 ${
                             status === 'active' ? 'text-cyan-400 animate-pulse' :
+                            status === 'failed' ? 'text-red-400' :
                             status === 'completed' ? 'text-green-400' :
                             'text-white/30'
                           }`}>
-                            {status === 'active' ? 'Processing' : status === 'completed' ? 'Completed' : 'Pending'}
+                            {status === 'active' ? 'Processing' : status === 'failed' ? 'Failed' : status === 'completed' ? 'Completed' : 'Pending'}
                           </p>
                         </div>
                         <div className="shrink-0">
                           {status === 'active' ? (
                             <div className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                          ) : status === 'failed' ? (
+                            <div className="w-2 h-2 rounded-full bg-red-500" />
                           ) : status === 'completed' ? (
                             <div className="w-2 h-2 rounded-full bg-green-500 flex items-center justify-center text-[6px] text-black font-black">✓</div>
                           ) : (
@@ -261,9 +413,13 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
 
           <div className="flex gap-4 pt-4">
             <button 
-              onClick={() => onPreview(selectedServices[0] || 'homebox', editData)} 
+              onClick={() => {
+                if (previewService) {
+                  onPreview(previewService, editData);
+                }
+              }} 
               className="flex-1 py-4 glass rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-30"
-              disabled={selectedServices.length === 0}
+              disabled={!previewService}
             >
               <Search className="w-3 h-3" /> Preview Payload
             </button>
