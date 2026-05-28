@@ -69,3 +69,6 @@ out/
 playwright-report/
 test-results/
 *_output.txt
+.coverage
+*.stackdump
+bash.exe.stackdump

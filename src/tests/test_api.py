@@ -4,7 +4,7 @@ import json
 import uuid
 import base64
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 from types import SimpleNamespace
 
@@ -33,11 +33,12 @@ async def test_identify_endpoint():
         "llm_output": {"product_name": "Test Product", "is_food": False},
         "searxng_results": []
     }
-    
+
     with patch('app.AsyncSessionLocal') as mock_session_factory:
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
-        
+
         # Mock database select result for Batch
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None # No existing batch
@@ -55,14 +56,14 @@ async def test_identify_endpoint():
                 buf = io.BytesIO()
                 img.save(buf, format='JPEG')
                 img_bytes = buf.getvalue()
-                
+
                 # Mock file operations
                 with patch("builtins.open", MagicMock()):
                     files = {'file': ('test.jpg', img_bytes, 'image/jpeg')}
                     data = {'text': 'test context', 'rotation': 0, 'mirror': False}
-                    
+
                     response = await ac.post("/api/identify", data=data, files=files)
-                    
+
                     assert response.status_code == 200
                     res_json = response.json()
                     assert res_json["success"] is True
@@ -76,7 +77,7 @@ async def test_get_locations_endpoint():
         with patch('requests.get') as mock_get:
             mock_get.return_value.json.return_value = [{"id": "loc1", "name": "Pantry"}]
             mock_get.return_value.status_code = 200
-            
+
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
                 response = await ac.get("/api/locations")
                 assert response.status_code == 200
@@ -94,7 +95,7 @@ async def test_preview_endpoint():
     with patch("app.AsyncSessionLocal") as mock_session_factory:
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
-        
+
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_item
         mock_session.execute.return_value = mock_result
@@ -103,7 +104,7 @@ async def test_preview_endpoint():
             response = await ac.get("/api/preview/homebox?item_id=1")
             assert response.status_code == 200
             assert "payload" in response.json()
-            
+
             # Test non-existent service
             response = await ac.get("/api/preview/invalid?item_id=1")
             assert response.status_code == 404
@@ -115,23 +116,23 @@ async def test_execute_endpoint():
     mock_item.image_path = "test.jpg"
     mock_item.ai_output = {"llm_output": {"product_name": "Test"}}
     mock_item.user_overrides = None
-    
+
     with patch("app.AsyncSessionLocal") as mock_session_factory:
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
-        
+
         # Mock database query
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_item
         mock_session.execute.return_value = mock_result
-        
+
         # Mock service execution
         SERVICES["homebox"].execute = AsyncMock(return_value={"success": True, "item_id": "hb-123"})
-        
+
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             payload = {"item_id": 1, "service_names": ["homebox"]}
             response = await ac.post("/api/execute", json=payload)
-            
+
             assert response.status_code == 200
             assert response.json()["results"]["homebox"]["success"] is True
 
@@ -149,7 +150,7 @@ async def test_batch_upload_endpoint():
         mock_session.refresh = AsyncMock(side_effect=refresh_side_effect)
         mock_session.add = MagicMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
-        
+
         # Mock background task to avoid actually running it
         with patch("app.process_item_task", AsyncMock()):
             # Mock open() for file writing
@@ -158,12 +159,12 @@ async def test_batch_upload_endpoint():
                     img = Image.new('RGB', (10, 10))
                     buf = io.BytesIO()
                     img.save(buf, format='JPEG')
-                    
+
                     files = [
                         ('files', ('img1.jpg', buf.getvalue(), 'image/jpeg'))
                     ]
                     data = {'text': 'Batch Desc'}
-                    
+
                     response = await ac.post("/api/batch-upload", data=data, files=files)
                     assert response.status_code == 200
                     assert response.json()["success"] is True
@@ -173,20 +174,20 @@ async def test_bulk_approve_endpoint():
     with patch("app.AsyncSessionLocal") as mock_session_factory:
         mock_session = AsyncMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session
-        
+
         mock_item = MagicMock()
         mock_item.id = 1
         mock_item.product_type = "product"
         mock_item.image_path = "test.jpg"
         mock_item.ai_output = {"llm_output": {"name": "Test"}}
-        
+
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_item
         mock_session.execute.return_value = mock_result
-        
+
         # Mock execute_services internally or the SERVICES themselves
         SERVICES["homebox"].execute = AsyncMock(return_value={"success": True})
-        
+
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             payload = {"item_ids": [1]}
             response = await ac.post("/api/bulk-approve", json=payload)
@@ -340,6 +341,7 @@ async def test_get_config_masks_and_preserves_url_secrets():
 @pytest.mark.asyncio
 async def test_update_config_persists_custom_pipelines_and_secret():
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
     mock_session.execute.return_value = mock_result
@@ -379,7 +381,7 @@ async def test_search_endpoint_returns_merged_item_data():
         product_type="food",
         ai_output={"llm_output": {"product_name": "Sriracha", "brand": "Huy Fong"}},
         user_overrides={},
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
     )
     mock_mapping = SimpleNamespace(service_name="mealie", external_id="r-1", external_url="http://x")
 
@@ -490,6 +492,7 @@ async def test_delete_item_endpoint_deletes_files_and_item():
 @pytest.mark.asyncio
 async def test_update_config_handles_legacy_homebox_email():
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
     mock_session.execute.return_value = mock_result

@@ -251,4 +251,155 @@ describe('PipelineEditor', () => {
     expect(preview.endsWith('...')).toBe(true);
     expect(preview.length).toBe(93);
   });
+
+  it('Feature: pipeline-editor-save-existing-custom | saves persisted custom pipeline without creating copy', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockImplementation((url: string, opts?: RequestInit) => {
+      if (url === '/api/pipelines') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            success: true,
+            pipelines: [{ id: 'custom_user_flow', name: 'My Flow', schema: { active_nodes: { default: ['vision', 'refine'] } } }]
+          })
+        });
+      }
+      if (url === '/api/config' && (!opts || !opts.method)) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ custom_pipelines: [{ id: 'custom_user_flow', name: 'Old', schema: {} }] }) });
+      }
+      if (url === '/api/config' && opts?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, models: [{ id: 'qwen/model-a' }] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }) as typeof fetch;
+
+    render(<PipelineEditor />);
+    fireEvent.click(await screen.findByText('Customize Sequence'));
+    fireEvent.click(await screen.findByText('Save Changes'));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/config', expect.objectContaining({ method: 'POST' }));
+    });
+
+    const postCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0] === '/api/config' && call[1]?.method === 'POST'
+    );
+    const payload = JSON.parse((postCall?.[1] as RequestInit).body as string) as { custom_pipelines: Array<{ id: string; name: string }> };
+    expect(payload.custom_pipelines).toHaveLength(1);
+    expect(payload.custom_pipelines[0].id).toBe('custom_user_flow');
+    expect(payload.custom_pipelines[0].name).toBe('My Flow');
+
+    globalThis.fetch = originalFetch;
+  });
+
+  it('Feature: pipeline-editor-create-fallback-model | uses fallback vision model when no model catalog loaded', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/pipelines') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, pipelines: [] }) });
+      }
+      if (url === '/api/config') {
+        return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }) as typeof fetch;
+
+    render(<PipelineEditor />);
+    fireEvent.click(await screen.findByText('Create Custom'));
+    fireEvent.click(screen.getAllByRole('button', { name: /vision/i })[0]);
+
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    expect(select.value).toBe('qwen/qwen2.5-vl-72b-instruct');
+
+    globalThis.fetch = originalFetch;
+  });
+
+  it('Feature: pipeline-editor-node-config-variants | opens refine, scrape, and system-managed node config states', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/pipelines') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            success: true,
+            pipelines: [
+              {
+                id: 'custom_flow',
+                name: 'Custom Flow',
+                schema: {
+                  active_nodes: { default: ['barcode', 'vision', 'search', 'scrape', 'refine'] },
+                  vision_prompt: { default: 'vision' },
+                  refine_prompt: { default: 'refine' },
+                  scrape_wait_time: { default: 2000 },
+                },
+              },
+            ],
+          }),
+        });
+      }
+      if (url === '/api/config') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ model_favorites: ['qwen/a'] }) });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, models: [{ id: 'qwen/a' }] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }) as typeof fetch;
+
+    render(<PipelineEditor />);
+    fireEvent.click(await screen.findByText('Customize Sequence'));
+
+    fireEvent.click(screen.getAllByRole('button', { name: /refine/i })[0]);
+    expect(await screen.findByText(/Merge logic instructions/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Confirm Parameters/i }));
+
+    fireEvent.click(screen.getAllByRole('button', { name: /scrape/i })[0]);
+    expect(await screen.findByText(/JavaScript Wait Time/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Confirm Parameters/i }));
+
+    fireEvent.click(screen.getAllByRole('button', { name: /search/i })[0]);
+    expect(await screen.findByText(/Node calibrated by system core/i)).toBeInTheDocument();
+
+    globalThis.fetch = originalFetch;
+  });
+
+  it('Feature: pipeline-editor-subtitles | renders subtitle variants for default, advanced, and custom pipelines', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/pipelines') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            success: true,
+            pipelines: [
+              { id: 'default', name: 'Default', schema: {} },
+              { id: 'advanced_playwright', name: 'Advanced', schema: {} },
+              { id: 'custom_user', name: 'Custom', schema: { active_nodes: { default: ['vision'] } } },
+            ],
+          }),
+        });
+      }
+      if (url === '/api/config') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ model_favorites: [] }) });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, models: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }) as typeof fetch;
+
+    render(<PipelineEditor />);
+
+    expect(await screen.findByText(/Core System Sequence/i)).toBeInTheDocument();
+    expect(screen.getByText(/Advanced Scraping Flow/i)).toBeInTheDocument();
+    expect(screen.getByText(/Configurable User Flow/i)).toBeInTheDocument();
+
+    globalThis.fetch = originalFetch;
+  });
 });

@@ -316,4 +316,46 @@ describe('Settings', () => {
 
     expect(derivePromptTemplatesFromPipelines(undefined)).toEqual([]);
   });
+
+  it('Feature: settings-secret-visibility | keeps URLs visible while masking key/token secrets', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/config') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            secrets_status: {
+              HOMEBOX_URL: 'https://homebox.local',
+              OPENROUTER_API_KEY: true,
+            },
+            model_favorites: [],
+            starred_models: [],
+            image_optimization: { max_dimension: 1024, quality: 85 },
+            prompt_templates: [],
+          }),
+        });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, models: [] }) });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, pipelines: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<Settings />);
+    expect(await screen.findByDisplayValue('https://homebox.local')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('********')).toBeInTheDocument();
+  });
+
+  it('Feature: settings-model-add-duplicate | does not add a duplicate model id', async () => {
+    render(<Settings />);
+    await screen.findByText('System Settings');
+
+    const modelInput = screen.getByPlaceholderText('owner/model-name');
+    fireEvent.change(modelInput, { target: { value: 'qwen/qwen2.5-vl-72b-instruct' } });
+    fireEvent.click(screen.getByText('Add'));
+
+    expect(screen.getAllByText('qwen2.5-vl-72b-instruct')).toHaveLength(1);
+  });
 });

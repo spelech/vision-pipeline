@@ -25,7 +25,9 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Attach feature metadata to every test for traceable coverage reports."""
     for item in items:
         marker = item.get_closest_marker("feature")
-        feature = str(marker.args[0]) if marker and marker.args else _derive_feature_from_nodeid(item.nodeid)
+        feature = str(
+            marker.args[0]) if marker and marker.args else _derive_feature_from_nodeid(
+            item.nodeid)
         if marker is None:
             item.add_marker(pytest.mark.feature(feature))
         item.user_properties.append(("feature", feature))

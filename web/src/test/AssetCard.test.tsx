@@ -1,9 +1,17 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AssetCard } from '../components/AssetCard';
 import type { Asset } from '../types';
 
 describe('AssetCard', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ logs: [] }),
+    });
+  });
+
   const mockItem: Asset = {
     id: '1',
     image_path: 'test-image.jpg',
@@ -103,5 +111,57 @@ describe('AssetCard', () => {
 
     expect(openSpy).toHaveBeenCalledWith('/uploads/test-image.jpg', '_blank');
     openSpy.mockRestore();
+  });
+
+  it('Feature: asset-card-log-session-id | fetches logs using ai_output session id when expanded', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ logs: [{ message: '[Node: Vision] complete' }] }),
+    });
+
+    render(<AssetCard item={{ ...mockItem, ai_output: { ...mockItem.ai_output, session_id: 'sess-42' } }} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/logs/sess-42');
+      expect(screen.getByText(/\[Node: Vision\] complete/i)).toBeInTheDocument();
+    });
+  });
+
+  it('Feature: asset-card-log-fallback-session | falls back to batch-item session id when no ai session id', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ logs: [] }),
+    });
+
+    render(<AssetCard item={{ ...mockItem, ai_output: { llm_output: {} } }} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/logs/batch-item-1');
+    });
+  });
+
+  it('Feature: asset-card-log-fetch-error | handles log fetch failures', async () => {
+    const err = new Error('network fail');
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    globalThis.fetch = vi.fn().mockRejectedValue(err);
+
+    render(<AssetCard item={mockItem} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+
+    await waitFor(() => {
+      expect(errSpy).toHaveBeenCalledWith('Failed to fetch logs', err);
+    });
+  });
+
+  it('Feature: asset-card-default-service | defaults to mealie for food items when no selected services', () => {
+    const handlePreview = vi.fn();
+    render(<AssetCard item={{ ...mockItem, selected_services: [] }} onPreview={handlePreview} onExecute={vi.fn()} />);
+
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByText(/Preview Payload/i));
+
+    expect(handlePreview).toHaveBeenCalledWith('mealie', expect.any(Object));
   });
 });

@@ -99,3 +99,27 @@ def test_advanced_pipeline_handles_no_search_results(monkeypatch: pytest.MonkeyP
     assert out["scraped_content"] is None
     assert called["scrape"] is False
     assert called["refine"] is False
+
+
+@pytest.mark.feature("advanced-pipeline-guards")
+def test_advanced_pipeline_uses_barcode_query_and_defaults_without_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Feature: barcode query path should work even when settings are omitted."""
+    monkeypatch.setattr("pipelines.advanced.scan_barcode", lambda image, log_cb=None: "9988")
+    monkeypatch.setattr(
+        "pipelines.advanced.vision_identify",
+        lambda image, text_description, model=None, log_cb=None: {"product_name": "Widget"},
+    )
+
+    search_queries: list[str] = []
+
+    def _search(query, log_cb=None):
+        search_queries.append(query)
+        return []
+
+    monkeypatch.setattr("pipelines.advanced.web_search", _search)
+
+    pipeline = AdvancedPipeline()
+    out = pipeline.run(image=object(), text_description="test", settings=None)
+
+    assert search_queries == ["9988"]
+    assert out["barcode"] == "9988"

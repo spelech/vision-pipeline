@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { Camera, Menu, X } from 'lucide-react';
+import type { ActiveTab } from '../app/types';
 
 interface NavbarProps {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
+  activeTab: ActiveTab;
+  setActiveTab: (tab: ActiveTab) => void;
 }
 
 export function Navbar({ activeTab, setActiveTab }: NavbarProps) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const tabs = ['identify', 'batch', 'review', 'pipelines', 'system'];
+  const tabs: ActiveTab[] = ['identify', 'batch', 'review', 'pipelines', 'system'];
 
-  const handleTabClick = (tab: string) => {
+  const handleTabClick = (tab: ActiveTab) => {
     setActiveTab(tab);
     setIsMobileOpen(false);
   };

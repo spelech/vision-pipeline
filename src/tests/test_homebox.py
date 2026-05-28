@@ -6,7 +6,7 @@ from services.homebox import HomeboxService
 async def test_homebox_execution_new_item():
     service = HomeboxService()
     service._cached_token = "test-token"
-    
+
     data = {
         "product_name": "Test Homebox Item",
         "quantity": 2,
@@ -24,18 +24,18 @@ async def test_homebox_execution_new_item():
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = [{"id": "loc-123", "name": "Pantry"}]
         mock_get.return_value.raise_for_status.return_value = None
-        
+
         # Mock creating item
         mock_post.return_value.status_code = 201
         mock_post.return_value.json.return_value = {"id": "item-456"}
         mock_post.return_value.raise_for_status.return_value = None
-        
+
         # Mock updating item
         mock_put.return_value.status_code = 200
         mock_put.return_value.raise_for_status.return_value = None
 
         result = await service.execute(data)
-        
+
         assert result["success"] is True
         assert result["item_id"] == "item-456"
         assert mock_post.called
@@ -45,7 +45,7 @@ async def test_homebox_execution_new_item():
 async def test_homebox_execution_update_item():
     service = HomeboxService()
     service._cached_token = "test-token"
-    
+
     data = {
         "product_name": "Updated Item",
         "quantity": 5
@@ -59,27 +59,27 @@ async def test_homebox_execution_update_item():
         # Mock item exists check
         mock_get.return_value.status_code = 200
         mock_get.return_value.raise_for_status.return_value = None
-        
+
         # Mock updating item
         mock_put.return_value.status_code = 200
         mock_put.return_value.raise_for_status.return_value = None
 
         result = await service.execute(data, external_id="existing-id")
-        
+
         assert result["success"] is True
         assert result["item_id"] == "existing-id"
         assert mock_put.called
-        
+
 @pytest.mark.asyncio
 async def test_homebox_auth_email_password():
     service = HomeboxService()
     service.username = "test@example.com"
     service.password = "password"
-    
+
     with patch("requests.post") as mock_post:
         mock_post.return_value.ok = True
         mock_post.return_value.json.return_value = {"token": "fake-jwt-token"}
-        
+
         headers = service._get_headers()
         assert headers is not None
         assert headers["Authorization"] == "Bearer fake-jwt-token"
