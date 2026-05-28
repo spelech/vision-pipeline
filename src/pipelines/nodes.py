@@ -114,7 +114,7 @@ def web_scrape(url, wait_time=2000, log_cb=None):
         if log_cb: log_cb(f"⚠️ [Node: Scrape] Failed: {str(e)}")
         return None
 
-def data_refine(current_data, context_data, model="qwen/qwen2.5-72b-instruct", prompt=None, log_cb=None):
+def data_refine(current_data, context_data, model="qwen/qwen2.5-vl-72b-instruct", prompt=None, log_cb=None):
     if log_cb: log_cb(f"🧠 [Node: Refine] Finalizing with {model}...")
     client = get_client()
 
