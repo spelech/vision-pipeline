@@ -423,10 +423,38 @@ async def get_locations() -> LocationsResponse:
         return LocationsResponse(success=False, error=str(e))
 
 @api_router.get("/logs/{session_id}", response_model=SessionLogsResponse)
-async def get_session_logs(session_id: str) -> SessionLogsResponse:
+async def get_session_logs(session_id: str, db: AsyncSession = Depends(get_db)) -> SessionLogsResponse:
+    # 1. Try from in-memory session logger
     logs = session_logger.get_logs(session_id)
-    # Convert list of strings to list of dicts for Pydantic
-    return SessionLogsResponse(logs=[{"message": log} for log in logs])
+    if logs:
+        return SessionLogsResponse(logs=[{"message": log} for log in logs])
+        
+    # 2. Try from database items (looking for matching session_id in JSONB)
+    try:
+        stmt = select(Item).where(Item.ai_output['session_id'].astext == session_id)
+        result = await db.execute(stmt)
+        item = result.scalar_one_or_none()
+        
+        if item and isinstance(item.ai_output, dict) and "logs" in item.ai_output:
+            db_logs = item.ai_output["logs"]
+            if isinstance(db_logs, list):
+                return SessionLogsResponse(logs=[{"message": str(log)} for log in db_logs])
+                
+        # Also support querying by f"batch-item-{item_id}"
+        if session_id.startswith("batch-item-"):
+            item_id_str = session_id.replace("batch-item-", "")
+            if item_id_str.isdigit():
+                stmt_batch = select(Item).where(Item.id == int(item_id_str))
+                result_batch = await db.execute(stmt_batch)
+                item_batch = result_batch.scalar_one_or_none()
+                if item_batch and isinstance(item_batch.ai_output, dict) and "logs" in item_batch.ai_output:
+                    db_logs = item_batch.ai_output["logs"]
+                    if isinstance(db_logs, list):
+                        return SessionLogsResponse(logs=[{"message": str(log)} for log in db_logs])
+    except Exception as e:
+        logger.error(f"Error querying logs from DB for session {session_id}: {e}")
+        
+    return SessionLogsResponse(logs=[])
 
 @api_router.get("/preview/{service_name}", response_model=ServicePreviewResponse)
 async def get_service_preview(service_name: str, item_id: int) -> ServicePreviewResponse:
@@ -489,6 +517,8 @@ async def identify(
         enrichment_tasks = [s.get_pre_enrichment(results['llm_output']) for s in SERVICES.values()]
         enrichments = await asyncio.gather(*enrichment_tasks)
         results["service_enrichments"] = {list(SERVICES.keys())[i]: enrichments[i] for i in range(len(enrichments))}
+        results["session_id"] = sid
+        results["logs"] = session_logger.get_logs(sid)
         
         async with AsyncSessionLocal() as db:
             stmt = select(Batch).where(Batch.name == "Single Captures")
@@ -632,7 +662,7 @@ async def batch_upload(
         db.add(new_item)
         await db.commit()
         await db.refresh(new_item)
-        background_tasks.add_task(process_item_task, int(new_item.id), pipeline_id, settings) # type: ignore
+        background_tasks.add_task(process_item_task_safe, int(new_item.id), pipeline_id, settings) # type: ignore
         
     return {"success": True, "batch_id": new_batch.id}
 
@@ -663,6 +693,8 @@ async def process_item_task(item_id: int, pipeline_id: str = "default", settings
             enrichment_tasks = [s.get_pre_enrichment(results['llm_output']) for s in SERVICES.values()]
             enrichments = await asyncio.gather(*enrichment_tasks)
             results["service_enrichments"] = {list(SERVICES.keys())[i]: enrichments[i] for i in range(len(enrichments))}
+            results["session_id"] = sid
+            results["logs"] = session_logger.get_logs(sid)
 
             item.ai_output = results
             item.product_type = "food" if results.get("llm_output", {}).get("is_food") else "product"
@@ -672,9 +704,25 @@ async def process_item_task(item_id: int, pipeline_id: str = "default", settings
             logger.error(f"Processing failed for item {item_id}: {e}")
             item.status = "error"
             item.error = str(e)
+            item.ai_output = {
+                "session_id": sid,
+                "logs": session_logger.get_logs(sid),
+                "error": str(e)
+            }
         
         session_logger.end_session(sid)
         await db.commit()
+
+
+async def process_item_task_safe(item_id: int, pipeline_id: str = "default", settings_str: str = "{}"):
+    """Run background processing and swallow task-level failures.
+
+    This prevents background task exceptions from bubbling into response handling.
+    """
+    try:
+        await process_item_task(item_id, pipeline_id, settings_str)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Background processing failed for item %s: %s", item_id, e, exc_info=True)
 
 @api_router.get("/queue")
 async def get_queue(status: str = "pending", db: AsyncSession = Depends(get_db)):
@@ -705,7 +753,7 @@ async def update_item_data(item_id: int, data: dict, db: AsyncSession = Depends(
 async def rerun_item(item_id: int, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     await db.execute(update(Item).where(Item.id == item_id).values(status="processing"))
     await db.commit()
-    background_tasks.add_task(process_item_task, item_id, "default", "{}")
+    background_tasks.add_task(process_item_task_safe, item_id, "default", "{}")
     return {"success": True}
 
 @api_router.delete("/items/{item_id}")
@@ -754,7 +802,6 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    import os
-    port = int(os.getenv("APP_PORT", 8460))
+    port = int(os.getenv("APP_PORT", "8460"))
     uvicorn.run(app, host="0.0.0.0", port=port)
 
