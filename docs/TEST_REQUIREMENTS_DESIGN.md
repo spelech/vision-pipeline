@@ -534,8 +534,10 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_scan_barcode_exception_logs_and_returns_none
     - test_vision_identify_success_parses_json_from_response
     - test_vision_identify_error_returns_error_object
+    - test_vision_identify_client_init_error_returns_error_object
     - test_web_search_and_scrape_paths
     - test_data_refine_success_and_fallback
+    - test_data_refine_client_init_error_returns_current_data
 - src/tests/test_validation.py
   - Test functions:
     - test_pipeline_validation_logic
