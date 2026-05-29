@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock, mock_open, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import requests
@@ -64,6 +64,7 @@ def test_find_or_create_location_request_exception_returns_none():
 @pytest.mark.asyncio
 async def test_execute_recreates_item_on_404_and_uploads_attachment():
     service = HomeboxService()
+    attachment_calls = {"count": 0}
 
     check_404 = MagicMock(status_code=404)
     create_resp = MagicMock()
@@ -81,14 +82,13 @@ async def test_execute_recreates_item_on_404_and_uploads_attachment():
         if method == "PUT" and endpoint.startswith("/items/"):
             return update_resp
         if method == "POST" and endpoint.endswith("/attachments"):
+            attachment_calls["count"] += 1
             return attach_resp
         raise AssertionError(f"Unexpected request {method} {endpoint}")
 
     with patch.object(service, "_get_headers_async", AsyncMock(return_value={"Authorization": "Bearer t"})), patch.object(
         service, "_request", side_effect=_mock_request
-    ), patch.object(service, "find_or_create_location_async", AsyncMock(return_value="loc-1")), patch(
-        "services.homebox.os.path.exists", return_value=True
-    ), patch("builtins.open", mock_open(read_data=b"img")):
+    ), patch.object(service, "find_or_create_location_async", AsyncMock(return_value="loc-1")):
         result = await service.execute(
             {
                 "product_name": "Milk",
@@ -96,12 +96,13 @@ async def test_execute_recreates_item_on_404_and_uploads_attachment():
                 "notes": "n1",
                 "technical_details": "cold",
             },
-            image_path="x.jpg",
+            image_path="data:image/jpeg;base64,aW1hZ2U=",
             external_id="old-id",
         )
 
     assert result["success"] is True
     assert result["item_id"] == "new-item"
+    assert attachment_calls["count"] == 1
 
 
 @pytest.mark.asyncio
