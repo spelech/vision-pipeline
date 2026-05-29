@@ -14,6 +14,8 @@ interface AssetCardProps {
 type PipelineStageId = 'barcode' | 'vision' | 'search' | 'refine' | 'sync';
 
 export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecute }: AssetCardProps) {
+  type ServiceRunState = 'idle' | 'running' | 'ready' | 'error';
+
   const [isExpanded, setIsExpanded] = useState(false);
   const [editData, setEditData] = useState<AssetEditData>(
     (item.user_overrides && Object.keys(item.user_overrides).length > 0) 
@@ -28,6 +30,12 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
     mealie: false,
     changedetection: false,
     pricebuddy: false,
+  });
+  const [serviceRunState, setServiceRunState] = useState<Record<string, ServiceRunState>>({
+    homebox: item.selected_services?.includes('homebox') ? 'ready' : 'idle',
+    mealie: item.selected_services?.includes('mealie') ? 'ready' : 'idle',
+    changedetection: item.selected_services?.includes('changedetection') ? 'ready' : 'idle',
+    pricebuddy: item.selected_services?.includes('pricebuddy') ? 'ready' : 'idle',
   });
   const [showTechnical, setShowTechnical] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
@@ -102,15 +110,43 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
     }
   };
 
+  const generateServiceOutput = async (svc: string) => {
+    setServiceRunState((prev) => ({ ...prev, [svc]: 'running' }));
+    setExpandedServices((prev) => ({ ...prev, [svc]: false }));
+    try {
+      const resp = await fetch('/api/service-output/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: Number(item.id), service_name: svc })
+      });
+      const data = await resp.json();
+      if (resp.ok && data?.success && data?.output?.status === 'ready') {
+        const generated = data?.output?.data;
+        if (generated && typeof generated === 'object') {
+          setEditData((prev) => ({ ...prev, ...(generated as AssetEditData) }));
+        }
+        setServiceRunState((prev) => ({ ...prev, [svc]: 'ready' }));
+        setExpandedServices((prev) => ({ ...prev, [svc]: true }));
+        return;
+      }
+      setServiceRunState((prev) => ({ ...prev, [svc]: 'error' }));
+    } catch (error) {
+      console.error('Failed to generate service output', error);
+      setServiceRunState((prev) => ({ ...prev, [svc]: 'error' }));
+    }
+  };
+
   const toggleService = (svc: string) => {
     setSelectedServices((prev) => {
       const isEnabled = prev.includes(svc);
       if (isEnabled) {
+        setExpandedServices((expandedPrev) => ({ ...expandedPrev, [svc]: false }));
+        setServiceRunState((statePrev) => ({ ...statePrev, [svc]: 'idle' }));
         return prev.filter((s) => s !== svc);
       }
       return [...prev, svc];
     });
-    setExpandedServices((prev) => ({ ...prev, [svc]: true }));
+    void generateServiceOutput(svc);
   };
 
   const toggleServiceExpanded = (svc: string) => {
@@ -223,7 +259,10 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
     );
   };
 
-  const previewService = selectedServices.find((svc) => expandedServices[svc]) || selectedServices[0] || null;
+  const previewService =
+    selectedServices.find((svc) => expandedServices[svc] && serviceRunState[svc] === 'ready') ||
+    selectedServices.find((svc) => serviceRunState[svc] === 'ready') ||
+    null;
 
   return (
     <div className={`glass rounded-[2rem] overflow-hidden transition-all ${isSelected ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'hover:border-white/20'}`}>
@@ -270,6 +309,7 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
                 const Icon = svc.icon;
                 const active = selectedServices.includes(svc.id);
                 const expanded = expandedServices[svc.id];
+                const runState = serviceRunState[svc.id] ?? 'idle';
                 return (
                   <div
                     key={svc.id}
@@ -289,11 +329,37 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
                         onClick={() => toggleServiceExpanded(svc.id)}
                         aria-label={`Expand ${svc.name} details`}
                         className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5"
+                        disabled={!active || runState !== 'ready'}
                       >
                         <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
                       </button>
                     </div>
-                    {expanded && (
+                    {active && runState === 'running' && (
+                      <div className="px-4 pb-4 border-t border-white/10 pt-4">
+                        <p className="text-[10px] uppercase tracking-widest font-black text-cyan-300/90 mb-3">Preparing Service Data...</p>
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-4 blur-[2px] pointer-events-none select-none">
+                          <div className="h-3 w-1/2 bg-white/20 rounded mb-2" />
+                          <div className="h-3 w-3/4 bg-white/10 rounded mb-2" />
+                          <div className="h-16 w-full bg-white/10 rounded" />
+                        </div>
+                      </div>
+                    )}
+                    {active && runState === 'error' && (
+                      <div className="px-4 pb-4 border-t border-white/10 pt-4">
+                        <p className="text-[10px] text-red-300/90 uppercase tracking-widest font-black mb-3">
+                          Service generation failed.
+                        </p>
+                        <button
+                          onClick={() => {
+                            void generateServiceOutput(svc.id);
+                          }}
+                          className="px-4 py-2 rounded-xl border border-red-400/40 text-red-200 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/10"
+                        >
+                          Retry Service Run
+                        </button>
+                      </div>
+                    )}
+                    {active && runState === 'ready' && expanded && (
                       <div className="px-4 pb-4 border-t border-white/10 pt-4">
                         {renderServiceFields(svc.id)}
                       </div>
@@ -426,7 +492,7 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
             <button 
               onClick={() => onExecute(selectedServices, editData)} 
               className="flex-[2] btn-apple py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-30"
-              disabled={selectedServices.length === 0}
+              disabled={selectedServices.length === 0 || selectedServices.some((svc) => serviceRunState[svc] === 'running')}
             >
               <Send className="w-3 h-3" /> Execute & Sync
             </button>

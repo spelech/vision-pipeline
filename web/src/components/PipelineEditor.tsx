@@ -115,13 +115,8 @@ export function PipelineEditor() {
   const savePipelineChanges = async (saveAsCustomCopy = false) => {
     if (!editingPipeline) return;
     setSaving(true);
-    
-    // Merge new pipeline into custom_pipelines. 
-    // Wait, first we need to fetch all custom_pipelines from config and append/update.
+
     try {
-      const cRes = await fetch('/api/config');
-      const cData = await cRes.json();
-      const custom = Array.isArray(cData.custom_pipelines) ? cData.custom_pipelines : [];
       const pipelineToSave = saveAsCustomCopy && !isPersistedCustomPipeline(editingPipeline)
         ? {
             ...editingPipeline,
@@ -130,19 +125,21 @@ export function PipelineEditor() {
           }
         : editingPipeline;
 
-      const idx = custom.findIndex((p: Pipeline) => p.id === pipelineToSave.id);
-      if (idx !== -1) {
-        custom[idx] = pipelineToSave;
-      } else {
-        custom.push(pipelineToSave);
+      const saveResp = await fetch(`/api/pipelines/${pipelineToSave.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: pipelineToSave.name,
+          schema: pipelineToSave.schema,
+          is_system: !pipelineToSave.id.startsWith('custom_'),
+          is_editable: true,
+          service_target: pipelineToSave.id.startsWith('service_') ? pipelineToSave.id.replace('service_', '') : undefined,
+        })
+      });
+      if (!saveResp.ok) {
+        throw new Error('Failed to save pipeline');
       }
 
-      await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ custom_pipelines: custom })
-      });
-      
       setEditingPipeline(null);
       await fetchPipelines();
     } catch (e) {
@@ -208,7 +205,7 @@ export function PipelineEditor() {
                       </p>
                   </div>
                   <button onClick={() => openPipelineEditor(p)} className="w-full md:w-auto btn-apple px-6 sm:px-10 py-3 sm:py-5 rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">
-                    {isPersistedCustomPipeline(p) ? 'Customize Sequence' : 'Inspect Architecture'}
+                    Customize Sequence
                   </button>
               </div>
 
@@ -318,7 +315,7 @@ export function PipelineEditor() {
 
               <div className="p-6 sm:p-10 border-t border-white/10 flex flex-col sm:flex-row gap-3 sm:gap-4 bg-black/40">
                   <button onClick={() => setEditingPipeline(null)} className="sm:flex-1 px-8 py-4 sm:py-6 rounded-[1.5rem] font-black text-[10px] sm:text-xs uppercase tracking-widest text-white/40 hover:bg-white/5 transition-all">Discard</button>
-                  <button onClick={() => void savePipelineChanges(!isPersistedCustomPipeline(editingPipeline))} className="sm:flex-[2] btn-apple py-4 sm:py-6 rounded-[1.5rem] font-black text-[10px] sm:text-xs uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all">{saving ? 'Saving...' : (isPersistedCustomPipeline(editingPipeline) ? 'Save Changes' : 'Save As Custom Copy')}</button>
+                  <button onClick={() => void savePipelineChanges(false)} className="sm:flex-[2] btn-apple py-4 sm:py-6 rounded-[1.5rem] font-black text-[10px] sm:text-xs uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all">{saving ? 'Saving...' : 'Save Changes'}</button>
               </div>
           </div>
         </div>
