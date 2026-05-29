@@ -58,6 +58,17 @@ docker compose up -d --build
 ```
 Access the UI at `http://localhost:8460`.
 
+## ✅ Quality Checks
+Run the same core gates used in CI before pushing:
+
+```bash
+node scripts/update-test-requirements-index.mjs --check
+python -m pytest src/tests --cov=src --cov-fail-under=80 --cov-report=term --cov-report=xml:coverage/python-coverage.xml
+```
+
+For local VS Code task runs, `Python: Run Tests` now auto-refreshes the test requirements index first,
+which reduces docs-sync drift during normal development.
+
 ## 📖 Documentation
 - [Architecture & Design](docs/ARCHITECTURE.md)
 - [Pipeline Registry](docs/PIPELINES.md)

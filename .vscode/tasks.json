@@ -99,7 +99,7 @@
 		{
 			"label": "Python: Run Tests",
 			"type": "shell",
-			"command": "${command:python.interpreterPath} -m pytest src/tests",
+			"command": "node scripts/update-test-requirements-index.mjs && ${command:python.interpreterPath} -m pytest src/tests",
 			"group": "test",
 			"options": {
 				"shell": {
