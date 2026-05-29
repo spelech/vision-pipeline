@@ -40,7 +40,26 @@ class DefaultPipeline(BasePipeline):
             "custom_prompt": {
                 "type": "textarea",
                 "label": "System Prompt Override",
-                "default": ""}}
+                "default": (
+                    "Analyze the image and return strict JSON product metadata "
+                    "for inventory ingestion."
+                )},
+            "vision_prompt": {
+                "type": "textarea",
+                "label": "Vision Prompt",
+                "default": (
+                    "Analyze the image and return strict JSON product metadata "
+                    "for inventory ingestion."
+                )
+            },
+            "refine_prompt": {
+                "type": "textarea",
+                "label": "Refine Prompt",
+                "default": (
+                    "Refine the metadata using search results and preserve "
+                    "the existing JSON schema."
+                )
+            }}
 
     def run(
             self,
@@ -58,7 +77,9 @@ class DefaultPipeline(BasePipeline):
         model = settings.get(
             "vision_model",
             "qwen/qwen2.5-vl-72b-instruct") if settings else "qwen/qwen2.5-vl-72b-instruct"
-        prompt = settings.get("custom_prompt") if settings else None
+        prompt = None
+        if settings:
+            prompt = settings.get("vision_prompt") or settings.get("custom_prompt")
         results["llm_output"] = vision_identify(
             image, text_description, model=model, prompt=prompt, log_cb=log_cb)
 
@@ -75,10 +96,12 @@ class DefaultPipeline(BasePipeline):
             # 4. Refine
             if results["searxng_results"]:
                 refine_model = settings.get("refine_model") if settings else None
+                refine_prompt = settings.get("refine_prompt") if settings else None
                 results["llm_output"] = data_refine(
                     results["llm_output"],
                     results["searxng_results"],
                     model=refine_model,
+                    prompt=refine_prompt,
                     log_cb=log_cb,
                 )
 
