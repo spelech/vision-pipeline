@@ -6,6 +6,12 @@ services:
       - POSTGRES_USER=${DB_USER:-vision}
       - POSTGRES_PASSWORD=${DB_PASSWORD:-vision_pass}
       - POSTGRES_DB=${DB_NAME:-vision_pipeline}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-vision} -d ${DB_NAME:-vision_pipeline}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     ports:
@@ -32,10 +38,10 @@ services:
       - ./data:/app/data
       - ./web:/web
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://vision:vision_pass@db:5432/vision_pipeline}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   playwright-scraper:
