@@ -6,7 +6,7 @@ import re
 from io import BytesIO
 
 import requests
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
 from PIL import ImageEnhance, ImageFilter
 
 try:
@@ -77,7 +77,12 @@ def vision_identify(
         model = DEFAULT_VISION_MODEL
     if log_cb:
         log_cb(f"🤖 [Node: Vision] Calling {model}...")
-    client = get_client()
+    try:
+        client = get_client()
+    except OpenAIError as e:
+        if log_cb:
+            log_cb(f"❌ [Node: Vision] Error: {str(e)}")
+        return {"error": str(e)}
 
     if not prompt:
         prompt = """
@@ -127,6 +132,7 @@ def vision_identify(
         RuntimeError,
         json.JSONDecodeError,
         requests.RequestException,
+        OpenAIError,
     ) as e:
         if log_cb:
             log_cb(f"❌ [Node: Vision] Error: {str(e)}")
@@ -194,7 +200,12 @@ def data_refine(
         model = DEFAULT_REFINE_MODEL
     if log_cb:
         log_cb(f"🧠 [Node: Refine] Finalizing with {model}...")
-    client = get_client()
+    try:
+        client = get_client()
+    except OpenAIError as e:
+        if log_cb:
+            log_cb(f"⚠️ [Node: Refine] Failed: {str(e)}")
+        return current_data
 
     if not prompt:
         prompt = f"""
@@ -221,6 +232,7 @@ def data_refine(
         RuntimeError,
         json.JSONDecodeError,
         requests.RequestException,
+        OpenAIError,
     ) as e:
         if log_cb:
             log_cb(f"⚠️ [Node: Refine] Failed: {str(e)}")

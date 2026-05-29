@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
+from openai import OpenAIError
 from PIL import Image
 
 from pipelines import nodes
@@ -81,6 +82,19 @@ def test_vision_identify_error_returns_error_object():
     assert any("[Node: Vision] Calling" in entry for entry in logs)
 
 
+def test_vision_identify_client_init_error_returns_error_object():
+    logs = []
+    with patch(
+        "pipelines.nodes.get_client",
+        side_effect=OpenAIError("Missing credentials"),
+    ):
+        result = nodes.vision_identify(_mk_image(), log_cb=logs.append)
+
+    assert "error" in result
+    assert "Missing credentials" in result["error"]
+    assert any("[Node: Vision] Error" in entry for entry in logs)
+
+
 def test_web_search_and_scrape_paths():
     with patch.dict("os.environ", {}, clear=True):
         assert nodes.web_search("abc") == []
@@ -143,3 +157,18 @@ def test_data_refine_success_and_fallback():
     )
     with patch("pipelines.nodes.get_client", return_value=mock_error_client):
         assert nodes.data_refine(current, context) == current
+
+
+def test_data_refine_client_init_error_returns_current_data():
+    current = {"name": "old"}
+    context = {"source": "web"}
+    logs = []
+
+    with patch(
+        "pipelines.nodes.get_client",
+        side_effect=OpenAIError("Missing credentials"),
+    ):
+        refined = nodes.data_refine(current, context, log_cb=logs.append)
+
+    assert refined == current
+    assert any("[Node: Refine] Failed" in entry for entry in logs)
