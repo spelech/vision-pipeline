@@ -15,6 +15,10 @@ interface PreviewModalProps {
 export function PreviewModal({ preview, onClose, onConfirm }: PreviewModalProps) {
   const [editedPayload, setEditedPayload] = useState(JSON.stringify(preview.payload, null, 2));
   const [error, setError] = useState<string | null>(null);
+  const imageSrc =
+    (typeof preview.item.ai_output?.review_image_data_uri === 'string' && preview.item.ai_output.review_image_data_uri.startsWith('data:image'))
+      ? preview.item.ai_output.review_image_data_uri
+      : (preview.item.image_path.startsWith('data:image') ? preview.item.image_path : `/uploads/${preview.item.image_path}`);
 
   const handleConfirm = () => {
     try {
@@ -47,7 +51,7 @@ export function PreviewModal({ preview, onClose, onConfirm }: PreviewModalProps)
             <h3 className="label-apple">Reference Image</h3>
             <div className="flex-1 rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group min-h-[200px]">
               <img 
-                src={`/uploads/${preview.item.image_path}`} 
+                src={imageSrc}
                 className="w-full h-full object-contain" 
                 alt="Asset" 
               />

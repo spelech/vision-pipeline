@@ -12,7 +12,15 @@ from types import SimpleNamespace
 with patch("os.makedirs"):
     with patch("os.path.exists", return_value=True):
         with patch("fastapi.staticfiles.StaticFiles", return_value=MagicMock()):
-            from app import app, SERVICES, get_db
+            from app import (
+                app,
+                SERVICES,
+                get_db,
+                encode_image_bytes_to_data_uri,
+                decode_data_uri_to_bytes,
+                build_review_image_data_uri,
+                item_source_image_data_uri,
+            )
 from pipelines import get_pipeline
 
 from httpx import ASGITransport, AsyncClient
@@ -57,18 +65,26 @@ async def test_identify_endpoint():
                 img.save(buf, format='JPEG')
                 img_bytes = buf.getvalue()
 
-                # Mock file operations
-                with patch("builtins.open", MagicMock()):
-                    files = {'file': ('test.jpg', img_bytes, 'image/jpeg')}
-                    data = {'text': 'test context', 'rotation': 0, 'mirror': False}
+                files = {'file': ('test.jpg', img_bytes, 'image/jpeg')}
+                data = {'text': 'test context', 'rotation': 0, 'mirror': False}
 
-                    response = await ac.post("/api/identify", data=data, files=files)
+                response = await ac.post("/api/identify", data=data, files=files)
 
-                    assert response.status_code == 200
-                    res_json = response.json()
-                    assert res_json["success"] is True
-                    assert res_json["results"]["llm_output"]["product_name"] == "Test Product"
-                    assert "ai_preview" in res_json
+                assert response.status_code == 200
+                res_json = response.json()
+                assert res_json["success"] is True
+                assert res_json["results"]["llm_output"]["product_name"] == "Test Product"
+                assert res_json["ai_preview"].startswith("data:image/jpeg;base64,")
+
+                added_item = next(
+                    call.args[0]
+                    for call in mock_session.add.call_args_list
+                    if hasattr(call.args[0], "image_path")
+                )
+                assert isinstance(added_item.image_path, str)
+                assert added_item.image_path.startswith("data:image/jpeg;base64,")
+                assert isinstance(added_item.raw_image_path, str)
+                assert added_item.raw_image_path.startswith("data:image/jpeg;base64,")
 
 @pytest.mark.asyncio
 async def test_get_locations_endpoint():
@@ -153,21 +169,43 @@ async def test_batch_upload_endpoint():
 
         # Mock background task to avoid actually running it
         with patch("app.process_item_task", AsyncMock()):
-            # Mock open() for file writing
-            with patch("builtins.open", MagicMock()):
-                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-                    img = Image.new('RGB', (10, 10))
-                    buf = io.BytesIO()
-                    img.save(buf, format='JPEG')
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                img = Image.new('RGB', (10, 10))
+                buf = io.BytesIO()
+                img.save(buf, format='JPEG')
 
-                    files = [
-                        ('files', ('img1.jpg', buf.getvalue(), 'image/jpeg'))
-                    ]
-                    data = {'text': 'Batch Desc'}
+                files = [
+                    ('files', ('img1.jpg', buf.getvalue(), 'image/jpeg'))
+                ]
+                data = {'text': 'Batch Desc'}
 
-                    response = await ac.post("/api/batch-upload", data=data, files=files)
-                    assert response.status_code == 200
-                    assert response.json()["success"] is True
+                response = await ac.post("/api/batch-upload", data=data, files=files)
+                assert response.status_code == 200
+                assert response.json()["success"] is True
+
+                added_item = next(
+                    call.args[0]
+                    for call in mock_session.add.call_args_list
+                    if hasattr(call.args[0], "image_path")
+                )
+                assert isinstance(added_item.image_path, str)
+                assert added_item.image_path.startswith("data:image/jpeg;base64,")
+                assert isinstance(added_item.raw_image_path, str)
+                assert added_item.raw_image_path.startswith("data:image/jpeg;base64,")
+
+
+def test_image_data_uri_helper_round_trip_and_item_source_resolution():
+    payload = b"hello-image"
+    uri = encode_image_bytes_to_data_uri(payload)
+    assert uri.startswith("data:image/jpeg;base64,")
+    assert decode_data_uri_to_bytes(uri) == payload
+
+    sample_img = Image.new("RGB", (32, 16), color=(10, 20, 30))
+    preview_uri = build_review_image_data_uri(sample_img)
+    assert preview_uri.startswith("data:image/jpeg;base64,")
+
+    row = SimpleNamespace(raw_image_path=uri, image_path=preview_uri)
+    assert item_source_image_data_uri(row) == uri
 
 @pytest.mark.asyncio
 async def test_bulk_approve_endpoint():
@@ -601,7 +639,7 @@ async def test_preview_endpoint_item_not_found():
 
 @pytest.mark.feature("delete-item")
 @pytest.mark.asyncio
-async def test_delete_item_endpoint_deletes_files_and_item():
+async def test_delete_item_endpoint_deletes_item_without_filesystem_dependency():
     mock_session = AsyncMock()
     mock_item = SimpleNamespace(id=3, image_path="masked.png", raw_image_path="raw.jpg")
     mock_result = MagicMock()
@@ -613,13 +651,12 @@ async def test_delete_item_endpoint_deletes_files_and_item():
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        with patch("os.path.exists", return_value=True):
-            with patch("os.remove") as remove_mock:
-                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-                    response = await ac.delete("/api/items/3")
-                    assert response.status_code == 200
-                    assert response.json()["success"] is True
-                    assert remove_mock.call_count == 2
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.delete("/api/items/3")
+            assert response.status_code == 200
+            assert response.json()["success"] is True
+            mock_session.delete.assert_awaited_once_with(mock_item)
+            mock_session.commit.assert_awaited()
     finally:
         app.dependency_overrides.pop(get_db, None)
 

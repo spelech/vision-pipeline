@@ -336,6 +336,8 @@ Updated by script: scripts/update-test-requirements-index.mjs
   - asset-card-default-service | does not enable any default service when none are selected
   - asset-card-service-generation-success | generates service output when enabling a new service
   - asset-card-service-generation-error | shows retry state when service generation fails
+  - asset-card-service-toggle-off | does not regenerate service output when disabling a selected service
+  - asset-card-homebox-object-fields | renders object technical details as JSON text
 - web/src/test/NetworkCheck.test.tsx
   - network-check-success | logs success when backend responds OK
   - network-check-non-ok | logs error with status when backend returns non-OK
@@ -389,11 +391,13 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - guard search/scrape path when query cannot be trusted.
     - skip scraping/refine when search returns no candidate URLs.
     - barcode query path should work even when settings are omitted.
+    - advanced pipeline settings schema includes non-empty prompt defaults.
   - Test functions:
     - test_advanced_pipeline_runs_full_search_scrape_refine_flow
     - test_advanced_pipeline_skips_search_when_query_unknown
     - test_advanced_pipeline_handles_no_search_results
     - test_advanced_pipeline_uses_barcode_query_and_defaults_without_settings
+    - test_advanced_pipeline_schema_exposes_vision_and_refine_prompts
 - src/tests/test_api.py
   - Feature labels:
     - pipeline list uses DB catalog data and no file merge fallback.
@@ -404,6 +408,7 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_preview_endpoint
     - test_execute_endpoint
     - test_batch_upload_endpoint
+    - test_image_data_uri_helper_round_trip_and_item_source_resolution
     - test_bulk_approve_endpoint
     - test_queue_endpoint_all_status_returns_items
     - test_get_item_endpoint_returns_item
@@ -415,12 +420,13 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_update_config_persists_custom_pipelines_and_secret
     - test_generate_service_output_endpoint_generates_and_persists
     - test_generate_service_output_endpoint_returns_cached_when_ready
+    - test_generate_service_output_root_alias_accepts_post
     - test_search_endpoint_returns_merged_item_data
     - test_logs_endpoint_wraps_messages
     - test_locations_endpoint_handles_missing_headers
     - test_pipelines_endpoint_merges_custom_from_config_file
     - test_preview_endpoint_item_not_found
-    - test_delete_item_endpoint_deletes_files_and_item
+    - test_delete_item_endpoint_deletes_item_without_filesystem_dependency
     - test_update_config_handles_homebox_username_secret
 - src/tests/test_app_utils.py
   - Feature labels:
@@ -428,6 +434,7 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - convert prompt maps into UI-friendly template arrays.
     - collect deduplicated model favorites lists.
     - normalize service prompt configs and overlay them onto defaults.
+    - derive retailer-weighted candidates for service prompt feedback passes.
     - read and write Homebox username env variable.
     - select composable pipeline when pipeline id exists in DB catalog.
     - resolve registered pipeline ids and fallback to default for unknown ids.
@@ -436,6 +443,7 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_normalize_prompt_templates_from_mapping
     - test_merge_unique_lists
     - test_normalize_and_merge_service_prompts
+    - test_extract_search_candidates_and_feedback_context
     - test_secret_get_set_homebox_username
     - test_get_pipeline_uses_composable_when_db_pipeline_exists
     - test_get_pipeline_uses_registry_and_default_fallback
@@ -461,10 +469,12 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - full default pipeline path with query/search/refine.
     - unknown query should block search/refine branch.
     - no image means no barcode scan branch but vision still runs.
+    - default pipeline settings schema includes non-empty prompt defaults.
   - Test functions:
     - test_default_pipeline_refines_when_search_has_results
     - test_default_pipeline_skips_search_and_refine_for_unknown_query
     - test_default_pipeline_handles_missing_image_path
+    - test_default_pipeline_schema_exposes_vision_and_refine_prompts
 - src/tests/test_enrichers.py
   - Test functions:
     - test_pricebuddy_execution
@@ -472,12 +482,14 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_enrichers_pre_enrichment
     - test_pricebuddy_execute_without_api_key_returns_error
     - test_pricebuddy_payload_falls_back_to_top_results_and_default_tag
+    - test_pricebuddy_payload_includes_monitor_urls_when_present
     - test_changedetection_execute_missing_url_returns_error
     - test_changedetection_pre_enrichment_no_key_or_no_url_short_circuits
     - test_pricebuddy_execute_request_exception_returns_error
     - test_pricebuddy_pre_enrichment_name_query_and_exception_paths
     - test_changedetection_execute_request_exception_returns_error
     - test_changedetection_pre_enrichment_no_matching_watch_and_exception_paths
+    - test_changedetection_execute_supports_multiple_monitor_urls
 - src/tests/test_homebox.py
   - Test functions:
     - test_homebox_execution_new_item

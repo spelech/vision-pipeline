@@ -921,6 +921,9 @@ SERVICES = {
     "changedetection": ChangeDetectionService()
 }
 
+REVIEW_IMAGE_MAX_DIM = int(os.getenv("REVIEW_IMAGE_MAX_DIM", "1280"))
+REVIEW_IMAGE_JPEG_QUALITY = int(os.getenv("REVIEW_IMAGE_JPEG_QUALITY", "72"))
+
 # Ensure directories exist
 os.makedirs("data/uploads", exist_ok=True)
 
@@ -933,6 +936,43 @@ app.mount("/uploads", StaticFiles(directory="data/uploads"), name="uploads")
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
+
+
+def encode_image_bytes_to_data_uri(image_bytes: bytes, mime: str = "image/jpeg") -> str:
+    return f"data:{mime};base64,{base64.b64encode(image_bytes).decode()}"
+
+
+def decode_data_uri_to_bytes(data_uri: str) -> bytes:
+    if not isinstance(data_uri, str) or "," not in data_uri:
+        raise ValueError("Invalid data URI")
+    encoded = data_uri.split(",", 1)[1]
+    return base64.b64decode(encoded)
+
+
+def build_review_image_data_uri(img: Image.Image) -> str:
+    preview_img = img.copy()
+    if preview_img.mode in ("RGBA", "P"):
+        preview_img = preview_img.convert("RGB")
+    preview_img.thumbnail((REVIEW_IMAGE_MAX_DIM, REVIEW_IMAGE_MAX_DIM))
+
+    out = io.BytesIO()
+    preview_img.save(
+        out,
+        format="JPEG",
+        quality=REVIEW_IMAGE_JPEG_QUALITY,
+        optimize=True,
+    )
+    return encode_image_bytes_to_data_uri(out.getvalue(), mime="image/jpeg")
+
+
+def item_source_image_data_uri(item: Any) -> Optional[str]:
+    raw_value = getattr(item, "raw_image_path", None)
+    preview_value = getattr(item, "image_path", None)
+    candidates = [raw_value, preview_value]
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.startswith("data:image"):
+            return candidate
+    return None
 
 # --- Endpoints ---
 
@@ -1337,14 +1377,10 @@ async def identify(
 
     try:
         content = await file.read()
-        raw_filename = f"raw_{uuid.uuid4()}.jpg"
-        masked_filename = f"masked_{uuid.uuid4()}.png"
-
-        with open(f"data/uploads/{raw_filename}", "wb") as fh:
-            fh.write(content)
-
         img = Image.open(io.BytesIO(content))
         img = ImageOps.exif_transpose(img)  # type: ignore
+        review_image_data_uri = build_review_image_data_uri(img)
+        raw_image_data_uri = encode_image_bytes_to_data_uri(content, mime="image/jpeg")
 
         # type: ignore
         results = await run_in_threadpool(core_pipeline.run, img, text, pipeline_settings, log_it)
@@ -1402,6 +1438,7 @@ async def identify(
         results["service_outputs"] = service_outputs
         results["session_id"] = sid
         results["logs"] = session_logger.get_logs(sid)
+        results["review_image_data_uri"] = review_image_data_uri
 
         async with AsyncSessionLocal() as db:
             stmt = select(Batch).where(Batch.name == "Single Captures")
@@ -1413,12 +1450,10 @@ async def identify(
                 await db.commit()
                 await db.refresh(batch)
 
-            img.save(f"data/uploads/{masked_filename}")
-
             new_item = Item(
                 batch_id=batch.id,
-                image_path=masked_filename,
-                raw_image_path=raw_filename,
+                image_path=review_image_data_uri,
+                raw_image_path=raw_image_data_uri,
                 lasso_polygon=lasso_points,
                 status="pending",
                 ai_output=results,
@@ -1431,17 +1466,13 @@ async def identify(
             item_id = new_item.id
 
         log_it("✨ UI updating with findings.")
-        buf = io.BytesIO()
-        img.save(buf, format='PNG')
-        b64_img = base64.b64encode(buf.getvalue()).decode()
-
         session_logger.end_session(sid)
         return {
             "success": True,
             "session_id": sid,
             "item_id": item_id,
             "results": results,
-            "ai_preview": f"data:image/png;base64,{b64_img}"
+            "ai_preview": review_image_data_uri,
         }
     except (
         OSError,
@@ -1636,16 +1667,16 @@ async def batch_upload(
     for file in files:
         if file.content_type and not file.content_type.startswith("image/"):
             continue
-        file_ext = os.path.splitext(file.filename or "")[1]
-        file_name = f"{uuid.uuid4()}{file_ext}"
-        file_path = f"data/uploads/{file_name}"
         content = await file.read()
-        with open(file_path, "wb") as fh:
-            fh.write(content)
+        img = Image.open(io.BytesIO(content))
+        img = ImageOps.exif_transpose(img)  # type: ignore
+        review_image_data_uri = build_review_image_data_uri(img)
+        raw_image_data_uri = encode_image_bytes_to_data_uri(content, mime="image/jpeg")
 
         new_item = Item(
             batch_id=new_batch.id,
-            image_path=file_name,
+            image_path=review_image_data_uri,
+            raw_image_path=raw_image_data_uri,
             status="processing")
         db.add(new_item)
         await db.commit()
@@ -1684,9 +1715,15 @@ async def process_item_task(
         batch_text = batch.description if batch else None
 
         try:
-            full_path = f"data/uploads/{item.image_path}"
-            img = Image.open(full_path)
+            image_data_uri = item_source_image_data_uri(item)
+            if not image_data_uri:
+                raise ValueError("No image data found on item")
+
+            image_bytes = decode_data_uri_to_bytes(image_data_uri)
+            img = Image.open(io.BytesIO(image_bytes))
+            img = ImageOps.exif_transpose(img)  # type: ignore
             results = await run_in_threadpool(core_pipeline.run, img, batch_text, settings, log_it)
+            results["review_image_data_uri"] = build_review_image_data_uri(img)
 
             enrichment_tasks = [
                 s.get_pre_enrichment(
@@ -1719,6 +1756,7 @@ async def process_item_task(
             results["logs"] = session_logger.get_logs(sid)
 
             item.ai_output = results
+            item.image_path = results["review_image_data_uri"]
             item.product_type = "food" if results.get(
                 "llm_output", {}).get("is_food") else "product"
             item.status = "pending"
@@ -1818,11 +1856,6 @@ async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Item).where(Item.id == item_id))
     item = result.scalar_one_or_none()
     if item:
-        if os.path.exists(f"data/uploads/{item.image_path}"):
-            os.remove(f"data/uploads/{item.image_path}")
-        if item.raw_image_path and os.path.exists(
-                f"data/uploads/{item.raw_image_path}"):
-            os.remove(f"data/uploads/{item.raw_image_path}")
         await db.delete(item)
         await db.commit()
     return {"success": True}

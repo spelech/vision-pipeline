@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import logging
 import os
 from typing import Any, Dict, Optional
@@ -157,10 +158,12 @@ class HomeboxService(BaseService):
                     timeout=5,
                 )
 
-            # Upload attachment if image_path exists
-            if image_path and os.path.exists(f"data/uploads/{image_path}"):
-                with open(f"data/uploads/{image_path}", "rb") as f:
-                    files = {"file": (image_path, f, "image/jpeg")}
+            # Upload attachment if item includes an image data URI.
+            if isinstance(image_path, str) and image_path.startswith("data:image"):
+                encoded = image_path.split(",", 1)[1] if "," in image_path else ""
+                image_bytes = base64.b64decode(encoded) if encoded else b""
+                if image_bytes:
+                    files = {"file": ("vision-capture.jpg", image_bytes, "image/jpeg")}
                     attach_data = {"type": "photo", "name": "Vision Capture"}
                     await self._request(
                         "POST",

@@ -14,6 +14,11 @@ interface AssetCardProps {
 type PipelineStageId = 'barcode' | 'vision' | 'search' | 'refine' | 'sync';
 
 export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecute }: AssetCardProps) {
+    const itemImageSrc =
+      (typeof item.ai_output?.review_image_data_uri === 'string' && item.ai_output.review_image_data_uri.startsWith('data:image'))
+        ? item.ai_output.review_image_data_uri
+        : (item.image_path.startsWith('data:image') ? item.image_path : `/uploads/${item.image_path}`);
+
   type ServiceRunState = 'idle' | 'running' | 'ready' | 'error';
 
   const asEditableText = (value: unknown, fallback = ''): string => {
@@ -288,9 +293,9 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
         )}
         <div 
           className="w-24 h-24 rounded-2xl overflow-hidden bg-white/5 shrink-0 cursor-pointer hover:scale-105 transition-transform"
-          onClick={() => window.open(`/uploads/${item.image_path}`, '_blank')}
+          onClick={() => window.open(itemImageSrc, '_blank')}
         >
-          <img src={`/uploads/${item.image_path}`} className="w-full h-full object-contain bg-black/40" alt="" />
+          <img src={itemImageSrc} className="w-full h-full object-contain bg-black/40" alt="" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex gap-2 mb-1 overflow-x-auto no-scrollbar">
