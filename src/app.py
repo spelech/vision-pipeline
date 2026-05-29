@@ -714,10 +714,11 @@ def generate_service_output(
                 f"🔁 [Service Prompt: {service_name}] "
                 "Applying search-feedback refinement pass..."
             )
+        feedback_template_text = feedback_template or (
+            "Revise JSON output using candidate URLs and service constraints."
+        )
         feedback_prompt = (
-            f"{feedback_template or (
-                'Revise JSON output using candidate URLs and service constraints.'
-            )}\n"
+            f"{feedback_template_text}\n"
             f"Service: {service_name}\n"
             f"Current Data: {json.dumps(base_data)}\n"
             f"Initial Output: {json.dumps(refined)}\n"
