@@ -396,7 +396,7 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_advanced_pipeline_uses_barcode_query_and_defaults_without_settings
 - src/tests/test_api.py
   - Feature labels:
-    - pipeline list uses DB-first catalog and falls back to registry without file merge.
+    - pipeline list uses DB catalog data and no file merge fallback.
   - Test functions:
     - test_health_endpoint
     - test_identify_endpoint
@@ -421,24 +421,20 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_pipelines_endpoint_merges_custom_from_config_file
     - test_preview_endpoint_item_not_found
     - test_delete_item_endpoint_deletes_files_and_item
-    - test_update_config_handles_legacy_homebox_email
+    - test_update_config_handles_homebox_username_secret
 - src/tests/test_app_utils.py
   - Feature labels:
     - normalize mixed prompt template representations into stable objects.
     - convert prompt maps into UI-friendly template arrays.
-    - collect deduplicated configured model favorites from legacy and nested config shapes.
-    - safely parse config files while tolerating missing and malformed content.
-    - merge legacy/current user config and dedupe templates and model favorites.
+    - collect deduplicated model favorites lists.
     - normalize service prompt configs and overlay them onto defaults.
-    - keep Homebox username/email environment variables in sync.
+    - read and write Homebox username env variable.
     - select composable pipeline when pipeline id exists in DB catalog.
     - resolve registered pipeline ids and fallback to default for unknown ids.
   - Test functions:
     - test_normalize_prompt_templates_from_list_and_dict
     - test_normalize_prompt_templates_from_mapping
-    - test_merge_unique_and_extract_model_favorites
-    - test_load_json_file_handles_missing_invalid_and_nondict
-    - test_load_merged_user_config_merges_and_dedupes
+    - test_merge_unique_lists
     - test_normalize_and_merge_service_prompts
     - test_secret_get_set_homebox_username
     - test_get_pipeline_uses_composable_when_db_pipeline_exists
