@@ -438,6 +438,12 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - read and write Homebox username env variable.
     - select composable pipeline when pipeline id exists in DB catalog.
     - resolve registered pipeline ids and fallback to default for unknown ids.
+    - infer provider routing from model ids.
+    - route setting normalization to key-specific transformers.
+    - normalize legacy model ids in pipeline schema and settings.
+    - run feedback pass only for supported services and fill URL fallbacks.
+    - resolve service config from defaults plus stored overrides.
+    - build item payloads for service preview/execute paths.
   - Test functions:
     - test_normalize_prompt_templates_from_list_and_dict
     - test_normalize_prompt_templates_from_mapping
@@ -447,6 +453,12 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_secret_get_set_homebox_username
     - test_get_pipeline_uses_composable_when_db_pipeline_exists
     - test_get_pipeline_uses_registry_and_default_fallback
+    - test_infer_model_provider_handles_known_custom_and_blank
+    - test_normalize_app_setting_routes_by_key
+    - test_normalize_pipeline_schema_settings_and_list_apply_model_aliases
+    - test_service_feedback_gate_and_fallback_population
+    - test_get_service_prompt_config_overlays_defaults_and_overrides
+    - test_item_data_helpers_project_base_context_and_service_data
 - src/tests/test_composable_pipeline.py
   - Test functions:
     - test_pipeline_respects_custom_order
