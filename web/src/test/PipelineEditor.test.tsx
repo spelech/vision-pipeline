@@ -59,7 +59,7 @@ describe('PipelineEditor', () => {
   it('Feature: pipeline-editor-edit-nodes | edits nodes by removing and adding blocks', async () => {
     render(<PipelineEditor />);
 
-    const open = await screen.findByText('Inspect Architecture');
+    const open = await screen.findByText('Customize Sequence');
     fireEvent.click(open);
 
     expect(await screen.findByText('Pipeline Architecture')).toBeInTheDocument();
@@ -70,6 +70,19 @@ describe('PipelineEditor', () => {
 
     fireEvent.click(screen.getByText('+ scrape'));
     expect(screen.getByText('Label')).toBeInTheDocument();
+  });
+
+  it('Feature: pipeline-editor-discard | closes editor without saving when discard is clicked', async () => {
+    render(<PipelineEditor />);
+
+    fireEvent.click(await screen.findByText('Customize Sequence'));
+    expect(await screen.findByText('Pipeline Architecture')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Discard'));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Pipeline Architecture')).not.toBeInTheDocument();
+    });
   });
 
   it('Feature: pipeline-editor-save-error | shows alert when save fails', async () => {
@@ -84,10 +97,7 @@ describe('PipelineEditor', () => {
           })
         });
       }
-      if (url === '/api/config' && (!opts || !opts.method)) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ custom_pipelines: [] }) });
-      }
-      if (url === '/api/config' && opts?.method === 'POST') {
+      if (typeof url === 'string' && url.startsWith('/api/pipelines/') && opts?.method === 'PUT') {
         return Promise.reject(new Error('save failed'));
       }
       if (url === '/api/models') {
@@ -99,8 +109,8 @@ describe('PipelineEditor', () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     render(<PipelineEditor />);
 
-    fireEvent.click(await screen.findByText('Inspect Architecture'));
-    fireEvent.click(await screen.findByText('Save As Custom Copy'));
+    fireEvent.click(await screen.findByText('Customize Sequence'));
+    fireEvent.click(await screen.findByText('Save Changes'));
 
     await waitFor(() => {
       expect(alertSpy).toHaveBeenCalledWith('Failed to save pipeline');
@@ -109,7 +119,7 @@ describe('PipelineEditor', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('Feature: pipeline-editor-save-copy-success | saves a non-custom pipeline as a custom copy', async () => {
+  it('Feature: pipeline-editor-save-success | saves a pipeline through DB API endpoint', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn().mockImplementation((url: string, opts?: RequestInit) => {
       if (url === '/api/pipelines') {
@@ -121,10 +131,7 @@ describe('PipelineEditor', () => {
           })
         });
       }
-      if (url === '/api/config' && (!opts || !opts.method)) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ custom_pipelines: [] }) });
-      }
-      if (url === '/api/config' && opts?.method === 'POST') {
+      if (typeof url === 'string' && url.startsWith('/api/pipelines/') && opts?.method === 'PUT') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
       }
       if (url === '/api/models') {
@@ -134,22 +141,21 @@ describe('PipelineEditor', () => {
     }) as typeof fetch;
 
     render(<PipelineEditor />);
-    fireEvent.click(await screen.findByText('Inspect Architecture'));
-    fireEvent.click(await screen.findByText('Save As Custom Copy'));
+    fireEvent.click(await screen.findByText('Customize Sequence'));
+    fireEvent.click(await screen.findByText('Save Changes'));
 
     await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledWith('/api/config', expect.objectContaining({ method: 'POST' }));
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/pipelines/default', expect.objectContaining({ method: 'PUT' }));
     });
 
     const postCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-      (call) => call[0] === '/api/config' && call[1]?.method === 'POST'
+      (call) => call[0] === '/api/pipelines/default' && call[1]?.method === 'PUT'
     );
     expect(postCall).toBeDefined();
 
-    const payload = JSON.parse((postCall?.[1] as RequestInit).body as string) as { custom_pipelines: Array<{ id: string; name: string }> };
-    expect(payload.custom_pipelines).toHaveLength(1);
-    expect(payload.custom_pipelines[0].id).toMatch(/^custom_/);
-    expect(payload.custom_pipelines[0].name).toBe('Default Copy');
+    const payload = JSON.parse((postCall?.[1] as RequestInit).body as string) as { name: string; schema: Record<string, unknown> };
+    expect(payload.name).toBe('Default');
+    expect(payload.schema).toBeDefined();
 
     globalThis.fetch = originalFetch;
   });
@@ -173,10 +179,7 @@ describe('PipelineEditor', () => {
           })
         });
       }
-      if (url === '/api/config' && (!opts || !opts.method)) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ custom_pipelines: [] }) });
-      }
-      if (url === '/api/config' && opts?.method === 'POST') {
+      if (typeof url === 'string' && url.startsWith('/api/pipelines/') && opts?.method === 'PUT') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
       }
       if (url === '/api/models') {
@@ -186,7 +189,7 @@ describe('PipelineEditor', () => {
     }) as typeof fetch;
 
     render(<PipelineEditor />);
-    fireEvent.click(await screen.findByText('Inspect Architecture'));
+    fireEvent.click(await screen.findByText('Customize Sequence'));
 
     fireEvent.click(screen.getAllByRole('button', { name: /vision/i })[0]);
     expect(await screen.findByText('Node Calibration')).toBeInTheDocument();
@@ -195,21 +198,21 @@ describe('PipelineEditor', () => {
     fireEvent.change(instructionSet, { target: { value: 'Updated vision prompt for tests' } });
     fireEvent.click(screen.getByRole('button', { name: /Confirm Parameters/i }));
 
-    fireEvent.click(await screen.findByText('Save As Custom Copy'));
+    fireEvent.click(await screen.findByText('Save Changes'));
 
     await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledWith('/api/config', expect.objectContaining({ method: 'POST' }));
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/pipelines/default', expect.objectContaining({ method: 'PUT' }));
     });
 
     const postCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-      (call) => call[0] === '/api/config' && call[1]?.method === 'POST'
+      (call) => call[0] === '/api/pipelines/default' && call[1]?.method === 'PUT'
     );
     expect(postCall).toBeDefined();
 
     const payload = JSON.parse((postCall?.[1] as RequestInit).body as string) as {
-      custom_pipelines: Array<{ schema: { custom_prompt?: { default: string } } }>;
+      schema: { custom_prompt?: { default: string } };
     };
-    expect(payload.custom_pipelines[0].schema.custom_prompt?.default).toBe('Updated vision prompt for tests');
+    expect(payload.schema.custom_prompt?.default).toBe('Updated vision prompt for tests');
 
     globalThis.fetch = originalFetch;
   });
@@ -264,10 +267,7 @@ describe('PipelineEditor', () => {
           })
         });
       }
-      if (url === '/api/config' && (!opts || !opts.method)) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ custom_pipelines: [{ id: 'custom_user_flow', name: 'Old', schema: {} }] }) });
-      }
-      if (url === '/api/config' && opts?.method === 'POST') {
+      if (typeof url === 'string' && url.startsWith('/api/pipelines/') && opts?.method === 'PUT') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
       }
       if (url === '/api/models') {
@@ -281,16 +281,14 @@ describe('PipelineEditor', () => {
     fireEvent.click(await screen.findByText('Save Changes'));
 
     await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledWith('/api/config', expect.objectContaining({ method: 'POST' }));
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/pipelines/custom_user_flow', expect.objectContaining({ method: 'PUT' }));
     });
 
     const postCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-      (call) => call[0] === '/api/config' && call[1]?.method === 'POST'
+      (call) => call[0] === '/api/pipelines/custom_user_flow' && call[1]?.method === 'PUT'
     );
-    const payload = JSON.parse((postCall?.[1] as RequestInit).body as string) as { custom_pipelines: Array<{ id: string; name: string }> };
-    expect(payload.custom_pipelines).toHaveLength(1);
-    expect(payload.custom_pipelines[0].id).toBe('custom_user_flow');
-    expect(payload.custom_pipelines[0].name).toBe('My Flow');
+    const payload = JSON.parse((postCall?.[1] as RequestInit).body as string) as { name: string };
+    expect(payload.name).toBe('My Flow');
 
     globalThis.fetch = originalFetch;
   });

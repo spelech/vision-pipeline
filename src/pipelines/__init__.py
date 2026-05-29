@@ -2,11 +2,21 @@ from .base import BasePipeline
 from .default import DefaultPipeline
 from .advanced import AdvancedPipeline
 from .composable import ComposablePipeline
+from .service_pipelines import (
+    HomeboxServicePipeline,
+    MealieServicePipeline,
+    PriceBuddyServicePipeline,
+    ChangeDetectionServicePipeline,
+)
 
 PIPELINE_REGISTRY = {
     DefaultPipeline.get_id(): DefaultPipeline,
     AdvancedPipeline.get_id(): AdvancedPipeline,
-    ComposablePipeline.get_id(): ComposablePipeline
+    ComposablePipeline.get_id(): ComposablePipeline,
+    HomeboxServicePipeline.get_id(): HomeboxServicePipeline,
+    MealieServicePipeline.get_id(): MealieServicePipeline,
+    PriceBuddyServicePipeline.get_id(): PriceBuddyServicePipeline,
+    ChangeDetectionServicePipeline.get_id(): ChangeDetectionServicePipeline,
 }
 
 

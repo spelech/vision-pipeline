@@ -165,4 +165,66 @@ describe('AssetCard', () => {
 
     expect(handlePreview).not.toHaveBeenCalled();
   });
+
+  it('Feature: asset-card-service-generation-success | generates service output when enabling a new service', async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/service-output/generate') {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            output: {
+              status: 'ready',
+              data: { recipe_ingredients_raw: 'Eggs\nFlour' }
+            }
+          })
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ logs: [] })
+      } as Response;
+    });
+
+    render(<AssetCard item={{ ...mockItem, selected_services: [] }} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByLabelText(/Enable Mealie/i));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/service-output/generate',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Ingredients \(one per line\)/i)).toBeInTheDocument();
+    });
+  });
+
+  it('Feature: asset-card-service-generation-error | shows retry state when service generation fails', async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/service-output/generate') {
+        return {
+          ok: false,
+          json: async () => ({ success: false, error: 'failed' })
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ logs: [] })
+      } as Response;
+    });
+
+    render(<AssetCard item={{ ...mockItem, selected_services: [] }} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByLabelText(/Enable Mealie/i));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Service generation failed/i)).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /Retry Service Run/i })).toBeInTheDocument();
+  });
 });

@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, UTC
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncAttrs
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, relationship
@@ -95,6 +95,53 @@ class ConfigSecret(Base):
 
     key = Column(String, primary_key=True, index=True)
     encrypted_value = Column(String)
+
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+
+    key = Column(String, primary_key=True, index=True)
+    value = Column(JSONB, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=utc_now_naive,
+        onupdate=utc_now_naive,
+    )
+
+
+class ModelCatalog(Base):
+    __tablename__ = "model_catalog"
+
+    id = Column(Integer, primary_key=True, index=True)
+    model_id = Column(String, unique=True, index=True, nullable=False)
+    provider = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    is_system = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=utc_now_naive)
+    updated_at = Column(
+        DateTime,
+        default=utc_now_naive,
+        onupdate=utc_now_naive,
+    )
+
+
+class PipelineDefinition(Base):
+    __tablename__ = "pipeline_definitions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    pipeline_id = Column(String, unique=True, index=True)
+    name = Column(String)
+    schema = Column(JSONB, nullable=False)
+    is_system = Column(Boolean, default=False)
+    is_editable = Column(Boolean, default=True)
+    service_target = Column(String, nullable=True)
+    created_at = Column(DateTime, default=utc_now_naive)
+    updated_at = Column(
+        DateTime,
+        default=utc_now_naive,
+        onupdate=utc_now_naive,
+    )
 
 
 engine = create_async_engine(DATABASE_URL, echo=False)

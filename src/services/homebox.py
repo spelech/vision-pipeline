@@ -12,8 +12,7 @@ logger = logging.getLogger(__name__)
 class HomeboxService(BaseService):
     def __init__(self):
         self.api_url = os.getenv("HOMEBOX_URL", "http://homebox:7745/api/v1")
-        self.username = os.getenv(
-            "HOMEBOX_USERNAME") or os.getenv("HOMEBOX_EMAIL")
+        self.username = os.getenv("HOMEBOX_USERNAME")
         self.password = os.getenv("HOMEBOX_PASSWORD")
         self._cached_token = None
 

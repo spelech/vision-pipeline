@@ -10,6 +10,13 @@ class PromptTemplateConfig(BaseModel):
     prompt: str
 
 
+class ServicePromptConfig(BaseModel):
+    service: str
+    prompt: str
+    model: Optional[str] = None
+    enabled: bool = True
+
+
 class PipelineInfo(BaseModel):
     id: str
     name: str = "Unknown Pipeline"
@@ -25,6 +32,8 @@ class PipelineListResponse(BaseModel):
 class ModelInfo(BaseModel):
     id: str
     name: str
+    provider: Optional[str] = None
+    is_system: Optional[bool] = None
 
 
 class ModelListResponse(BaseModel):
@@ -48,6 +57,7 @@ class ConfigSecretStatus(BaseModel):
 
 class ConfigResponse(BaseModel):
     prompt_templates: Optional[List[PromptTemplateConfig]] = None
+    service_prompts: Optional[Dict[str, ServicePromptConfig]] = None
     model_favorites: Optional[List[str]] = None
     starred_models: Optional[List[str]] = None
     image_optimization: Optional[Dict[str, Any]] = None
@@ -57,6 +67,7 @@ class ConfigResponse(BaseModel):
 
 class ConfigUpdateRequest(BaseModel):
     prompt_templates: Optional[List[PromptTemplateConfig]] = None
+    service_prompts: Optional[Dict[str, ServicePromptConfig]] = None
     model_favorites: Optional[List[str]] = None
     starred_models: Optional[List[str]] = None
     image_optimization: Optional[Dict[str, Any]] = None
@@ -69,7 +80,6 @@ class ConfigUpdateRequest(BaseModel):
     PRICEBUDDY_URL: Optional[str] = None
     CHANGEDETECTION_URL: Optional[str] = None
     HOMEBOX_USERNAME: Optional[str] = None
-    HOMEBOX_EMAIL: Optional[str] = None
     HOMEBOX_PASSWORD: Optional[str] = None
     MEALIE_API_TOKEN: Optional[str] = None
     PRICEBUDDY_API_KEY: Optional[str] = None
@@ -123,3 +133,17 @@ class SessionLogsResponse(BaseModel):
 class ServicePreviewResponse(BaseModel):
     service: str
     payload: Dict[str, Any]
+
+
+class ServiceOutputGenerateRequest(BaseModel):
+    item_id: int
+    service_name: str
+    force: bool = False
+
+
+class ServiceOutputGenerateResponse(BaseModel):
+    success: bool
+    service_name: str
+    cached: bool = False
+    output: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None

@@ -6,7 +6,7 @@ import base64
 import logging
 import asyncio
 from datetime import datetime, UTC
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, cast
 import requests
 from fastapi import (
     FastAPI,
@@ -45,6 +45,9 @@ from database import (  # pylint: disable=wrong-import-position
     Item,
     ServiceMapping,
     ConfigSecret,
+    AppSetting,
+    ModelCatalog,
+    PipelineDefinition,
 )
 from schemas import (  # pylint: disable=wrong-import-position
     PipelineListResponse,
@@ -59,6 +62,8 @@ from schemas import (  # pylint: disable=wrong-import-position
     LocationsResponse,
     SessionLogsResponse,
     ServicePreviewResponse,
+    ServiceOutputGenerateRequest,
+    ServiceOutputGenerateResponse,
 )
 from pipelines import (  # pylint: disable=wrong-import-position
     PIPELINE_REGISTRY,
@@ -66,6 +71,7 @@ from pipelines import (  # pylint: disable=wrong-import-position
     ComposablePipeline,
 )
 import pipelines  # pylint: disable=wrong-import-position
+from pipelines.nodes import data_refine  # pylint: disable=wrong-import-position
 from services.homebox import HomeboxService  # pylint: disable=wrong-import-position
 from services.mealie import MealieService  # pylint: disable=wrong-import-position
 from services.enrichers import PriceBuddyService, ChangeDetectionService  # pylint: disable=wrong-import-position
@@ -104,6 +110,9 @@ def normalize_prompt_templates(value: Any) -> List[Dict[str, str]]:
                 })
         return normalized
 
+
+
+
     if isinstance(value, dict):
         normalized = []
         for key, prompt in value.items():
@@ -134,28 +143,449 @@ def merge_unique_str_lists(*values: Any) -> List[str]:
     return merged
 
 
-def extract_model_favorites(config_data: Dict[str, Any]) -> List[str]:
-    nested_registry = []
-    model_registry = config_data.get("model_registry")
-    if isinstance(model_registry, list):
-        nested_registry = [
-            model.get("id") for model in model_registry
-            if isinstance(model, dict) and isinstance(model.get("id"), str)
-        ]
-
-    return merge_unique_str_lists(
-        config_data.get("model_favorites"),
-        config_data.get("favorite_models"),
-        config_data.get("configured_models"),
-        config_data.get("models"),
-        nested_registry,
-    )
-
-
 MODEL_ID_ALIASES: Dict[str, str] = {
     "qwen/qwen2.5-72b-instruct": "qwen/qwen3-235b-a22b-2507",
     "qwen/qwen2.5-32b-instruct": "qwen/qwen3-235b-a22b-2507",
 }
+
+SERVICE_NAMES = ["homebox", "mealie", "pricebuddy", "changedetection"]
+DB_SETTING_KEYS = [
+    "prompt_templates",
+    "service_prompts",
+    "model_favorites",
+    "starred_models",
+    "image_optimization",
+]
+
+DEFAULT_MODEL_CATALOG: List[Dict[str, str]] = [
+    {
+        "id": "qwen/qwen2.5-vl-72b-instruct",
+        "name": "Qwen 2.5 VL 72B (OpenRouter)",
+        "provider": "openrouter",
+    },
+    {
+        "id": "google/gemini-2.0-flash-001",
+        "name": "Gemini 2.0 Flash (OpenRouter)",
+        "provider": "openrouter",
+    },
+    {
+        "id": "anthropic/claude-3.5-sonnet",
+        "name": "Claude 3.5 Sonnet (OpenRouter)",
+        "provider": "openrouter",
+    },
+]
+
+
+def get_pipeline(pipeline_id: str, db_pipeline_exists: bool = False):
+    if pipeline_id in PIPELINE_REGISTRY:
+        return PIPELINE_REGISTRY[pipeline_id]()
+    if db_pipeline_exists:
+        return ComposablePipeline()
+    return DefaultPipeline()
+
+
+def _service_target_for_pipeline_id(pipeline_id: str) -> Optional[str]:
+    if pipeline_id.startswith("service_"):
+        return pipeline_id.replace("service_", "", 1)
+    return None
+
+
+def _pipeline_row_to_dict(row: PipelineDefinition) -> Dict[str, Any]:
+    schema: Dict[str, Any] = row.schema if isinstance(row.schema, dict) else {}
+    return {
+        "id": row.pipeline_id,
+        "name": row.name,
+        "schema": normalize_pipeline_schema(schema),
+        "is_system": bool(row.is_system),
+        "is_editable": bool(row.is_editable),
+        "service_target": row.service_target,
+    }
+
+
+def infer_model_provider(model_id: str) -> str:
+    owner = (
+        model_id.split("/", 1)[0].strip().lower()
+        if "/" in model_id
+        else model_id.strip().lower()
+    )
+    if not owner:
+        return "custom"
+    if owner in {"google", "qwen", "anthropic", "openai", "meta", "mistralai", "x-ai", "deepseek"}:
+        return "openrouter"
+    return owner
+
+
+def normalize_app_setting(key: str, value: Any) -> Any:
+    if key == "prompt_templates":
+        return normalize_prompt_templates(value)
+    if key == "service_prompts":
+        return normalize_service_prompts(value)
+    if key in {"model_favorites", "starred_models"}:
+        return merge_unique_str_lists(value)
+    if key == "image_optimization" and isinstance(value, dict):
+        return value
+    return value
+
+
+async def upsert_app_setting(db: AsyncSession, key: str, value: Any) -> None:
+    normalized_value = normalize_app_setting(key, value)
+    result = await db.execute(select(AppSetting).where(AppSetting.key == key))
+    row = result.scalar_one_or_none()
+    if row:
+        row.value = normalized_value  # type: ignore
+    else:
+        db.add(AppSetting(key=key, value=normalized_value))
+
+
+async def get_app_settings(db: AsyncSession) -> Dict[str, Any]:
+    result = await db.execute(select(AppSetting))
+    rows = result.scalars().all()
+    settings: Dict[str, Any] = {}
+    for row in rows:
+        settings[str(row.key)] = row.value
+    return settings
+
+
+async def ensure_model_catalog(db: AsyncSession) -> None:
+    result = await db.execute(select(ModelCatalog.model_id))
+    existing_ids = {str(item[0]) for item in result.all()}
+    created = False
+    for model in DEFAULT_MODEL_CATALOG:
+        model_id = str(model.get("id", "")).strip()
+        if not model_id or model_id in existing_ids:
+            continue
+        db.add(
+            ModelCatalog(
+                model_id=model_id,
+                provider=str(model.get("provider") or infer_model_provider(model_id)),
+                name=str(model.get("name") or model_id),
+                is_active=True,
+                is_system=True,
+            )
+        )
+        created = True
+
+    if created:
+        await db.commit()
+
+
+async def ensure_app_settings_seed(db: AsyncSession) -> None:
+    existing = await get_app_settings(db)
+    if all(key in existing for key in DB_SETTING_KEYS):
+        return
+
+    defaults: Dict[str, Any] = {
+        "prompt_templates": [],
+        "service_prompts": default_service_prompt_configs(),
+        "model_favorites": [],
+        "starred_models": [],
+        "image_optimization": {},
+    }
+    for key in DB_SETTING_KEYS:
+        if key in existing:
+            continue
+        await upsert_app_setting(db, key, defaults.get(key))
+
+    model_ids: set[str] = set()
+
+    catalog_result = await db.execute(select(ModelCatalog.model_id))
+    for item in catalog_result.all():
+        model_ids.add(str(item[0]))
+    await upsert_app_setting(db, "model_favorites", list(model_ids))
+
+    await db.commit()
+
+
+async def get_runtime_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
+    async with AsyncSessionLocal() as db:
+        await ensure_app_settings_seed(db)
+        settings = await get_app_settings(db)
+        return merge_service_prompt_configs(settings.get("service_prompts"))
+
+
+async def ensure_pipeline_catalog(db: AsyncSession) -> None:
+    try:
+        registry_entries = normalize_pipeline_list(pipelines.get_all_pipelines())
+        result = await db.execute(select(PipelineDefinition.pipeline_id))
+        existing_ids = {str(item[0]) for item in result.all()}
+
+        created = False
+        for entry in registry_entries:
+            pipeline_id = str(entry.get("id", "")).strip()
+            if not pipeline_id or pipeline_id in existing_ids:
+                continue
+            db.add(
+                PipelineDefinition(
+                    pipeline_id=pipeline_id,
+                    name=str(entry.get("name", pipeline_id)),
+                    schema=normalize_pipeline_schema(entry.get("schema") or {}),
+                    is_system=True,
+                    is_editable=True,
+                    service_target=_service_target_for_pipeline_id(pipeline_id),
+                )
+            )
+            created = True
+
+        if created:
+            await db.commit()
+    except SQLAlchemyError:
+        logger.warning("Skipping pipeline catalog sync because DB is unavailable")
+
+
+async def pipeline_definition_exists(db: AsyncSession, pipeline_id: str) -> bool:
+    try:
+        result = await db.execute(
+            select(PipelineDefinition.id).where(PipelineDefinition.pipeline_id == pipeline_id)
+        )
+        return result.first() is not None
+    except SQLAlchemyError:
+        return False
+
+
+async def list_pipeline_definitions(
+    db: AsyncSession,
+    include_system: bool = True,
+) -> List[Dict[str, Any]]:
+    stmt = select(PipelineDefinition)
+    if not include_system:
+        stmt = stmt.where(PipelineDefinition.is_system.is_(False))
+
+    try:
+        result = await db.execute(
+            stmt.order_by(PipelineDefinition.is_system.desc(), PipelineDefinition.pipeline_id.asc())
+        )
+        rows = result.scalars().all()
+        return [_pipeline_row_to_dict(row) for row in rows]
+    except SQLAlchemyError:
+        return []
+
+
+async def persist_custom_pipelines(
+    db: AsyncSession,
+    custom_pipelines: List[Dict[str, Any]],
+) -> None:
+    existing_result = await db.execute(
+        select(PipelineDefinition).where(PipelineDefinition.is_system.is_(False))
+    )
+    for row in existing_result.scalars().all():
+        await db.delete(row)
+
+    for pipeline in custom_pipelines:
+        pipeline_id = str(pipeline.get("id", "")).strip()
+        if not pipeline_id:
+            continue
+        db.add(
+            PipelineDefinition(
+                pipeline_id=pipeline_id,
+                name=str(pipeline.get("name", pipeline_id)),
+                schema=normalize_pipeline_schema(pipeline.get("schema") or {}),
+                is_system=False,
+                is_editable=True,
+                service_target=_service_target_for_pipeline_id(pipeline_id),
+            )
+        )
+
+    await db.commit()
+
+
+def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
+    return {
+        "homebox": {
+            "service": "homebox",
+            "model": "qwen/qwen3-235b-a22b-2507",
+            "enabled": True,
+            "prompt": (
+                "Create Homebox-ready inventory JSON from the provided product data and context. "
+                "Prioritize product_name, brand, model_number, category, and description. "
+                "Include technical_details when available. "
+                "Keep all values concise and factual. Return strict JSON only."
+            ),
+        },
+        "mealie": {
+            "service": "mealie",
+            "model": "qwen/qwen3-235b-a22b-2507",
+            "enabled": True,
+            "prompt": (
+                "Create Mealie-ready recipe JSON from the provided food data and context. "
+                "Prioritize product_name, recipe_ingredients, and recipe_instructions. "
+                "Include recipe_notes when available. "
+                "If data is uncertain, preserve confidence in notes. Return strict JSON only."
+            ),
+        },
+        "pricebuddy": {
+            "service": "pricebuddy",
+            "model": "qwen/qwen3-235b-a22b-2507",
+            "enabled": True,
+            "prompt": (
+                "Create PriceBuddy-ready product tracking JSON from the provided data and context. "
+                "Prioritize product_name, barcode, product_url, and comparable result URLs. "
+                "Return strict JSON only."
+            ),
+        },
+        "changedetection": {
+            "service": "changedetection",
+            "model": "qwen/qwen3-235b-a22b-2507",
+            "enabled": True,
+            "prompt": (
+                "Create ChangeDetection-ready monitoring JSON from the provided data and context. "
+                "Prioritize product_name, product_url, and change_monitoring_notes. "
+                "Return strict JSON only."
+            ),
+        },
+    }
+
+
+def normalize_service_prompts(value: Any) -> Dict[str, Dict[str, Any]]:
+    normalized: Dict[str, Dict[str, Any]] = {}
+    if not isinstance(value, dict):
+        return normalized
+
+    for service_name, config in value.items():
+        if service_name not in SERVICE_NAMES:
+            continue
+        if isinstance(config, str):
+            normalized[service_name] = {
+                "service": service_name,
+                "prompt": config,
+                "model": None,
+                "enabled": True,
+            }
+            continue
+
+        if isinstance(config, dict):
+            normalized[service_name] = {
+                "service": service_name,
+                "prompt": str(config.get("prompt", "")),
+                "model": normalize_model_id(config.get("model")),
+                "enabled": bool(config.get("enabled", True)),
+            }
+
+    return normalized
+
+
+def merge_service_prompt_configs(*values: Any) -> Dict[str, Dict[str, Any]]:
+    merged = default_service_prompt_configs()
+    for value in values:
+        normalized = normalize_service_prompts(value)
+        for service_name, config in normalized.items():
+            merged[service_name] = {
+                **merged.get(service_name, {}),
+                **config,
+                "service": service_name,
+            }
+    return merged
+
+
+def get_service_prompt_config(
+    service_name: str,
+    service_prompt_configs: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    return {
+        **default_service_prompt_configs().get(service_name, {}),
+        **service_prompt_configs.get(service_name, {}),
+        "service": service_name,
+    }
+
+
+def generate_service_output(
+    service_name: str,
+    base_data: Dict[str, Any],
+    context_data: Dict[str, Any],
+    service_prompt_configs: Dict[str, Dict[str, Any]],
+    log_cb=None,
+) -> Dict[str, Any]:
+    prompt_config = get_service_prompt_config(service_name, service_prompt_configs)
+    if not prompt_config.get("enabled", True):
+        return {
+            "status": "skipped",
+            "error": "Service prompt disabled",
+            "data": {},
+        }
+
+    model = prompt_config.get("model")
+    prompt_template = str(prompt_config.get("prompt", "")).strip()
+    prompt = (
+        f"{prompt_template}\n"
+        f"Service: {service_name}\n"
+        f"Current Data: {json.dumps(base_data)}\n"
+        f"Context: {json.dumps(context_data)}"
+    )
+
+    if log_cb:
+        log_cb(f"🧩 [Service Prompt: {service_name}] Generating service-specific output...")
+
+    refined = data_refine(base_data, context_data, model=model, prompt=prompt, log_cb=log_cb)
+    if not isinstance(refined, dict):
+        return {
+            "status": "error",
+            "error": "Service prompt output was not JSON",
+            "data": {},
+        }
+    return {
+        "status": "ready",
+        "error": None,
+        "data": refined,
+        "model": model,
+    }
+
+
+def get_item_base_data(item: Any) -> Dict[str, Any]:
+    user_overrides = item.user_overrides if isinstance(item.user_overrides, dict) else {}
+    if user_overrides:
+        return dict(user_overrides)
+
+    ai_output: Dict[str, Any] = (
+        cast(Dict[str, Any], item.ai_output)
+        if isinstance(item.ai_output, dict)
+        else {}
+    )
+    llm_output_raw = ai_output.get("llm_output")
+    llm_output: Dict[str, Any] = llm_output_raw if isinstance(llm_output_raw, dict) else {}
+    base_data: Dict[str, Any] = dict(llm_output.items())
+    if isinstance(ai_output.get("searxng_results"), list):
+        base_data["searxng_results"] = ai_output.get("searxng_results")
+    if isinstance(ai_output.get("scraped_content"), str):
+        base_data["scraped_content"] = ai_output.get("scraped_content")
+    return base_data
+
+
+def get_service_specific_item_data(item: Any, service_name: str) -> Dict[str, Any]:
+    base_data = get_item_base_data(item)
+    ai_output: Dict[str, Any] = (
+        cast(Dict[str, Any], item.ai_output)
+        if isinstance(item.ai_output, dict)
+        else {}
+    )
+    service_outputs_raw = ai_output.get("service_outputs")
+    service_outputs: Dict[str, Any] = (
+        service_outputs_raw if isinstance(service_outputs_raw, dict) else {}
+    )
+    service_output_entry_raw = service_outputs.get(service_name)
+    service_output_entry: Dict[str, Any] = (
+        service_output_entry_raw if isinstance(service_output_entry_raw, dict) else {}
+    )
+    service_data_raw = service_output_entry.get("data")
+    service_data: Dict[str, Any] = (
+        service_data_raw if isinstance(service_data_raw, dict) else {}
+    )
+    return {**base_data, **service_data}
+
+
+def get_service_context_from_item(item: Any, service_name: str) -> Dict[str, Any]:
+    ai_output: Dict[str, Any] = (
+        cast(Dict[str, Any], item.ai_output)
+        if isinstance(item.ai_output, dict)
+        else {}
+    )
+    service_enrichments_raw = ai_output.get("service_enrichments")
+    service_enrichments: Dict[str, Any] = (
+        service_enrichments_raw if isinstance(service_enrichments_raw, dict) else {}
+    )
+    return {
+        "search": ai_output.get("searxng_results", []),
+        "scrape": ai_output.get("scraped_content"),
+        "service_enrichment": service_enrichments.get(service_name, {}),
+    }
 
 
 def normalize_model_id(value: Any) -> Any:
@@ -209,64 +639,6 @@ def normalize_pipeline_list(pipeline_list: Any) -> List[Dict[str, Any]]:
     return normalized
 
 
-def load_json_file(path: str) -> Dict[str, Any]:
-    if not os.path.exists(path):
-        return {}
-
-    try:
-        with open(path, "r", encoding="utf-8") as fh:
-            loaded = json.load(fh)
-            return loaded if isinstance(loaded, dict) else {}
-    except (OSError, json.JSONDecodeError, ValueError) as exc:
-        logger.warning("Failed to read config file %s: %s", path, exc)
-        return {}
-
-
-def load_merged_user_config() -> Dict[str, Any]:
-    legacy_path = "config/user_settings.json"
-    current_path = "config/user_config.json"
-
-    legacy = load_json_file(legacy_path)
-    current = load_json_file(current_path)
-
-    merged = {**legacy, **current}
-
-    merged["model_favorites"] = merge_unique_str_lists(
-        extract_model_favorites(legacy),
-        extract_model_favorites(current),
-    )
-    merged["starred_models"] = merge_unique_str_lists(
-        legacy.get("starred_models"),
-        current.get("starred_models"),
-    )
-    merged["prompt_templates"] = normalize_prompt_templates(
-        (legacy.get("prompt_templates") or legacy.get("prompts") or legacy.get("templates"))
-    ) + normalize_prompt_templates(
-        (current.get("prompt_templates") or current.get("prompts") or current.get("templates"))
-    )
-
-    if merged["prompt_templates"]:
-        deduped: Dict[str, Dict[str, str]] = {}
-        for template in merged["prompt_templates"]:
-            deduped[str(template.get("id", uuid.uuid4()))] = {
-                "id": str(template.get("id", uuid.uuid4())),
-                "name": str(template.get("name", "Untitled Template")),
-                "prompt": str(template.get("prompt", "")),
-            }
-        merged["prompt_templates"] = list(deduped.values())
-
-    if not merged.get("image_optimization") and isinstance(
-            legacy.get("image_optimization"), dict):
-        merged["image_optimization"] = legacy.get("image_optimization")
-
-    merged["custom_pipelines"] = (
-        current.get("custom_pipelines") if isinstance(
-            current.get("custom_pipelines"),
-            list) else legacy.get("custom_pipelines")) or []
-
-    return merged
-
-
 CONFIG_SECRET_KEYS = [
     "OPENROUTER_API_KEY",
     "SEARXNG_URL",
@@ -283,19 +655,11 @@ CONFIG_SECRET_KEYS = [
 
 
 def get_secret_value(key: str) -> str:
-    if key == "HOMEBOX_USERNAME":
-        return os.getenv("HOMEBOX_USERNAME") or os.getenv(
-            "HOMEBOX_EMAIL") or ""
     return os.getenv(key) or ""
 
 
 def set_secret_value(key: str, val: str) -> None:
-    if key == "HOMEBOX_USERNAME":
-        os.environ["HOMEBOX_USERNAME"] = val
-        # Keep compatibility with existing Homebox email-based setups.
-        os.environ["HOMEBOX_EMAIL"] = val
-    else:
-        os.environ[key] = val
+    os.environ[key] = val
 
 
 # --- Logging ---
@@ -308,6 +672,9 @@ logger = logging.getLogger("VisionAPI")
 async def lifespan(_app: FastAPI):
     await init_db()
     async with AsyncSessionLocal() as db:
+        await ensure_pipeline_catalog(db)
+        await ensure_model_catalog(db)
+        await ensure_app_settings_seed(db)
         res = await db.execute(select(ConfigSecret))
         secrets = res.scalars().all()
         for secret in secrets:
@@ -343,77 +710,124 @@ async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
 
-# --- Pipeline Helpers ---
-
-
-def get_pipeline(pipeline_id: str):
-    # Check for custom composable pipeline in config first
-    try:
-        config_path = "config/user_config.json"
-        if os.path.exists(config_path):
-            with open(config_path, "r", encoding="utf-8") as fh:
-                config = json.load(fh)
-                for cp in config.get("custom_pipelines", []):
-                    if cp["id"] == pipeline_id:
-                        # Return a ComposablePipeline
-                        return ComposablePipeline()
-    except (OSError, TypeError, KeyError, json.JSONDecodeError):
-        pass
-
-    # Check registry
-    if pipeline_id in PIPELINE_REGISTRY:
-        return PIPELINE_REGISTRY[pipeline_id]()
-
-    return DefaultPipeline()
-
-
 # --- Endpoints ---
 
 @api_router.get("/pipelines", response_model=PipelineListResponse)
-async def list_pipelines() -> PipelineListResponse:
+async def list_pipelines(db: AsyncSession = Depends(get_db)) -> PipelineListResponse:
     try:
-        base = normalize_pipeline_list(pipelines.get_all_pipelines())
-        config_path = "config/user_config.json"
-        custom: List[Dict[str, Any]] = []
-        if os.path.exists(config_path):
-            with open(config_path, "r", encoding="utf-8") as fh:
-                config = json.load(fh)
-                custom = normalize_pipeline_list(config.get("custom_pipelines", []))
+        await ensure_pipeline_catalog(db)
+        all_pipelines = await list_pipeline_definitions(db, include_system=True)
+        return PipelineListResponse(success=True, pipelines=all_pipelines)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Error listing DB pipelines: %s", e)
+        return PipelineListResponse(success=False, pipelines=[], error=str(e))
 
-        return PipelineListResponse(success=True, pipelines=base + custom)
-    except (
-        OSError,
-        TypeError,
-        KeyError,
-        AttributeError,
-        json.JSONDecodeError,
-        RuntimeError,
-    ) as e:
-        logger.error("Error listing pipelines: %s", e)
-        return PipelineListResponse(success=False, error=str(e), pipelines=[])
+
+@api_router.put("/pipelines/{pipeline_id}")
+async def upsert_pipeline(
+    pipeline_id: str,
+    data: Dict[str, Any],
+    db: AsyncSession = Depends(get_db),
+):
+    await ensure_pipeline_catalog(db)
+    name = str(data.get("name") or pipeline_id)
+    schema = normalize_pipeline_schema(data.get("schema") or {})
+    is_system = bool(data.get("is_system", False))
+    is_editable = bool(data.get("is_editable", True))
+    service_target = data.get("service_target")
+    service_target_value = (
+        str(service_target)
+        if isinstance(service_target, str)
+        else _service_target_for_pipeline_id(pipeline_id)
+    )
+
+    result = await db.execute(
+        select(PipelineDefinition).where(PipelineDefinition.pipeline_id == pipeline_id)
+    )
+    row = result.scalar_one_or_none()
+    if row:
+        row.name = name  # type: ignore
+        row.schema = schema  # type: ignore
+        row.is_system = is_system  # type: ignore
+        row.is_editable = is_editable  # type: ignore
+        row.service_target = service_target_value  # type: ignore
+    else:
+        db.add(
+            PipelineDefinition(
+                pipeline_id=pipeline_id,
+                name=name,
+                schema=schema,
+                is_system=is_system,
+                is_editable=is_editable,
+                service_target=service_target_value,
+            )
+        )
+
+    await db.commit()
+    return {"success": True, "pipeline_id": pipeline_id}
+
+
+@api_router.delete("/pipelines/{pipeline_id}")
+async def delete_pipeline(
+    pipeline_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(PipelineDefinition).where(PipelineDefinition.pipeline_id == pipeline_id)
+    )
+    row = result.scalar_one_or_none()
+    if not row:
+        return {"success": False, "error": "Pipeline not found"}
+
+    await db.delete(row)
+    await db.commit()
+    return {"success": True}
 
 
 @api_router.get("/models", response_model=ModelListResponse)
-async def list_models() -> ModelListResponse:
-    return ModelListResponse(
-        success=True,
-        models=[
+async def list_models(db: AsyncSession = Depends(get_db)) -> ModelListResponse:
+    try:
+        await ensure_model_catalog(db)
+        result = await db.execute(
+            select(ModelCatalog)
+            .where(ModelCatalog.is_active.is_(True))
+            .order_by(ModelCatalog.is_system.desc(), ModelCatalog.model_id.asc())
+        )
+        rows = result.scalars().all()
+        models = [
             ModelInfo(
-                id="qwen/qwen2.5-vl-72b-instruct",
-                name="Qwen 2.5 VL 72B (OpenRouter)"),
-            ModelInfo(
-                id="google/gemini-2.0-flash-001",
-                name="Gemini 2.0 Flash (OpenRouter)"),
-            ModelInfo(
-                id="anthropic/claude-3.5-sonnet",
-                name="Claude 3.5 Sonnet (OpenRouter)")])
+                id=str(row.model_id),
+                name=str(row.name),
+                provider=str(row.provider),
+                is_system=bool(row.is_system),
+            )
+            for row in rows
+        ]
+        return ModelListResponse(success=True, models=models)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Error listing model catalog: %s", e)
+        return ModelListResponse(success=False, models=[])
 
 
 @api_router.get("/config", response_model=ConfigResponse)
-async def get_config() -> ConfigResponse:
-    data = load_merged_user_config()
-    data["prompt_templates"] = normalize_prompt_templates(
-        data.get("prompt_templates"))
+async def get_config(db: AsyncSession = Depends(get_db)) -> ConfigResponse:
+    await ensure_app_settings_seed(db)
+    settings = await get_app_settings(db)
+    data: Dict[str, Any] = {
+        "prompt_templates": normalize_prompt_templates(settings.get("prompt_templates")),
+        "service_prompts": merge_service_prompt_configs(settings.get("service_prompts")),
+        "model_favorites": merge_unique_str_lists(settings.get("model_favorites")),
+        "starred_models": merge_unique_str_lists(settings.get("starred_models")),
+        "image_optimization": settings.get("image_optimization"),
+    }
+    try:
+        await ensure_pipeline_catalog(db)
+        data["custom_pipelines"] = await list_pipeline_definitions(
+            db,
+            include_system=False,
+        )
+    except SQLAlchemyError:
+        data["custom_pipelines"] = []
 
     # Mask secrets - return only presence status
     secrets_status = {}
@@ -434,26 +848,51 @@ async def get_config() -> ConfigResponse:
 async def update_config(
         data: ConfigUpdateRequest,
         db: AsyncSession = Depends(get_db)):
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-locals,too-many-branches
     # Separate secrets from general config
     keys_to_persist = [
         "prompt_templates",
+        "service_prompts",
         "model_favorites",
         "starred_models",
         "image_optimization",
-        "custom_pipelines"]
+    ]
     data_dict = data.model_dump(exclude_unset=True)
     if "prompt_templates" in data_dict:
         data_dict["prompt_templates"] = normalize_prompt_templates(
             data_dict.get("prompt_templates"))
     if "custom_pipelines" in data_dict:
-        data_dict["custom_pipelines"] = normalize_pipeline_list(
+        normalized_custom_pipelines = normalize_pipeline_list(
             data_dict.get("custom_pipelines", [])
         )
-    current_config_path = "config/user_config.json"
-    existing_config = load_json_file(current_config_path)
-    config_to_save = {**existing_config, **
-                      {k: data_dict[k] for k in keys_to_persist if k in data_dict}}
+        await ensure_pipeline_catalog(db)
+        await persist_custom_pipelines(db, normalized_custom_pipelines)
+    if "service_prompts" in data_dict:
+        data_dict["service_prompts"] = normalize_service_prompts(
+            data_dict.get("service_prompts")
+        )
+
+    await ensure_app_settings_seed(db)
+    for key in keys_to_persist:
+        if key not in data_dict:
+            continue
+        await upsert_app_setting(db, key, data_dict.get(key))
+        if key == "model_favorites":
+            favorites = merge_unique_str_lists(data_dict.get("model_favorites"))
+            for model_id in favorites:
+                model_result = await db.execute(
+                    select(ModelCatalog).where(ModelCatalog.model_id == model_id)
+                )
+                if model_result.scalar_one_or_none() is None:
+                    db.add(
+                        ModelCatalog(
+                            model_id=model_id,
+                            provider=infer_model_provider(model_id),
+                            name=model_id,
+                            is_active=True,
+                            is_system=False,
+                        )
+                    )
 
     for key in CONFIG_SECRET_KEYS:
         val = getattr(data, key, None)
@@ -469,24 +908,7 @@ async def update_config(
             else:
                 db.add(ConfigSecret(key=key, encrypted_value=encrypted))
 
-    # Backward compatibility for older payloads.
-    legacy_homebox_email = getattr(data, "HOMEBOX_EMAIL", None)
-    if legacy_homebox_email and legacy_homebox_email != "********":
-        set_secret_value("HOMEBOX_USERNAME", legacy_homebox_email)
-        encrypted = encrypt_secret(legacy_homebox_email)
-        for legacy_key in ["HOMEBOX_USERNAME", "HOMEBOX_EMAIL"]:
-            res = await db.execute(select(ConfigSecret).where(ConfigSecret.key == legacy_key))
-            secret_obj = res.scalar_one_or_none()
-            if secret_obj:
-                secret_obj.encrypted_value = encrypted  # type: ignore
-            else:
-                db.add(ConfigSecret(key=legacy_key, encrypted_value=encrypted))
     await db.commit()
-
-    config_path = "config/user_config.json"
-    os.makedirs(os.path.dirname(config_path), exist_ok=True)
-    with open(config_path, "w", encoding="utf-8") as fh:
-        json.dump(config_to_save, fh, indent=4)
 
     return {"success": True}
 
@@ -645,7 +1067,7 @@ async def get_service_preview(
                 status_code=404, content={
                     "error": "Item not found"})  # type: ignore
 
-        data = item.user_overrides or item.ai_output.get("llm_output", {})
+        data = get_service_specific_item_data(item, service_name)
 
     payload = SERVICES[service_name].get_payload(data)
     return ServicePreviewResponse(service=service_name, payload=payload)
@@ -681,7 +1103,8 @@ async def identify(
     # Reserved for future image transform options from UI.
     _ = (rotation, mirror)
 
-    core_pipeline = get_pipeline(pipeline_id)
+    has_db_pipeline = pipeline_id.startswith("custom_") or pipeline_id.startswith("service_")
+    core_pipeline = get_pipeline(pipeline_id, db_pipeline_exists=has_db_pipeline)
     sid = session_id or str(uuid.uuid4())
     session_logger.start_session(sid)
 
@@ -703,6 +1126,7 @@ async def identify(
         results = await run_in_threadpool(core_pipeline.run, img, text, pipeline_settings, log_it)
 
         llm_output = results.get("llm_output") or {}
+        service_prompt_configs = await get_runtime_service_prompt_configs()
         enrich_all_services = os.getenv("ENRICH_ALL_SERVICES", "false").lower() in {
             "1", "true", "yes", "on"
         }
@@ -735,7 +1159,23 @@ async def identify(
                 )
                 service_enrichments[service_name] = {}
 
+        service_outputs: Dict[str, Dict[str, Any]] = {}
+        for service_name in target_service_names:
+            context_data = {
+                "search": results.get("searxng_results", []),
+                "scrape": results.get("scraped_content"),
+                "service_enrichment": service_enrichments.get(service_name, {}),
+            }
+            service_outputs[service_name] = generate_service_output(
+                service_name,
+                llm_output,
+                context_data,
+                service_prompt_configs,
+                log_cb=log_it,
+            )
+
         results["service_enrichments"] = service_enrichments
+        results["service_outputs"] = service_outputs
         results["session_id"] = sid
         results["logs"] = session_logger.get_logs(sid)
 
@@ -807,20 +1247,17 @@ async def execute_services(data: Dict):  # pylint: disable=too-many-locals
     final_data = overrides
     image_path = None
     existing_mappings = {}
+    item_obj: Optional[Item] = None
 
     async with AsyncSessionLocal() as db:
         if item_id:
             res = await db.execute(select(Item).where(Item.id == item_id))
             item = res.scalar_one_or_none()
             if item:
+                item_obj = item
                 image_path = item.image_path
                 if not final_data:
-                    final_data = item.user_overrides or item.ai_output.get(
-                        "llm_output", {})
-                    if "searxng_results" in item.ai_output:
-                        final_data["searxng_results"] = item.ai_output[
-                            "searxng_results"
-                        ]
+                    final_data = get_item_base_data(item)
 
                 map_res = await db.execute(
                     select(ServiceMapping).where(ServiceMapping.item_id == item_id)
@@ -837,8 +1274,11 @@ async def execute_services(data: Dict):  # pylint: disable=too-many-locals
             continue
         svc = SERVICES[name]
         ext_id = existing_mappings.get(name)
+        service_data = final_data
+        if item_obj and not overrides:
+            service_data = get_service_specific_item_data(item_obj, name)
 
-        res = await svc.execute(final_data, image_path=image_path, external_id=ext_id)
+        res = await svc.execute(service_data, image_path=image_path, external_id=ext_id)
         results_map[name] = res
 
         if res.get("success") and item_id:
@@ -856,7 +1296,7 @@ async def execute_services(data: Dict):  # pylint: disable=too-many-locals
                 if mapping:
                     mapping.external_id = new_ext_id
                     mapping.external_url = ext_url
-                    mapping.last_sync_payload = final_data
+                    mapping.last_sync_payload = service_data
                     mapping.synced_at = datetime.now(UTC).replace(tzinfo=None)
                 else:
                     mapping = ServiceMapping(
@@ -864,7 +1304,7 @@ async def execute_services(data: Dict):  # pylint: disable=too-many-locals
                         service_name=name,
                         external_id=new_ext_id,
                         external_url=ext_url,
-                        last_sync_payload=final_data
+                        last_sync_payload=service_data
                     )
                     db.add(mapping)
 
@@ -872,6 +1312,80 @@ async def execute_services(data: Dict):  # pylint: disable=too-many-locals
                 await db.commit()
 
     return {"success": True, "results": results_map}
+
+
+@api_router.post(
+    "/service-output/generate",
+    response_model=ServiceOutputGenerateResponse,
+)
+async def generate_service_output_for_item(
+    request: ServiceOutputGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+) -> ServiceOutputGenerateResponse:
+    service_name = request.service_name
+    if service_name not in SERVICES:
+        return ServiceOutputGenerateResponse(
+            success=False,
+            service_name=service_name,
+            error="Service not found",
+        )
+
+    res = await db.execute(select(Item).where(Item.id == request.item_id))
+    item = res.scalar_one_or_none()
+    if not item:
+        return ServiceOutputGenerateResponse(
+            success=False,
+            service_name=service_name,
+            error="Item not found",
+        )
+
+    ai_output: Dict[str, Any] = (
+        cast(Dict[str, Any], item.ai_output)
+        if isinstance(item.ai_output, dict)
+        else {}
+    )
+    service_outputs_raw = ai_output.get("service_outputs")
+    service_outputs: Dict[str, Any] = (
+        service_outputs_raw if isinstance(service_outputs_raw, dict) else {}
+    )
+    existing_output_raw = service_outputs.get(service_name)
+    existing_output: Dict[str, Any] = (
+        existing_output_raw if isinstance(existing_output_raw, dict) else {}
+    )
+    if (
+        not request.force
+        and existing_output.get("status") == "ready"
+        and isinstance(existing_output.get("data"), dict)
+    ):
+        return ServiceOutputGenerateResponse(
+            success=True,
+            service_name=service_name,
+            cached=True,
+            output=existing_output,
+        )
+
+    service_prompt_configs = await get_runtime_service_prompt_configs()
+    base_data = get_item_base_data(item)
+    context_data = get_service_context_from_item(item, service_name)
+    output = generate_service_output(
+        service_name,
+        base_data,
+        context_data,
+        service_prompt_configs,
+    )
+
+    service_outputs[service_name] = output
+    ai_output["service_outputs"] = service_outputs
+    setattr(item, "ai_output", ai_output)
+    await db.commit()
+
+    return ServiceOutputGenerateResponse(
+        success=output.get("status") == "ready",
+        service_name=service_name,
+        cached=False,
+        output=output,
+        error=output.get("error"),
+    )
 
 # --- Batch Processing ---
 
@@ -922,7 +1436,8 @@ async def process_item_task(
         settings = json.loads(settings_str)
     except json.JSONDecodeError:
         settings = {}
-    core_pipeline = get_pipeline(pipeline_id)
+    has_db_pipeline = pipeline_id.startswith("custom_") or pipeline_id.startswith("service_")
+    core_pipeline = get_pipeline(pipeline_id, db_pipeline_exists=has_db_pipeline)
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Item).where(Item.id == item_id))
         item = result.scalar_one_or_none()
@@ -952,6 +1467,25 @@ async def process_item_task(
                 list(
                     SERVICES.keys())[i]: enrichments[i] for i in range(
                     len(enrichments))}
+
+            service_prompt_configs = await get_runtime_service_prompt_configs()
+            llm_output_raw = results.get("llm_output")
+            llm_output: Dict[str, Any] = llm_output_raw if isinstance(llm_output_raw, dict) else {}
+            default_target = "mealie" if llm_output.get("is_food") else "homebox"
+            context_data = {
+                "search": results.get("searxng_results", []),
+                "scrape": results.get("scraped_content"),
+                "service_enrichment": results["service_enrichments"].get(default_target, {}),
+            }
+            results["service_outputs"] = {
+                default_target: generate_service_output(
+                    default_target,
+                    llm_output,
+                    context_data,
+                    service_prompt_configs,
+                    log_cb=log_it,
+                )
+            }
             results["session_id"] = sid
             results["logs"] = session_logger.get_logs(sid)
 
