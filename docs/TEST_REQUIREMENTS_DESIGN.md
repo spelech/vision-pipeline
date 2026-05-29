@@ -305,6 +305,22 @@ Updated by script: scripts/update-test-requirements-index.mjs
   - batch-upload-failure | shows error toast when batch upload request fails
   - camera-no-media-devices-fallback | uses capture file input when media devices are unavailable
   - review-bulk-approve-error | surfaces error toast when bulk approve endpoint returns non-OK
+  - review-preview-and-execute | previews payload and executes sync successfully
+  - review-preview-failure | handles preview fetch rejection
+  - tab-routes | opens pipeline section from navbar
+  - review-empty-approved-state | shows approved empty message
+  - batch-empty-processing-state | shows batch processing empty message
+  - execute-failure-toast | shows failure toast when execute endpoint returns non-ok
+  - identify-upload-rejection | surfaces error during rejected identify upload call
+  - camera-play-failure | shows preview error when video playback fails
+  - camera-capture-no-context | shows error when canvas context cannot be acquired
+  - camera-capture-blob-failure | shows error when image blob cannot be created
+  - identify-open-pipeline-editor | navigates to pipeline editor from identify tab action
+  - identify-last-result-actions | clears result card and opens review queue from helper link
+  - processing-error-dismiss | clears processing dashboard state from dismiss action
+  - queue-missing-items-fallback | falls back to empty queue when items field is absent
+  - identify-upload-non-error-rejection | uses generic upload error when rejection is not an Error instance
+  - identify-upload-empty-file-selection | returns early when no files are selected
 - web/src/test/AssetCard.test.tsx
   - asset-card-collapsed | renders collapsed state correctly
   - asset-card-expand | expands when clicking the chevron
@@ -313,21 +329,45 @@ Updated by script: scripts/update-test-requirements-index.mjs
   - asset-card-preview | uses first selected service for preview
   - asset-card-technical-toggle | shows technical payload JSON when toggled
   - asset-card-service-empty | disables actions when no services are selected
+  - asset-card-open-image | opens original upload in new tab from thumbnail
+  - asset-card-log-session-id | fetches logs using ai_output session id when expanded
+  - asset-card-log-fallback-session | falls back to batch-item session id when no ai session id
+  - asset-card-log-fetch-error | handles log fetch failures
+  - asset-card-default-service | does not enable any default service when none are selected
+  - asset-card-service-generation-success | generates service output when enabling a new service
+  - asset-card-service-generation-error | shows retry state when service generation fails
+- web/src/test/NetworkCheck.test.tsx
+  - network-check-success | logs success when backend responds OK
+  - network-check-non-ok | logs error with status when backend returns non-OK
+  - network-check-rejection | logs error when request rejects
 - web/src/test/PipelineEditor.test.tsx
   - pipeline-editor-list | renders pipelines
   - pipeline-editor-create | can create a new pipeline
   - pipeline-editor-sync | triggers registry sync fetch
   - pipeline-editor-edit-nodes | edits nodes by removing and adding blocks
+  - pipeline-editor-discard | closes editor without saving when discard is clicked
   - pipeline-editor-save-error | shows alert when save fails
-  - pipeline-editor-save-copy-success | saves a non-custom pipeline as a custom copy
+  - pipeline-editor-save-success | saves a pipeline through DB API endpoint
   - pipeline-editor-vision-config | updates vision prompt through node settings and saves
   - pipeline-editor-helpers | resolves node lists for configured, advanced, and fallback pipelines
   - pipeline-editor-helper-prompts | detects persistence flags and prompt fallbacks
   - pipeline-editor-helper-preview | formats prompt preview text for empty and long values
+  - pipeline-editor-save-existing-custom | saves persisted custom pipeline without creating copy
+  - pipeline-editor-create-fallback-model | uses fallback vision model when no model catalog loaded
+  - pipeline-editor-node-config-variants | opens refine, scrape, and system-managed node config states
+  - pipeline-editor-subtitles | renders subtitle variants for default, advanced, and custom pipelines
+- web/src/test/pipelineStageStatus.test.ts
+  - stage-status-default | returns pending for unknown progress logs
+  - stage-status-active | returns active for currently running stage logs
+  - stage-status-completed-by-downstream | marks prior stages completed when later stages begin
+  - stage-status-finished-markers | marks all stages completed when completion markers exist
+  - stage-status-sync-alt-log | accepts alternate sync text
 - web/src/test/PreviewModal.test.tsx
   - preview-modal-render | renders correctly and shows payload
   - preview-modal-close | calls onClose when close button clicked
+  - preview-modal-close-icon | calls onClose when header close icon clicked
   - preview-modal-confirm | allows payload editing and confirms
+  - preview-modal-invalid-json | shows error on bad JSON and clears when editing
 - web/src/test/Settings.test.tsx
   - settings-load | renders correctly and loads data
   - settings-model-add | allows adding a new model
@@ -339,6 +379,8 @@ Updated by script: scripts/update-test-requirements-index.mjs
   - settings-template-format-add | formats and creates prompt templates from the editor
   - settings-template-normalize | normalizes array/object and handles invalid template values
   - settings-template-derive | derives prompt templates from pipeline schema prompt keys only
+  - settings-secret-visibility | keeps URLs visible while masking key/token secrets
+  - settings-model-add-duplicate | does not add a duplicate model id
 
 ### 9.2 Backend Feature Tests
 - src/tests/test_advanced_pipeline.py
@@ -346,11 +388,15 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - run advanced pipeline end-to-end with search/scrape/refine context path.
     - guard search/scrape path when query cannot be trusted.
     - skip scraping/refine when search returns no candidate URLs.
+    - barcode query path should work even when settings are omitted.
   - Test functions:
     - test_advanced_pipeline_runs_full_search_scrape_refine_flow
     - test_advanced_pipeline_skips_search_when_query_unknown
     - test_advanced_pipeline_handles_no_search_results
+    - test_advanced_pipeline_uses_barcode_query_and_defaults_without_settings
 - src/tests/test_api.py
+  - Feature labels:
+    - pipeline list uses DB-first catalog and falls back to registry without file merge.
   - Test functions:
     - test_health_endpoint
     - test_identify_endpoint
@@ -367,6 +413,8 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_pipelines_endpoint_handles_success_and_error
     - test_get_config_masks_and_preserves_url_secrets
     - test_update_config_persists_custom_pipelines_and_secret
+    - test_generate_service_output_endpoint_generates_and_persists
+    - test_generate_service_output_endpoint_returns_cached_when_ready
     - test_search_endpoint_returns_merged_item_data
     - test_logs_endpoint_wraps_messages
     - test_locations_endpoint_handles_missing_headers
@@ -381,8 +429,9 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - collect deduplicated configured model favorites from legacy and nested config shapes.
     - safely parse config files while tolerating missing and malformed content.
     - merge legacy/current user config and dedupe templates and model favorites.
+    - normalize service prompt configs and overlay them onto defaults.
     - keep Homebox username/email environment variables in sync.
-    - select composable pipeline when custom pipeline id is configured.
+    - select composable pipeline when pipeline id exists in DB catalog.
     - resolve registered pipeline ids and fallback to default for unknown ids.
   - Test functions:
     - test_normalize_prompt_templates_from_list_and_dict
@@ -390,8 +439,9 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_merge_unique_and_extract_model_favorites
     - test_load_json_file_handles_missing_invalid_and_nondict
     - test_load_merged_user_config_merges_and_dedupes
+    - test_normalize_and_merge_service_prompts
     - test_secret_get_set_homebox_username
-    - test_get_pipeline_uses_custom_pipeline_when_config_matches
+    - test_get_pipeline_uses_composable_when_db_pipeline_exists
     - test_get_pipeline_uses_registry_and_default_fallback
 - src/tests/test_composable_pipeline.py
   - Test functions:
@@ -399,26 +449,85 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_pipeline_skips_search_if_no_query
     - test_pipeline_skips_scrape_if_no_url
     - test_double_refinement_pass
+    - test_pipeline_uses_default_sequence_when_settings_missing
+    - test_pipeline_scrape_uses_product_url_fallback_when_no_search_results
+- src/tests/test_core_abstractions.py
+  - Feature labels:
+    - enforce base pipeline abstract contract and default schema behavior.
+    - keep base service abstract methods callable for introspection safety.
+    - remove completed session logs when delayed cleanup runs.
+  - Test functions:
+    - test_base_pipeline_defaults_and_abstract_errors
+    - test_base_service_abstract_bodies_are_well_formed
+    - test_session_logger_delayed_cleanup
+- src/tests/test_default_pipeline.py
+  - Feature labels:
+    - full default pipeline path with query/search/refine.
+    - unknown query should block search/refine branch.
+    - no image means no barcode scan branch but vision still runs.
+  - Test functions:
+    - test_default_pipeline_refines_when_search_has_results
+    - test_default_pipeline_skips_search_and_refine_for_unknown_query
+    - test_default_pipeline_handles_missing_image_path
 - src/tests/test_enrichers.py
   - Test functions:
     - test_pricebuddy_execution
     - test_changedetection_execution
     - test_enrichers_pre_enrichment
+    - test_pricebuddy_execute_without_api_key_returns_error
+    - test_pricebuddy_payload_falls_back_to_top_results_and_default_tag
+    - test_changedetection_execute_missing_url_returns_error
+    - test_changedetection_pre_enrichment_no_key_or_no_url_short_circuits
+    - test_pricebuddy_execute_request_exception_returns_error
+    - test_pricebuddy_pre_enrichment_name_query_and_exception_paths
+    - test_changedetection_execute_request_exception_returns_error
+    - test_changedetection_pre_enrichment_no_matching_watch_and_exception_paths
 - src/tests/test_homebox.py
   - Test functions:
     - test_homebox_execution_new_item
     - test_homebox_execution_update_item
     - test_homebox_auth_email_password
     - test_homebox_get_payload
+- src/tests/test_homebox_additional.py
+  - Test functions:
+    - test_execute_returns_credentials_error_when_no_headers
+    - test_get_headers_without_credentials_returns_none
+    - test_get_headers_handles_login_exception
+    - test_find_or_create_location_existing_and_create_paths
+    - test_find_or_create_location_request_exception_returns_none
+    - test_execute_recreates_item_on_404_and_uploads_attachment
+    - test_execute_handles_request_exception
+    - test_get_pre_enrichment_paths
 - src/tests/test_ingestion.py
   - Test functions:
     - test_pipeline_logic
     - test_api_endpoint
+- src/tests/test_logger.py
+  - Feature labels:
+    - ignore log events for unknown sessions and keep active session logs.
+    - delayed cleanup is safe even when session is removed before timeout.
+  - Test functions:
+    - test_session_logger_only_logs_for_active_sessions
+    - test_session_logger_delayed_cleanup_handles_removed_session
 - src/tests/test_mealie.py
   - Test functions:
     - test_mealie_execution_new_recipe
     - test_mealie_pre_enrichment
     - test_mealie_get_payload
+    - test_mealie_execute_without_api_key_returns_error
+    - test_mealie_execute_external_id_404_falls_back_to_create
+    - test_mealie_pre_enrichment_guard_paths
+    - test_mealie_pre_enrichment_non_200_returns_empty_items
+- src/tests/test_nodes.py
+  - Test functions:
+    - test_scan_barcode_none_image_returns_none
+    - test_scan_barcode_raw_success
+    - test_scan_barcode_grayscale_and_contrast_fallbacks
+    - test_scan_barcode_exception_logs_and_returns_none
+    - test_vision_identify_success_parses_json_from_response
+    - test_vision_identify_error_returns_error_object
+    - test_web_search_and_scrape_paths
+    - test_data_refine_success_and_fallback
 - src/tests/test_validation.py
   - Test functions:
     - test_pipeline_validation_logic
