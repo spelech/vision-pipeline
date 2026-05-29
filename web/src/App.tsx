@@ -380,7 +380,7 @@ export default function App() {
   const selectedPipelineName = pipelines.find((pipeline) => pipeline.id === selectedPipelineId)?.name || DEFAULT_PIPELINE_OPTION.name;
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-blue-500/30 font-sans">
+    <div className="min-h-screen bg-black text-white selection:bg-blue-500/30 font-sans compact-desktop">
       <NetworkCheck />
       <Navbar activeTab={activeTab} setActiveTab={handleTabChange} />
 

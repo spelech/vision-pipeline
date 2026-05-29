@@ -27,6 +27,71 @@ body {
   @apply text-[11px] font-bold uppercase tracking-wider text-white/40 mb-2 block;
 }
 
+@media (min-width: 1280px) {
+  .compact-desktop .btn-apple {
+    @apply px-4 py-2.5 rounded-xl text-[10px];
+  }
+
+  .compact-desktop .label-apple {
+    @apply text-[10px] mb-1.5;
+  }
+
+  .compact-desktop main {
+    @apply pt-24 pb-14;
+  }
+
+  .compact-desktop .space-y-12 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1.25rem;
+  }
+
+  .compact-desktop .space-y-10 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1rem;
+  }
+
+  .compact-desktop .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.75rem;
+  }
+
+  .compact-desktop .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.75rem;
+  }
+
+  .compact-desktop .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.625rem;
+  }
+
+  .compact-desktop .p-10 {
+    padding: 1.5rem;
+  }
+
+  .compact-desktop .p-8 {
+    padding: 1.25rem;
+  }
+
+  .compact-desktop .py-20 {
+    padding-top: 3rem;
+    padding-bottom: 3rem;
+  }
+
+  .compact-desktop .py-16 {
+    padding-top: 2.5rem;
+    padding-bottom: 2.5rem;
+  }
+
+  .compact-desktop .py-10 {
+    padding-top: 1.75rem;
+    padding-bottom: 1.75rem;
+  }
+
+  .compact-desktop [class*='rounded-[3rem]'] {
+    border-radius: 2rem;
+  }
+
+  .compact-desktop [class*='rounded-[2.5rem]'] {
+    border-radius: 1.5rem;
+  }
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
