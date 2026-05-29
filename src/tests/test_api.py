@@ -291,12 +291,31 @@ async def test_identify_returns_500_when_pipeline_run_fails():
 @pytest.mark.feature("models-list")
 @pytest.mark.asyncio
 async def test_models_endpoint_returns_catalog():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.get("/api/models")
-        assert response.status_code == 200
-        payload = response.json()
-        assert payload["success"] is True
-        assert len(payload["models"]) >= 3
+    mock_session = AsyncMock()
+    model_row = SimpleNamespace(
+        model_id="qwen/qwen2.5-vl-72b-instruct",
+        name="Qwen",
+        provider="openrouter",
+        is_system=True,
+    )
+    model_result = MagicMock()
+    model_result.scalars.return_value.all.return_value = [model_row]
+    mock_session.execute.return_value = model_result
+
+    async def override_get_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with patch("app.ensure_model_catalog", new=AsyncMock()):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                response = await ac.get("/api/models")
+                assert response.status_code == 200
+                payload = response.json()
+                assert payload["success"] is True
+                assert payload["models"][0]["id"] == "qwen/qwen2.5-vl-72b-instruct"
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.mark.feature("pipelines-list")
@@ -304,19 +323,20 @@ async def test_models_endpoint_returns_catalog():
 async def test_pipelines_endpoint_handles_success_and_error():
     fake_pipeline_list = [{"id": "default", "name": "Default", "schema": {}}]
 
-    with patch("pipelines.get_all_pipelines", return_value=fake_pipeline_list):
-        with patch("os.path.exists", return_value=False):
+    with patch("app.ensure_pipeline_catalog", new=AsyncMock()):
+        with patch("app.list_pipeline_definitions", new=AsyncMock(return_value=fake_pipeline_list)):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
                 ok_resp = await ac.get("/api/pipelines")
                 assert ok_resp.status_code == 200
                 assert ok_resp.json()["success"] is True
                 assert ok_resp.json()["pipelines"][0]["id"] == "default"
 
-    with patch("pipelines.get_all_pipelines", side_effect=RuntimeError("boom")):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            err_resp = await ac.get("/api/pipelines")
-            assert err_resp.status_code == 200
-            assert err_resp.json()["success"] is False
+    with patch("app.ensure_pipeline_catalog", new=AsyncMock()):
+        with patch("app.list_pipeline_definitions", new=AsyncMock(side_effect=RuntimeError("boom"))):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                err_resp = await ac.get("/api/pipelines")
+                assert err_resp.status_code == 200
+                assert err_resp.json()["success"] is False
 
 
 @pytest.mark.feature("config-read")
@@ -327,14 +347,17 @@ async def test_get_config_masks_and_preserves_url_secrets():
         "prompt_templates": [{"id": "1", "name": "Default", "prompt": "Analyze"}],
     }
 
-    with patch("app.load_merged_user_config", return_value=fake_config):
-        with patch("app.get_secret_value", side_effect=lambda key: "https://example.com" if "URL" in key else "secret"):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-                response = await ac.get("/api/config")
-                assert response.status_code == 200
-                body = response.json()
-                assert body["secrets_status"]["SEARXNG_URL"] == "https://example.com"
-                assert body["secrets_status"]["OPENROUTER_API_KEY"] == "********"
+    with patch("app.ensure_app_settings_seed", new=AsyncMock()):
+        with patch("app.get_app_settings", new=AsyncMock(return_value=fake_config)):
+            with patch("app.ensure_pipeline_catalog", new=AsyncMock()):
+                with patch("app.list_pipeline_definitions", new=AsyncMock(return_value=[])):
+                    with patch("app.get_secret_value", side_effect=lambda key: "https://example.com" if "URL" in key else "secret"):
+                        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                            response = await ac.get("/api/config")
+                            assert response.status_code == 200
+                            body = response.json()
+                            assert body["secrets_status"]["SEARXNG_URL"] == "https://example.com"
+                            assert body["secrets_status"]["OPENROUTER_API_KEY"] == "********"
 
 
 @pytest.mark.feature("config-write")
@@ -351,20 +374,99 @@ async def test_update_config_persists_custom_pipelines_and_secret():
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        with patch("app.load_json_file", return_value={}):
-            with patch("app.encrypt_secret", return_value="enc"):
-                with patch("app.set_secret_value") as set_secret:
-                    with patch("builtins.open", MagicMock()):
-                        with patch("json.dump"):
-                            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-                                payload = {
-                                    "custom_pipelines": [{"id": "custom_1", "name": "C1", "schema": {}}],
-                                    "OPENROUTER_API_KEY": "abc123"
-                                }
-                                response = await ac.post("/api/config", json=payload)
-                                assert response.status_code == 200
-                                assert response.json()["success"] is True
-                                set_secret.assert_any_call("OPENROUTER_API_KEY", "abc123")
+        with patch("app.encrypt_secret", return_value="enc"):
+            with patch("app.set_secret_value") as set_secret:
+                with patch("app.ensure_app_settings_seed", new=AsyncMock()):
+                    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                        payload = {
+                            "custom_pipelines": [{"id": "custom_1", "name": "C1", "schema": {}}],
+                            "OPENROUTER_API_KEY": "abc123"
+                        }
+                        response = await ac.post("/api/config", json=payload)
+                        assert response.status_code == 200
+                        assert response.json()["success"] is True
+                        set_secret.assert_any_call("OPENROUTER_API_KEY", "abc123")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.feature("service-output-generate")
+@pytest.mark.asyncio
+async def test_generate_service_output_endpoint_generates_and_persists():
+    mock_session = AsyncMock()
+    mock_item = SimpleNamespace(
+        id=21,
+        user_overrides=None,
+        ai_output={"llm_output": {"product_name": "Item A", "is_food": False}},
+    )
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_item
+    mock_session.execute.return_value = mock_result
+
+    async def override_get_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with patch("app.get_runtime_service_prompt_configs", new=AsyncMock(return_value={"homebox": {}})):
+            with patch(
+                "app.generate_service_output",
+                return_value={"status": "ready", "error": None, "data": {"product_name": "Item A+"}},
+            ):
+                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                    response = await ac.post(
+                        "/api/service-output/generate",
+                        json={"item_id": 21, "service_name": "homebox"},
+                    )
+                    assert response.status_code == 200
+                    payload = response.json()
+                    assert payload["success"] is True
+                    assert payload["cached"] is False
+                    assert payload["output"]["data"]["product_name"] == "Item A+"
+                    mock_session.commit.assert_awaited()
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.feature("service-output-generate")
+@pytest.mark.asyncio
+async def test_generate_service_output_endpoint_returns_cached_when_ready():
+    mock_session = AsyncMock()
+    mock_item = SimpleNamespace(
+        id=22,
+        user_overrides=None,
+        ai_output={
+            "llm_output": {"product_name": "Item B"},
+            "service_outputs": {
+                "homebox": {
+                    "status": "ready",
+                    "data": {"product_name": "Item B Ready"},
+                }
+            },
+        },
+    )
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_item
+    mock_session.execute.return_value = mock_result
+
+    async def override_get_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with patch("app.generate_service_output") as mocked_generate:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                response = await ac.post(
+                    "/api/service-output/generate",
+                    json={"item_id": 22, "service_name": "homebox"},
+                )
+                assert response.status_code == 200
+                payload = response.json()
+                assert payload["success"] is True
+                assert payload["cached"] is True
+                assert payload["output"]["data"]["product_name"] == "Item B Ready"
+                mocked_generate.assert_not_called()
+                mock_session.commit.assert_not_awaited()
     finally:
         app.dependency_overrides.pop(get_db, None)
 
@@ -431,19 +533,17 @@ async def test_locations_endpoint_handles_missing_headers():
 @pytest.mark.feature("pipelines-custom")
 @pytest.mark.asyncio
 async def test_pipelines_endpoint_merges_custom_from_config_file():
+    """Feature: pipeline list uses DB catalog data and no file merge fallback."""
     fake_pipeline_list = [{"id": "default", "name": "Default", "schema": {}}]
-    custom_pipeline = {"id": "custom_test", "name": "Custom Test", "schema": {}}
 
-    with patch("pipelines.get_all_pipelines", return_value=fake_pipeline_list):
-        with patch("os.path.exists", side_effect=lambda p: p == "config/user_config.json"):
-            with patch("builtins.open", MagicMock()):
-                with patch("json.load", return_value={"custom_pipelines": [custom_pipeline]}):
-                    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-                        response = await ac.get("/api/pipelines")
-                        assert response.status_code == 200
-                        data = response.json()
-                        assert data["success"] is True
-                        assert any(p["id"] == "custom_test" for p in data["pipelines"])
+    with patch("app.ensure_pipeline_catalog", new=AsyncMock()):
+        with patch("app.list_pipeline_definitions", new=AsyncMock(return_value=fake_pipeline_list)):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                response = await ac.get("/api/pipelines")
+                assert response.status_code == 200
+                data = response.json()
+                assert data["success"] is True
+                assert any(p["id"] == "default" for p in data["pipelines"])
 
 
 @pytest.mark.feature("preview-item-not-found")
@@ -488,9 +588,9 @@ async def test_delete_item_endpoint_deletes_files_and_item():
         app.dependency_overrides.pop(get_db, None)
 
 
-@pytest.mark.feature("config-legacy-homebox-email")
+@pytest.mark.feature("config-homebox-username")
 @pytest.mark.asyncio
-async def test_update_config_handles_legacy_homebox_email():
+async def test_update_config_handles_homebox_username_secret():
     mock_session = AsyncMock()
     mock_session.add = MagicMock()
     mock_result = MagicMock()
@@ -502,15 +602,13 @@ async def test_update_config_handles_legacy_homebox_email():
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        with patch("app.load_json_file", return_value={}):
-            with patch("app.encrypt_secret", return_value="enc"):
-                with patch("app.set_secret_value") as set_secret:
-                    with patch("builtins.open", MagicMock()):
-                        with patch("json.dump"):
-                            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-                                response = await ac.post("/api/config", json={"HOMEBOX_EMAIL": "legacy@example.com"})
-                                assert response.status_code == 200
-                                assert response.json()["success"] is True
-                                set_secret.assert_any_call("HOMEBOX_USERNAME", "legacy@example.com")
+        with patch("app.encrypt_secret", return_value="enc"):
+            with patch("app.set_secret_value") as set_secret:
+                with patch("app.ensure_app_settings_seed", new=AsyncMock()):
+                    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                        response = await ac.post("/api/config", json={"HOMEBOX_USERNAME": "user@example.com"})
+                        assert response.status_code == 200
+                        assert response.json()["success"] is True
+                        set_secret.assert_any_call("HOMEBOX_USERNAME", "user@example.com")
     finally:
         app.dependency_overrides.pop(get_db, None)
