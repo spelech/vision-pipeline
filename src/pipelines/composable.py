@@ -36,12 +36,18 @@ class ComposablePipeline(BasePipeline):
             "vision_prompt": {
                 "type": "textarea",
                 "label": "Vision Prompt",
-                "default": ""
+                "default": (
+                    "Analyze the image and return strict JSON product metadata "
+                    "with fields like product_name, brand, category, and search_query."
+                )
             },
             "refine_prompt": {
                 "type": "textarea",
                 "label": "Refine Prompt",
-                "default": ""
+                "default": (
+                    "Refine the metadata using search and scrape context while "
+                    "preserving the original JSON schema and factual accuracy."
+                )
             },
             "refine_model": {
                 "type": "string",

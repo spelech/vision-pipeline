@@ -6,6 +6,7 @@ import base64
 import logging
 import asyncio
 from datetime import datetime, UTC
+from urllib.parse import urlparse
 from typing import Optional, List, Dict, Any, cast
 import requests
 from fastapi import (
@@ -18,10 +19,9 @@ from fastapi import (
     APIRouter,
     HTTPException,
 )
-from fastapi.responses import JSONResponse, RedirectResponse, FileResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.concurrency import run_in_threadpool
-from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, or_
 from sqlalchemy.exc import SQLAlchemyError
@@ -396,10 +396,11 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
             "enabled": True,
             "prompt": (
                 "Create Homebox-ready inventory JSON from the provided product data and context. "
-                "Prioritize product_name, brand, model_number, category, and description. "
-                "Include technical_details when available. "
-                "Keep all values concise and factual. Return strict JSON only."
+                "Prioritize product_name, brand, model_number, category, description, "
+                "and technical_details. "
+                "Prefer factual values supported by search/scrape context. Return strict JSON only."
             ),
+            "feedback_enabled": False,
         },
         "mealie": {
             "service": "mealie",
@@ -411,6 +412,7 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
                 "Include recipe_notes when available. "
                 "If data is uncertain, preserve confidence in notes. Return strict JSON only."
             ),
+            "feedback_enabled": False,
         },
         "pricebuddy": {
             "service": "pricebuddy",
@@ -418,8 +420,17 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
             "enabled": True,
             "prompt": (
                 "Create PriceBuddy-ready product tracking JSON from the provided data and context. "
-                "Prioritize product_name, barcode, product_url, and comparable result URLs. "
+                "Prioritize product_name, barcode, product_url, and "
+                "monitor_urls/comparable_urls from search evidence. "
+                "Prefer retailer product pages over blogs or forums. "
                 "Return strict JSON only."
+            ),
+            "feedback_enabled": True,
+            "feedback_prompt": (
+                "Revise the PriceBuddy JSON using feedback candidates from search results. "
+                "Choose URLs that best match the same product across major retailers, "
+                "remove irrelevant links, "
+                "and keep only concise, valid JSON fields. Return strict JSON only."
             ),
         },
         "changedetection": {
@@ -428,8 +439,16 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
             "enabled": True,
             "prompt": (
                 "Create ChangeDetection-ready monitoring JSON from the provided data and context. "
-                "Prioritize product_name, product_url, and change_monitoring_notes. "
+                "Prioritize product_name, product_url, monitor_urls, and change_monitoring_notes. "
+                "When possible, select multiple matching retailer product URLs for monitoring. "
                 "Return strict JSON only."
+            ),
+            "feedback_enabled": True,
+            "feedback_prompt": (
+                "Revise the ChangeDetection JSON using feedback candidates from search results. "
+                "Ensure product_url is the best primary URL and monitor_urls contains "
+                "additional relevant retailers "
+                "for the same product. Keep strict JSON only."
             ),
         },
     }
@@ -449,6 +468,8 @@ def normalize_service_prompts(value: Any) -> Dict[str, Dict[str, Any]]:
                 "prompt": config,
                 "model": None,
                 "enabled": True,
+                "feedback_enabled": True,
+                "feedback_prompt": "",
             }
             continue
 
@@ -458,6 +479,8 @@ def normalize_service_prompts(value: Any) -> Dict[str, Dict[str, Any]]:
                 "prompt": str(config.get("prompt", "")),
                 "model": normalize_model_id(config.get("model")),
                 "enabled": bool(config.get("enabled", True)),
+                "feedback_enabled": bool(config.get("feedback_enabled", True)),
+                "feedback_prompt": str(config.get("feedback_prompt", "")),
             }
 
     return normalized
@@ -487,6 +510,158 @@ def get_service_prompt_config(
     }
 
 
+def _extract_terms(value: Any) -> List[str]:
+    if not isinstance(value, str):
+        return []
+    return [part.strip().lower() for part in value.split() if len(part.strip()) >= 3]
+
+
+def extract_search_candidates(  # pylint: disable=too-many-locals
+    search_results: Any,
+    base_data: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    if not isinstance(search_results, list):
+        return []
+
+    common_retailer_tokens = [
+        "amazon",
+        "walmart",
+        "target",
+        "bestbuy",
+        "costco",
+        "homedepot",
+        "lowes",
+        "ebay",
+        "newegg",
+        "wayfair",
+    ]
+    product_terms = _extract_terms(
+        str(base_data.get("product_name") or base_data.get("name") or "")
+    )
+
+    candidates: List[Dict[str, Any]] = []
+    for result in search_results[:12]:
+        if not isinstance(result, dict):
+            continue
+        url = str(result.get("url") or "").strip()
+        if not url.startswith(("http://", "https://")):
+            continue
+        title = str(result.get("title") or "").strip()
+        snippet = str(result.get("content") or "").strip()
+        domain = urlparse(url).netloc.lower()
+        haystack = f"{title} {snippet}".lower()
+
+        score = 0
+        if any(token in domain for token in common_retailer_tokens):
+            score += 2
+        if any(term in haystack for term in product_terms):
+            score += 1
+
+        candidates.append(
+            {
+                "url": url,
+                "title": title,
+                "snippet": snippet,
+                "domain": domain,
+                "score": score,
+                "is_retailer": any(token in domain for token in common_retailer_tokens),
+            }
+        )
+
+    candidates.sort(
+        key=lambda item: (
+            int(item.get("score", 0)),
+            bool(item.get("is_retailer")),
+        ),
+        reverse=True,
+    )
+    return candidates
+
+
+def build_service_feedback_context(
+    service_name: str,
+    base_data: Dict[str, Any],
+    context_data: Dict[str, Any],
+) -> Dict[str, Any]:
+    search_candidates = extract_search_candidates(context_data.get("search"), base_data)
+    candidate_urls = [item["url"] for item in search_candidates if isinstance(item.get("url"), str)]
+    retailer_urls = [
+        item["url"]
+        for item in search_candidates
+        if item.get("is_retailer") and isinstance(item.get("url"), str)
+    ]
+
+    # Service-specific hints keep the feedback pass targeted.
+    required_fields: List[str]
+    if service_name == "changedetection":
+        required_fields = [
+            "product_name",
+            "product_url",
+            "monitor_urls",
+            "change_monitoring_notes",
+        ]
+    elif service_name == "pricebuddy":
+        required_fields = ["product_name", "barcode", "product_url", "monitor_urls"]
+    else:
+        required_fields = ["product_name"]
+
+    return {
+        "candidate_urls": candidate_urls[:8],
+        "retailer_urls": retailer_urls[:6],
+        "required_fields": required_fields,
+        "top_candidates": search_candidates[:6],
+    }
+
+
+def should_run_service_feedback_pass(service_name: str, feedback_context: Dict[str, Any]) -> bool:
+    if service_name not in {"pricebuddy", "changedetection"}:
+        return False
+    candidate_urls = feedback_context.get("candidate_urls")
+    return isinstance(candidate_urls, list) and len(candidate_urls) > 0
+
+
+def apply_service_output_feedback_fallbacks(
+    service_name: str,
+    refined: Dict[str, Any],
+    feedback_context: Dict[str, Any],
+) -> Dict[str, Any]:
+    output = dict(refined)
+    candidate_urls = [
+        str(url).strip()
+        for url in feedback_context.get("candidate_urls", [])
+        if isinstance(url, str) and str(url).strip()
+    ]
+    retailer_urls = [
+        str(url).strip()
+        for url in feedback_context.get("retailer_urls", [])
+        if isinstance(url, str) and str(url).strip()
+    ]
+
+    if service_name in {"pricebuddy", "changedetection"}:
+        if not str(output.get("product_url") or "").strip():
+            primary = (retailer_urls or candidate_urls or [""])[0]
+            if primary:
+                output["product_url"] = primary
+
+        existing_monitor_urls = output.get("monitor_urls", [])
+        monitor_urls: List[str] = []
+        if isinstance(existing_monitor_urls, list):
+            monitor_urls.extend(
+                str(url).strip()
+                for url in existing_monitor_urls
+                if isinstance(url, str) and str(url).strip()
+            )
+        for url in retailer_urls + candidate_urls:
+            if url not in monitor_urls:
+                monitor_urls.append(url)
+            if len(monitor_urls) >= 6:
+                break
+        if monitor_urls:
+            output["monitor_urls"] = monitor_urls
+
+    return output
+
+
 def generate_service_output(
     service_name: str,
     base_data: Dict[str, Any],
@@ -494,6 +669,7 @@ def generate_service_output(
     service_prompt_configs: Dict[str, Dict[str, Any]],
     log_cb=None,
 ) -> Dict[str, Any]:
+    # pylint: disable=too-many-locals
     prompt_config = get_service_prompt_config(service_name, service_prompt_configs)
     if not prompt_config.get("enabled", True):
         return {
@@ -504,28 +680,71 @@ def generate_service_output(
 
     model = prompt_config.get("model")
     prompt_template = str(prompt_config.get("prompt", "")).strip()
+    feedback_enabled = bool(prompt_config.get("feedback_enabled", True))
+    feedback_template = str(prompt_config.get("feedback_prompt", "")).strip()
+    feedback_context = build_service_feedback_context(service_name, base_data, context_data)
+
+    generation_context = {
+        **context_data,
+        "feedback_hints": feedback_context,
+    }
     prompt = (
         f"{prompt_template}\n"
         f"Service: {service_name}\n"
         f"Current Data: {json.dumps(base_data)}\n"
-        f"Context: {json.dumps(context_data)}"
+        f"Context: {json.dumps(generation_context)}"
     )
 
     if log_cb:
         log_cb(f"🧩 [Service Prompt: {service_name}] Generating service-specific output...")
 
-    refined = data_refine(base_data, context_data, model=model, prompt=prompt, log_cb=log_cb)
+    refined = data_refine(base_data, generation_context, model=model, prompt=prompt, log_cb=log_cb)
     if not isinstance(refined, dict):
         return {
             "status": "error",
             "error": "Service prompt output was not JSON",
             "data": {},
         }
+
+    feedback_applied = False
+    if feedback_enabled and should_run_service_feedback_pass(service_name, feedback_context):
+        feedback_applied = True
+        if log_cb:
+            log_cb(
+                f"🔁 [Service Prompt: {service_name}] "
+                "Applying search-feedback refinement pass..."
+            )
+        feedback_prompt = (
+            f"{feedback_template or (
+                'Revise JSON output using candidate URLs and service constraints.'
+            )}\n"
+            f"Service: {service_name}\n"
+            f"Current Data: {json.dumps(base_data)}\n"
+            f"Initial Output: {json.dumps(refined)}\n"
+            f"Feedback Context: {json.dumps(feedback_context)}"
+        )
+        refined_feedback = data_refine(
+            refined,
+            {"feedback": feedback_context, **context_data},
+            model=model,
+            prompt=feedback_prompt,
+            log_cb=log_cb,
+        )
+        if isinstance(refined_feedback, dict):
+            refined = refined_feedback
+
+    refined = apply_service_output_feedback_fallbacks(service_name, refined, feedback_context)
+
     return {
         "status": "ready",
         "error": None,
         "data": refined,
         "model": model,
+        "feedback_applied": feedback_applied,
+        "feedback_hints": {
+            "candidate_urls": feedback_context.get("candidate_urls", [])[:3],
+            "retailer_urls": feedback_context.get("retailer_urls", [])[:3],
+        },
     }
 
 
@@ -686,7 +905,12 @@ async def lifespan(_app: FastAPI):
     yield
 
 # --- Setup ---
-app = FastAPI(lifespan=lifespan, title="Vision Pipeline API", version="3.4.0")
+app = FastAPI(
+    lifespan=lifespan,
+    title="Vision Pipeline API",
+    version="3.4.0",
+    redoc_url=None,
+)
 api_router = APIRouter(prefix="/api")
 
 # Registry of available services
@@ -1314,6 +1538,11 @@ async def execute_services(data: Dict):  # pylint: disable=too-many-locals
     return {"success": True, "results": results_map}
 
 
+@app.post(
+    "/service-output/generate",
+    response_model=ServiceOutputGenerateResponse,
+    include_in_schema=False,
+)
 @api_router.post(
     "/service-output/generate",
     response_model=ServiceOutputGenerateResponse,
@@ -1619,25 +1848,9 @@ async def bulk_approve(data: dict, db: AsyncSession = Depends(get_db)):
 
 app.include_router(api_router)
 
-# Serve built frontend if available
-UI_DIR = os.path.join(os.path.dirname(__file__), "..", "web", "dist")
-
-
-@app.exception_handler(StarletteHTTPException)
-async def spa_fallback(_request, exc):
-    if exc.status_code == 404 and os.path.exists(
-            os.path.join(UI_DIR, "index.html")):
-        return FileResponse(os.path.join(UI_DIR, "index.html"))
-    return JSONResponse(
-        status_code=exc.status_code, content={
-            "detail": exc.detail})
-
-if os.path.exists(UI_DIR):
-    app.mount("/", StaticFiles(directory=UI_DIR, html=True), name="ui")
-else:
-    @app.get("/")
-    async def root():
-        return RedirectResponse(url="/docs")
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/docs")
 
 if __name__ == "__main__":
     import uvicorn

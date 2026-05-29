@@ -16,6 +16,18 @@ type PipelineStageId = 'barcode' | 'vision' | 'search' | 'refine' | 'sync';
 export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecute }: AssetCardProps) {
   type ServiceRunState = 'idle' | 'running' | 'ready' | 'error';
 
+  const asEditableText = (value: unknown, fallback = ''): string => {
+    if (value === null || value === undefined || value === '') return fallback;
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return fallback;
+    }
+  };
+
   const [isExpanded, setIsExpanded] = useState(false);
   const [editData, setEditData] = useState<AssetEditData>(
     (item.user_overrides && Object.keys(item.user_overrides).length > 0) 
@@ -117,7 +129,7 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
       const resp = await fetch('/api/service-output/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item_id: Number(item.id), service_name: svc })
+        body: JSON.stringify({ item_id: Number(item.id), service_name: svc, force: true })
       });
       const data = await resp.json();
       if (resp.ok && data?.success && data?.output?.status === 'ready') {
@@ -137,15 +149,15 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
   };
 
   const toggleService = (svc: string) => {
-    setSelectedServices((prev) => {
-      const isEnabled = prev.includes(svc);
-      if (isEnabled) {
-        setExpandedServices((expandedPrev) => ({ ...expandedPrev, [svc]: false }));
-        setServiceRunState((statePrev) => ({ ...statePrev, [svc]: 'idle' }));
-        return prev.filter((s) => s !== svc);
-      }
-      return [...prev, svc];
-    });
+    const isEnabled = selectedServices.includes(svc);
+    if (isEnabled) {
+      setSelectedServices((prev) => prev.filter((s) => s !== svc));
+      setExpandedServices((prev) => ({ ...prev, [svc]: false }));
+      setServiceRunState((prev) => ({ ...prev, [svc]: 'idle' }));
+      return;
+    }
+
+    setSelectedServices((prev) => [...prev, svc]);
     void generateServiceOutput(svc);
   };
 
@@ -164,7 +176,7 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
     if (serviceId === 'homebox') {
       return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Field label="Location" value={String(editData.location || 'pantry')} onChange={(v) => setEditData({ ...editData, location: v })} />
+          <Field label="Location" value={asEditableText(editData.location)} onChange={(v) => setEditData({ ...editData, location: v })} />
           <Field label="Quantity" value={String(editData.quantity || '1')} onChange={(v) => setEditData({ ...editData, quantity: v })} />
           <Field label="Purchase Price" value={String(editData.purchase_price || '')} onChange={(v) => setEditData({ ...editData, purchase_price: v })} />
           <Field label="Serial Number" value={String(editData.serial_number || '')} onChange={(v) => setEditData({ ...editData, serial_number: v })} />
@@ -175,7 +187,7 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
             <textarea
               id="homebox-notes"
               className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm h-28 focus:outline-none focus:border-blue-500/30 transition-colors"
-              value={String(editData.notes || '')}
+              value={asEditableText(editData.notes)}
               onChange={(e) => setEditData({ ...editData, notes: e.target.value })}
             />
           </div>
@@ -184,7 +196,7 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
             <textarea
               id="homebox-tech"
               className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm h-24 focus:outline-none focus:border-blue-500/30 transition-colors"
-              value={String(editData.technical_details || '')}
+              value={asEditableText(editData.technical_details)}
               onChange={(e) => setEditData({ ...editData, technical_details: e.target.value })}
             />
           </div>

@@ -37,6 +37,22 @@ class AdvancedPipeline(BasePipeline):
                     "qwen/qwen2.5-vl-72b-instruct",
                     "google/gemini-2.0-flash-001",
                     "anthropic/claude-3.5-sonnet"]},
+            "vision_prompt": {
+                "type": "textarea",
+                "label": "Vision Prompt",
+                "default": (
+                    "Analyze the image and return strict JSON product metadata "
+                    "with product_name, brand, category, and search_query."
+                )
+            },
+            "refine_prompt": {
+                "type": "textarea",
+                "label": "Refine Prompt",
+                "default": (
+                    "Refine metadata using search and scraped page context while "
+                    "preserving JSON schema and factual consistency."
+                )
+            },
             "scrape_wait_time": {
                 "type": "string",
                 "label": "Playwright JS Wait Time (ms)",
@@ -65,8 +81,14 @@ class AdvancedPipeline(BasePipeline):
         model = settings.get(
             "vision_model",
             "qwen/qwen2.5-vl-72b-instruct") if settings else "qwen/qwen2.5-vl-72b-instruct"
+        vision_prompt = settings.get("vision_prompt") if settings else None
         results["llm_output"] = vision_identify(
-            image, text_description, model=model, log_cb=log_cb)
+            image,
+            text_description,
+            model=model,
+            prompt=vision_prompt,
+            log_cb=log_cb,
+        )
 
         if not results["barcode"]:
             results["barcode"] = results["llm_output"].get("barcode")
@@ -94,8 +116,14 @@ class AdvancedPipeline(BasePipeline):
                     "search": results["searxng_results"],
                     "scrape": results["scraped_content"]}
                 refine_model = settings.get("refine_model") if settings else None
+                refine_prompt = settings.get("refine_prompt") if settings else None
                 results["llm_output"] = data_refine(
-                    results["llm_output"], context, model=refine_model, log_cb=log_cb)
+                    results["llm_output"],
+                    context,
+                    model=refine_model,
+                    prompt=refine_prompt,
+                    log_cb=log_cb,
+                )
 
         if log_cb:
             log_cb("🏁 Advanced Pipeline finished.")

@@ -17,7 +17,10 @@ def test_default_pipeline_refines_when_search_has_results(monkeypatch: pytest.Mo
     monkeypatch.setattr("pipelines.default.web_search", lambda query, log_cb=None: [{"url": "https://example.com"}])
     monkeypatch.setattr(
         "pipelines.default.data_refine",
-        lambda llm_output, context, model=None, log_cb=None: {**llm_output, "refined": True},
+        lambda llm_output, context, model=None, prompt=None, log_cb=None: {
+            **llm_output,
+            "refined": True,
+        },
     )
 
     pipeline = DefaultPipeline()
@@ -82,3 +85,12 @@ def test_default_pipeline_handles_missing_image_path(monkeypatch: pytest.MonkeyP
 
     assert scan_called["called"] is False
     assert out["llm_output"]["product_name"] == "Widget"
+
+
+@pytest.mark.feature("default-pipeline-config")
+def test_default_pipeline_schema_exposes_vision_and_refine_prompts() -> None:
+    """Feature: default pipeline settings schema includes non-empty prompt defaults."""
+    schema = DefaultPipeline.get_settings_schema()
+
+    assert schema["vision_prompt"]["default"].strip()
+    assert schema["refine_prompt"]["default"].strip()

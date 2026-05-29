@@ -107,6 +107,26 @@ def test_pricebuddy_payload_falls_back_to_top_results_and_default_tag():
     assert payload["tags"] == ["Vision Pipeline"]
 
 
+def test_pricebuddy_payload_includes_monitor_urls_when_present():
+    service = PriceBuddyService()
+    payload = service.get_payload(
+        {
+            "product_name": "Smart Plug",
+            "product_url": "https://bestbuy.com/smart-plug",
+            "monitor_urls": [
+                "https://target.com/smart-plug",
+                "https://walmart.com/smart-plug",
+            ],
+        }
+    )
+
+    assert payload["urls"] == [
+        "https://bestbuy.com/smart-plug",
+        "https://target.com/smart-plug",
+        "https://walmart.com/smart-plug",
+    ]
+
+
 @pytest.mark.asyncio
 async def test_changedetection_execute_missing_url_returns_error():
     service = ChangeDetectionService()
@@ -181,3 +201,29 @@ async def test_changedetection_pre_enrichment_no_matching_watch_and_exception_pa
     with patch("requests.get", side_effect=requests.RequestException("timeout")):
         result = await service.get_pre_enrichment({"product_url": "https://target.example.com"})
         assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_changedetection_execute_supports_multiple_monitor_urls():
+    service = ChangeDetectionService()
+    service.api_key = "test_key"
+
+    with patch("requests.post") as mock_post:
+        mock_post.return_value.status_code = 201
+        mock_post.return_value.json.side_effect = [
+            {"uuid": "watch-1"},
+            {"uuid": "watch-2"},
+        ]
+
+        result = await service.execute(
+            {
+                "product_name": "Widget",
+                "product_url": "https://amazon.com/widget",
+                "monitor_urls": ["https://target.com/widget"],
+            }
+        )
+
+        assert result["success"] is True
+        assert result["note"] == "Monitoring 2 URLs"
+        assert len(result["data"]["created"]) == 2
+        assert mock_post.call_count == 2
