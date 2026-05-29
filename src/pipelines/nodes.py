@@ -8,7 +8,14 @@ from io import BytesIO
 import requests
 from openai import OpenAI
 from PIL import ImageEnhance, ImageFilter
-from pyzbar.pyzbar import decode  # type: ignore
+
+try:
+    from pyzbar.pyzbar import decode  # type: ignore
+except ImportError:
+    # CI environments may not have the native zbar shared library.
+    # Fallback keeps the module importable and barcode scan gracefully disabled.
+    def decode(_image):  # type: ignore
+        return []
 
 logger = logging.getLogger("PipelineNodes")
 
