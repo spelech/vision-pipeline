@@ -18,10 +18,9 @@ from fastapi import (
     APIRouter,
     HTTPException,
 )
-from fastapi.responses import JSONResponse, RedirectResponse, FileResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.concurrency import run_in_threadpool
-from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, or_
 from sqlalchemy.exc import SQLAlchemyError
@@ -686,7 +685,12 @@ async def lifespan(_app: FastAPI):
     yield
 
 # --- Setup ---
-app = FastAPI(lifespan=lifespan, title="Vision Pipeline API", version="3.4.0")
+app = FastAPI(
+    lifespan=lifespan,
+    title="Vision Pipeline API",
+    version="3.4.0",
+    redoc_url=None,
+)
 api_router = APIRouter(prefix="/api")
 
 # Registry of available services
@@ -1314,6 +1318,11 @@ async def execute_services(data: Dict):  # pylint: disable=too-many-locals
     return {"success": True, "results": results_map}
 
 
+@app.post(
+    "/service-output/generate",
+    response_model=ServiceOutputGenerateResponse,
+    include_in_schema=False,
+)
 @api_router.post(
     "/service-output/generate",
     response_model=ServiceOutputGenerateResponse,
@@ -1619,25 +1628,9 @@ async def bulk_approve(data: dict, db: AsyncSession = Depends(get_db)):
 
 app.include_router(api_router)
 
-# Serve built frontend if available
-UI_DIR = os.path.join(os.path.dirname(__file__), "..", "web", "dist")
-
-
-@app.exception_handler(StarletteHTTPException)
-async def spa_fallback(_request, exc):
-    if exc.status_code == 404 and os.path.exists(
-            os.path.join(UI_DIR, "index.html")):
-        return FileResponse(os.path.join(UI_DIR, "index.html"))
-    return JSONResponse(
-        status_code=exc.status_code, content={
-            "detail": exc.detail})
-
-if os.path.exists(UI_DIR):
-    app.mount("/", StaticFiles(directory=UI_DIR, html=True), name="ui")
-else:
-    @app.get("/")
-    async def root():
-        return RedirectResponse(url="/docs")
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/docs")
 
 if __name__ == "__main__":
     import uvicorn

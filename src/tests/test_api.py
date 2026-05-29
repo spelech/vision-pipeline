@@ -471,6 +471,42 @@ async def test_generate_service_output_endpoint_returns_cached_when_ready():
         app.dependency_overrides.pop(get_db, None)
 
 
+@pytest.mark.feature("service-output-generate")
+@pytest.mark.asyncio
+async def test_generate_service_output_root_alias_accepts_post():
+    mock_session = AsyncMock()
+    mock_item = SimpleNamespace(
+        id=23,
+        user_overrides=None,
+        ai_output={"llm_output": {"product_name": "Item C"}},
+    )
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_item
+    mock_session.execute.return_value = mock_result
+
+    async def override_get_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with patch("app.get_runtime_service_prompt_configs", new=AsyncMock(return_value={"homebox": {}})):
+            with patch(
+                "app.generate_service_output",
+                return_value={"status": "ready", "error": None, "data": {"product_name": "Item C+"}},
+            ):
+                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                    response = await ac.post(
+                        "/service-output/generate",
+                        json={"item_id": 23, "service_name": "homebox"},
+                    )
+                    assert response.status_code == 200
+                    payload = response.json()
+                    assert payload["success"] is True
+                    assert payload["output"]["data"]["product_name"] == "Item C+"
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
 @pytest.mark.feature("search-items")
 @pytest.mark.asyncio
 async def test_search_endpoint_returns_merged_item_data():
