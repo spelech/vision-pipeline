@@ -1,6 +1,8 @@
 import pytest
 
 from app import (
+    build_service_feedback_context,
+    extract_search_candidates,
     get_secret_value,
     merge_service_prompt_configs,
     merge_unique_str_lists,
@@ -71,6 +73,28 @@ def test_normalize_and_merge_service_prompts() -> None:
     assert normalized["mealie"]["enabled"] is False
     assert "unknown" not in normalized
     assert merged["changedetection"]["service"] == "changedetection"
+
+
+@pytest.mark.feature("service-feedback-loop")
+def test_extract_search_candidates_and_feedback_context() -> None:
+    """Feature: derive retailer-weighted candidates for service prompt feedback passes."""
+    search_results = [
+        {"url": "https://amazon.com/widget-123", "title": "Widget 123", "content": "Great widget"},
+        {"url": "https://example.org/blog", "title": "Thoughts", "content": "Random content"},
+    ]
+    base_data = {"product_name": "Widget 123"}
+
+    candidates = extract_search_candidates(search_results, base_data)
+    assert candidates
+    assert candidates[0]["url"] == "https://amazon.com/widget-123"
+
+    feedback_context = build_service_feedback_context(
+        "changedetection",
+        base_data,
+        {"search": search_results},
+    )
+    assert feedback_context["candidate_urls"][0] == "https://amazon.com/widget-123"
+    assert "monitor_urls" in feedback_context["required_fields"]
 
 
 @pytest.mark.feature("config-secrets")
