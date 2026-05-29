@@ -9,7 +9,7 @@ def test_advanced_pipeline_runs_full_search_scrape_refine_flow(monkeypatch: pyte
     monkeypatch.setattr("pipelines.advanced.scan_barcode", lambda image, log_cb=None: None)
     monkeypatch.setattr(
         "pipelines.advanced.vision_identify",
-        lambda image, text_description, model=None, log_cb=None: {
+        lambda image, text_description, model=None, prompt=None, log_cb=None: {
             "search_query": "sriracha",
             "product_name": "Sriracha",
             "barcode": "12345",
@@ -25,7 +25,10 @@ def test_advanced_pipeline_runs_full_search_scrape_refine_flow(monkeypatch: pyte
     )
     monkeypatch.setattr(
         "pipelines.advanced.data_refine",
-        lambda llm_output, context, model=None, log_cb=None: {**llm_output, "refined": True},
+        lambda llm_output, context, model=None, prompt=None, log_cb=None: {
+            **llm_output,
+            "refined": True,
+        },
     )
 
     pipeline = AdvancedPipeline()
@@ -43,7 +46,7 @@ def test_advanced_pipeline_skips_search_when_query_unknown(monkeypatch: pytest.M
     monkeypatch.setattr("pipelines.advanced.scan_barcode", lambda image, log_cb=None: None)
     monkeypatch.setattr(
         "pipelines.advanced.vision_identify",
-        lambda image, text_description, model=None, log_cb=None: {
+        lambda image, text_description, model=None, prompt=None, log_cb=None: {
             "search_query": "Unknown",
             "product_name": "Unknown",
         },
@@ -71,7 +74,7 @@ def test_advanced_pipeline_handles_no_search_results(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr("pipelines.advanced.scan_barcode", lambda image, log_cb=None: None)
     monkeypatch.setattr(
         "pipelines.advanced.vision_identify",
-        lambda image, text_description, model=None, log_cb=None: {
+        lambda image, text_description, model=None, prompt=None, log_cb=None: {
             "search_query": "sriracha",
             "product_name": "Sriracha",
             "barcode": None,
@@ -107,7 +110,9 @@ def test_advanced_pipeline_uses_barcode_query_and_defaults_without_settings(monk
     monkeypatch.setattr("pipelines.advanced.scan_barcode", lambda image, log_cb=None: "9988")
     monkeypatch.setattr(
         "pipelines.advanced.vision_identify",
-        lambda image, text_description, model=None, log_cb=None: {"product_name": "Widget"},
+        lambda image, text_description, model=None, prompt=None, log_cb=None: {
+            "product_name": "Widget"
+        },
     )
 
     search_queries: list[str] = []
@@ -123,3 +128,12 @@ def test_advanced_pipeline_uses_barcode_query_and_defaults_without_settings(monk
 
     assert search_queries == ["9988"]
     assert out["barcode"] == "9988"
+
+
+@pytest.mark.feature("advanced-pipeline-config")
+def test_advanced_pipeline_schema_exposes_vision_and_refine_prompts() -> None:
+    """Feature: advanced pipeline settings schema includes non-empty prompt defaults."""
+    schema = AdvancedPipeline.get_settings_schema()
+
+    assert schema["vision_prompt"]["default"].strip()
+    assert schema["refine_prompt"]["default"].strip()
