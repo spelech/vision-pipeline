@@ -194,7 +194,10 @@ describe('AssetCard', () => {
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         '/api/service-output/generate',
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ item_id: 1, service_name: 'mealie', force: true })
+        })
       );
     });
 
@@ -226,5 +229,72 @@ describe('AssetCard', () => {
       expect(screen.getByText(/Service generation failed/i)).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: /Retry Service Run/i })).toBeInTheDocument();
+  });
+
+  it('Feature: asset-card-service-toggle-off | does not regenerate service output when disabling a selected service', async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/service-output/generate') {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            output: {
+              status: 'ready',
+              data: { notes: 'Stored item' }
+            }
+          })
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ logs: [] })
+      } as Response;
+    });
+
+    render(<AssetCard item={mockItem} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByLabelText(/Enable Homebox/i));
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText(/Homebox Notes/i)).not.toBeInTheDocument();
+    });
+
+    expect(globalThis.fetch).not.toHaveBeenCalledWith(
+      '/api/service-output/generate',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('Feature: asset-card-homebox-object-fields | renders object technical details as JSON text', async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/service-output/generate') {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            output: {
+              status: 'ready',
+              data: { technical_details: { wattage: '10W', color: 'warm white' } }
+            }
+          })
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ logs: [] })
+      } as Response;
+    });
+
+    render(<AssetCard item={{ ...mockItem, selected_services: [] }} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByLabelText(/Enable Homebox/i));
+
+    await waitFor(() => {
+      const technicalField = screen.getByLabelText(/Technical Details/i) as HTMLTextAreaElement;
+      expect(technicalField.value).toContain('"wattage": "10W"');
+      expect(technicalField.value).toContain('"color": "warm white"');
+    });
   });
 });
