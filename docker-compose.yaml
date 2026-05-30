@@ -2,6 +2,8 @@ services:
   db:
     image: postgres:16-alpine
     container_name: vision-db
+    labels:
+      - "wud.watch=false"
     environment:
       - POSTGRES_USER=${DB_USER:-vision}
       - POSTGRES_PASSWORD=${DB_PASSWORD:-vision_pass}
@@ -27,7 +29,11 @@ services:
     container_name: vision-pipeline
     env_file:
       - .env.remote
-    image: ghcr.io/spelech/vision-pipeline:latest
+    image: ${VISION_PIPELINE_IMAGE:-ghcr.io/spelech/vision-pipeline}:${VISION_PIPELINE_TAG:-latest}
+    labels:
+      - "wud.watch=true"
+      - "wud.display.name=vision-pipeline"
+      - "wud.tag.include=^latest$|^v?[0-9]+\\.[0-9]+\\.[0-9]+$"
     networks:
       - default
       - net_webservices
