@@ -33,6 +33,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
@@ -44,9 +49,13 @@ jobs:
         run: |
           python scripts/check_db_migrations.py
 
+      - name: Check generated test requirements index
+        run: |
+          node scripts/update-test-requirements-index.mjs --check
+
       - name: Run backend tests with minimum coverage
         run: |
-          pytest src/tests --cov=src --cov-fail-under=80 --cov-report=term --cov-report=xml:coverage/python-coverage.xml
+          pytest src/tests --cov=src --cov-fail-under=82 --cov-report=term --cov-report=xml:coverage/python-coverage.xml
 
   frontend-coverage:
     runs-on: ubuntu-latest

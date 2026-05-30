@@ -28,6 +28,7 @@ jobs:
             dockerfile: src/Dockerfile
           - image_name: vision-playwright
             context: ./playwright
+            dockerfile: playwright/Dockerfile
 
     steps:
       - name: Checkout repository
@@ -60,6 +61,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
