@@ -358,4 +358,115 @@ describe('Settings', () => {
 
     expect(screen.getAllByText('qwen2.5-vl-72b-instruct')).toHaveLength(1);
   });
+
+  it('Feature: settings-load-fallback | keeps UI stable when config/models/pipelines requests fail', async () => {
+    globalThis.fetch = vi.fn().mockImplementation(() => Promise.reject(new Error('network down')));
+
+    render(<Settings />);
+
+    expect(await screen.findByText('System Settings')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('owner/model-name')).toBeInTheDocument();
+    expect(screen.getByText('Apply Full Configuration')).toBeInTheDocument();
+  });
+
+  it('Feature: settings-save-empty-template-array | persists prompt_templates as empty when templates originated from config', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url, opts) => {
+      if (url === '/api/config' && opts?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      if (url === '/api/config') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            secrets_status: {},
+            model_favorites: ['qwen/qwen2.5-vl-72b-instruct'],
+            starred_models: [],
+            image_optimization: { max_dimension: 1024, quality: 85 },
+            prompt_templates: [{ id: 'seed', name: 'Seed', prompt: 'Prompt' }],
+          }),
+        });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, models: [] }) });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, pipelines: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    render(<Settings />);
+    await screen.findByText('System Settings');
+
+    fireEvent.click(screen.getByText('Delete'));
+    fireEvent.click(screen.getByText('Apply Full Configuration'));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/config', expect.objectContaining({ method: 'POST' }));
+    });
+
+    const postCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0] === '/api/config' && call[1]?.method === 'POST'
+    );
+    const payload = JSON.parse((postCall?.[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(payload.prompt_templates).toEqual([]);
+
+    alertSpy.mockRestore();
+  });
+
+  it('Feature: settings-save-updated-secret-and-image-optimization | persists edited secret key and optimization values', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url, opts) => {
+      if (url === '/api/config' && opts?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      if (url === '/api/config') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            secrets_status: {
+              OPENROUTER_API_KEY: true,
+            },
+            model_favorites: [],
+            starred_models: [],
+            image_optimization: { max_dimension: 1024, quality: 85 },
+            prompt_templates: [],
+          }),
+        });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, models: [] }) });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, pipelines: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    render(<Settings />);
+    await screen.findByText('System Settings');
+
+    fireEvent.change(screen.getByPlaceholderText(/Enter OPENROUTER API KEY/i), { target: { value: 'test-key-123' } });
+    fireEvent.change(screen.getByDisplayValue('1024'), { target: { value: '1600' } });
+    fireEvent.change(screen.getByDisplayValue('85'), { target: { value: '92' } });
+
+    fireEvent.click(screen.getByText('Apply Full Configuration'));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/config', expect.objectContaining({ method: 'POST' }));
+    });
+
+    const postCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0] === '/api/config' && call[1]?.method === 'POST'
+    );
+    const payload = JSON.parse((postCall?.[1] as RequestInit).body as string) as {
+      OPENROUTER_API_KEY: string;
+      image_optimization: { max_dimension: number; quality: number };
+    };
+    expect(payload.OPENROUTER_API_KEY).toBe('test-key-123');
+    expect(payload.image_optimization).toEqual({ max_dimension: 1600, quality: 92 });
+
+    alertSpy.mockRestore();
+  });
 });

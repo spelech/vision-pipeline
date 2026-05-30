@@ -9,7 +9,30 @@ import { ReviewTab } from '../app/ReviewTab';
 import type { PipelineSummary } from '../app/types';
 
 vi.mock('../components/AssetCard', () => ({
-  AssetCard: ({ item }: { item: Asset }) => <div data-testid={`asset-${item.id}`}>{item.id}</div>,
+  AssetCard: ({
+    item,
+    onToggleSelect,
+    onPreview,
+    onExecute,
+  }: {
+    item: Asset;
+    onToggleSelect?: () => void;
+    onPreview: (service: string, overrides: Record<string, unknown>) => void;
+    onExecute: (services: string[], overrides: Record<string, unknown>) => void;
+  }) => (
+    <div data-testid={`asset-${item.id}`}>
+      {item.id}
+      <button data-testid={`toggle-${item.id}`} onClick={() => onToggleSelect?.()}>
+        toggle
+      </button>
+      <button data-testid={`preview-${item.id}`} onClick={() => onPreview('homebox', { sample: true })}>
+        preview
+      </button>
+      <button data-testid={`execute-${item.id}`} onClick={() => onExecute(['homebox'], { sample: true })}>
+        execute
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('../app/ProcessingDashboard', () => ({
@@ -121,14 +144,47 @@ describe('QueueCards', () => {
     expect(onBulkApprove).toHaveBeenCalled();
     expect(screen.getByTestId('asset-a1')).toBeInTheDocument();
   });
+
+  it('Feature: queue-cards-callback-wrappers | forwards toggle preview execute events through item-bound handlers', () => {
+    const onToggleSelection = vi.fn();
+    const onPreview = vi.fn();
+    const onExecute = vi.fn();
+
+    render(
+      <QueueCards
+        loading={false}
+        queue={[baseAsset]}
+        queueStatus="pending"
+        showSelection
+        selectedItems={[]}
+        rowVirtualizer={virtualizer as never}
+        listParentRef={{ current: null }}
+        onSelectAll={vi.fn()}
+        onToggleSelection={onToggleSelection}
+        onBulkApprove={vi.fn()}
+        onPreview={onPreview}
+        onExecute={onExecute}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('toggle-a1'));
+    fireEvent.click(screen.getByTestId('preview-a1'));
+    fireEvent.click(screen.getByTestId('execute-a1'));
+
+    expect(onToggleSelection).toHaveBeenCalledWith('a1');
+    expect(onPreview).toHaveBeenCalledWith(baseAsset, 'homebox', { sample: true });
+    expect(onExecute).toHaveBeenCalledWith(baseAsset, ['homebox'], { sample: true });
+  });
 });
 
 describe('App tab wrappers', () => {
   it('Feature: batch-tab-wrapper | renders controls and delegates queue rendering', () => {
     const onRefreshQueue = vi.fn();
     const onPipelineChange = vi.fn();
+    const onHandleUpload = vi.fn();
+    const uploadRef = { current: { click: vi.fn() } as unknown as HTMLInputElement };
 
-    render(
+    const { container } = render(
       <BatchTab
         queue={[baseAsset]}
         selectedItems={[]}
@@ -140,10 +196,10 @@ describe('App tab wrappers', () => {
         defaultPipelineOption={defaultPipeline}
         rowVirtualizer={virtualizer as never}
         listParentRef={{ current: null }}
-        batchInputRef={{ current: null }}
+        batchInputRef={uploadRef}
         onRefreshQueue={onRefreshQueue}
         onSetSelectedPipelineId={onPipelineChange}
-        onHandleUpload={vi.fn()}
+        onHandleUpload={onHandleUpload}
         onSelectAll={vi.fn()}
         onToggleSelection={vi.fn()}
         onBulkApprove={vi.fn()}
@@ -154,9 +210,14 @@ describe('App tab wrappers', () => {
 
     fireEvent.click(screen.getByText(/Refresh Queue/i));
     fireEvent.change(screen.getByDisplayValue('Default'), { target: { value: 'default' } });
+    const batchInput = container.querySelector('input[type="file"][multiple]') as HTMLInputElement;
+    fireEvent.change(batchInput, {
+      target: { files: [new File(['1'], 'batch.jpg', { type: 'image/jpeg' })] },
+    });
 
     expect(onRefreshQueue).toHaveBeenCalled();
     expect(onPipelineChange).toHaveBeenCalled();
+    expect(onHandleUpload).toHaveBeenCalled();
     expect(screen.getByTestId('asset-a1')).toBeInTheDocument();
   });
 
@@ -224,6 +285,81 @@ describe('App tab wrappers', () => {
     );
 
     expect(screen.getByTestId('processing-dashboard')).toBeInTheDocument();
+  });
+
+  it('Feature: identify-tab-upload-and-fallback-pipeline | uses default pipeline option and triggers gallery input click', () => {
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
+
+    render(
+      <IdentifyTab
+        pipelines={[]}
+        selectedPipelineId="default"
+        selectedPipelineName="Default"
+        defaultPipelineOption={defaultPipeline}
+        processingFile={null}
+        processingFileUrl=""
+        processingSessionId={null}
+        processingLogs={[]}
+        processingError={null}
+        lastIdentifyResult={null}
+        cameraInputRef={{ current: null }}
+        galleryInputRef={{ current: null }}
+        onSetSelectedPipelineId={vi.fn()}
+        onOpenPipelineEditor={vi.fn()}
+        onOpenCamera={vi.fn()}
+        onHandleUpload={vi.fn()}
+        onDismissProcessingError={vi.fn()}
+        onClearLastIdentifyResult={vi.fn()}
+        onOpenReviewTab={vi.fn()}
+        onPreview={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByDisplayValue('Default')).toBeInTheDocument();
+    fireEvent.click(screen.getByText(/Upload Files/i));
+    expect(clickSpy).toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
+
+  it('Feature: identify-tab-callbacks | updates pipeline selection and forwards result card actions', () => {
+    const onSetSelectedPipelineId = vi.fn();
+    const onClearLastIdentifyResult = vi.fn();
+    const onOpenReviewTab = vi.fn();
+
+    render(
+      <IdentifyTab
+        pipelines={[defaultPipeline, { id: 'alt', name: 'Alternate' }]}
+        selectedPipelineId="default"
+        selectedPipelineName="Default"
+        defaultPipelineOption={defaultPipeline}
+        processingFile={null}
+        processingFileUrl=""
+        processingSessionId={null}
+        processingLogs={[]}
+        processingError={null}
+        lastIdentifyResult={baseAsset}
+        cameraInputRef={{ current: null }}
+        galleryInputRef={{ current: null }}
+        onSetSelectedPipelineId={onSetSelectedPipelineId}
+        onOpenPipelineEditor={vi.fn()}
+        onOpenCamera={vi.fn()}
+        onHandleUpload={vi.fn()}
+        onDismissProcessingError={vi.fn()}
+        onClearLastIdentifyResult={onClearLastIdentifyResult}
+        onOpenReviewTab={onOpenReviewTab}
+        onPreview={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByDisplayValue('Default'), { target: { value: 'alt' } });
+    fireEvent.click(screen.getByRole('button', { name: /Review Queue/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Clear/i }));
+
+    expect(onSetSelectedPipelineId).toHaveBeenCalledWith('alt');
+    expect(onOpenReviewTab).toHaveBeenCalled();
+    expect(onClearLastIdentifyResult).toHaveBeenCalled();
   });
 
   it('Feature: review-tab-wrapper | switches queue filters and delegates pending selection mode', () => {

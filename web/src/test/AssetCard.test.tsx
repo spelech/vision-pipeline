@@ -297,4 +297,306 @@ describe('AssetCard', () => {
       expect(technicalField.value).toContain('"color": "warm white"');
     });
   });
+
+  it('Feature: asset-card-review-image-precedence | opens review image data uri when available', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const reviewDataUri = 'data:image/jpeg;base64,Zm9v';
+
+    const { container } = render(
+      <AssetCard
+        item={{
+          ...mockItem,
+          image_path: 'relative.jpg',
+          ai_output: { ...mockItem.ai_output, review_image_data_uri: reviewDataUri },
+        }}
+        onPreview={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    const imagePanel = container.querySelector('.w-24.h-24.cursor-pointer') as HTMLElement;
+    fireEvent.click(imagePanel);
+
+    expect(openSpy).toHaveBeenCalledWith(reviewDataUri, '_blank');
+    openSpy.mockRestore();
+  });
+
+  it('Feature: asset-card-data-uri-image-path | opens data uri image path directly', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const dataUriPath = 'data:image/png;base64,YmFy';
+
+    const { container } = render(
+      <AssetCard
+        item={{ ...mockItem, image_path: dataUriPath, ai_output: { llm_output: {} } }}
+        onPreview={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    const imagePanel = container.querySelector('.w-24.h-24.cursor-pointer') as HTMLElement;
+    fireEvent.click(imagePanel);
+
+    expect(openSpy).toHaveBeenCalledWith(dataUriPath, '_blank');
+    openSpy.mockRestore();
+  });
+
+  it('Feature: asset-card-service-retry | retries generation and enables changedetection fields', async () => {
+    const generation = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ success: false, error: 'first run failed' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, output: { status: 'ready', data: { product_url: 'https://shop/item' } } }),
+      });
+
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/service-output/generate') {
+        return (await generation()) as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ logs: [] }),
+      } as Response;
+    });
+
+    render(<AssetCard item={{ ...mockItem, selected_services: [] }} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByLabelText(/Enable CD.io/i));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Retry Service Run/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Retry Service Run/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Expand CD.io details/i)).toBeEnabled();
+    });
+
+    expect(await screen.findByLabelText(/Product URL/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/Check Every \(hours\)/i)).toBeInTheDocument();
+  });
+
+  it('Feature: asset-card-stage-status | reflects pending active completed and failed stages from logs', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        logs: [
+          { message: '[Node: Barcode] started' },
+          { message: '[Node: Vision] started' },
+          { message: '[Node: Search] ❌ failed' },
+          { message: 'Checking for existing entries' },
+          { message: '🏁 finished' },
+        ],
+      }),
+    });
+
+    render(<AssetCard item={mockItem} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Services Sync Check/i)).toBeInTheDocument();
+    });
+    expect(screen.getAllByText(/Failed/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Completed/i).length).toBeGreaterThan(0);
+  });
+
+  it('Feature: asset-card-pricebuddy-fields | renders editable price-tracking fields after generation succeeds', async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/service-output/generate') {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            output: {
+              status: 'ready',
+              data: {
+                target_price: '19.99',
+                currency: 'USD',
+                retailer: 'Example Shop',
+              },
+            },
+          }),
+        } as Response;
+      }
+      return { ok: true, json: async () => ({ logs: [] }) } as Response;
+    });
+
+    render(<AssetCard item={{ ...mockItem, selected_services: [] }} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByLabelText(/Enable Price/i));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Expand Price details/i)).toBeEnabled();
+    });
+
+    expect(await screen.findByDisplayValue('19.99')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('USD')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('Example Shop')).toBeInTheDocument();
+  });
+
+  it('Feature: asset-card-preview-priority | prefers expanded ready service when selecting preview payload', () => {
+    const handlePreview = vi.fn();
+    render(
+      <AssetCard
+        item={{ ...mockItem, selected_services: ['homebox', 'mealie'] }}
+        onPreview={handlePreview}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByLabelText(/Expand Mealie details/i));
+    fireEvent.click(screen.getByRole('button', { name: /Preview Payload/i }));
+
+    expect(handlePreview).toHaveBeenCalledWith('mealie', expect.any(Object));
+  });
+
+  it('Feature: asset-card-running-disable | disables execute while service generation is in running state', async () => {
+    globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/service-output/generate') {
+        return new Promise<Response>(() => undefined);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ logs: [] }) } as Response);
+    }) as typeof fetch;
+
+    render(<AssetCard item={{ ...mockItem, selected_services: [] }} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByLabelText(/Enable Mealie/i));
+
+    expect(screen.getByRole('button', { name: /Execute & Sync/i })).toBeDisabled();
+    expect(screen.getByText(/Preparing Service Data/i)).toBeInTheDocument();
+  });
+
+  it('Feature: asset-card-homebox-edit-fields | updates homebox fields and submits edited overrides', () => {
+    const handleExecute = vi.fn();
+    render(
+      <AssetCard
+        item={{ ...mockItem, selected_services: ['homebox'], ai_output: { llm_output: { product_name: 'Lamp', brand: 'BrightCo' } } }}
+        onPreview={vi.fn()}
+        onExecute={handleExecute}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByLabelText(/Expand Homebox details/i));
+
+    fireEvent.change(screen.getByLabelText(/Location/i), { target: { value: 'Garage Shelf' } });
+    fireEvent.change(screen.getByLabelText(/Quantity/i), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText(/Model Number/i), { target: { value: 'LMP-100' } });
+    fireEvent.change(screen.getByLabelText(/Homebox Notes/i), { target: { value: 'Keep upright' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Execute & Sync/i }));
+
+    expect(handleExecute).toHaveBeenCalledWith(
+      ['homebox'],
+      expect.objectContaining({
+        location: 'Garage Shelf',
+        quantity: '2',
+        model_number: 'LMP-100',
+        notes: 'Keep upright',
+      }),
+    );
+  });
+
+  it('Feature: asset-card-mealie-edit-fields | updates recipe fields and submits edited payload', () => {
+    const handleExecute = vi.fn();
+    render(
+      <AssetCard
+        item={{ ...mockItem, selected_services: ['mealie'], ai_output: { llm_output: { product_name: 'Pancakes' } } }}
+        onPreview={vi.fn()}
+        onExecute={handleExecute}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByLabelText(/Expand Mealie details/i));
+
+    fireEvent.change(screen.getByLabelText(/Yield/i), { target: { value: '4 servings' } });
+    fireEvent.change(screen.getByLabelText(/Prep Time/i), { target: { value: '10 min' } });
+    fireEvent.change(screen.getByLabelText(/Ingredients \(one per line\)/i), { target: { value: 'Flour\nEggs' } });
+    fireEvent.change(screen.getByLabelText(/Tags \(comma separated\)/i), { target: { value: 'breakfast,quick' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Execute & Sync/i }));
+
+    expect(handleExecute).toHaveBeenCalledWith(
+      ['mealie'],
+      expect.objectContaining({
+        yield: '4 servings',
+        prep_time: '10 min',
+        recipe_ingredients_raw: 'Flour\nEggs',
+        tags: 'breakfast,quick',
+      }),
+    );
+  });
+
+  it('Feature: asset-card-changedetection-edit-fields | updates monitoring fields and submits edited payload', () => {
+    const handleExecute = vi.fn();
+    render(
+      <AssetCard
+        item={{ ...mockItem, selected_services: ['changedetection'], ai_output: { llm_output: { product_name: 'Widget' } } }}
+        onPreview={vi.fn()}
+        onExecute={handleExecute}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByLabelText(/Expand CD.io details/i));
+
+    fireEvent.change(screen.getByLabelText(/Product URL/i), { target: { value: 'https://shop/widget' } });
+    fireEvent.change(screen.getByLabelText(/^Tag$/i), { target: { value: 'Monitoring' } });
+    fireEvent.change(screen.getByLabelText(/Check Every \(hours\)/i), { target: { value: '6' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Execute & Sync/i }));
+
+    expect(handleExecute).toHaveBeenCalledWith(
+      ['changedetection'],
+      expect.objectContaining({
+        product_url: 'https://shop/widget',
+        category: 'Monitoring',
+        check_every_hours: '6',
+      }),
+    );
+  });
+
+  it('Feature: asset-card-service-generation-exception | enters error state when service generation throws and recovers on retry', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const generation = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('request failed'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, output: { status: 'ready', data: { retailer: 'Retry Store' } } }),
+      });
+
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/service-output/generate') {
+        return (await generation()) as Response;
+      }
+      return { ok: true, json: async () => ({ logs: [] }) } as Response;
+    });
+
+    render(<AssetCard item={{ ...mockItem, selected_services: [] }} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByLabelText(/Enable Price/i));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Service generation failed/i)).toBeInTheDocument();
+    });
+    expect(errSpy).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Retry Service Run/i }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Expand Price details/i)).toBeEnabled();
+    });
+
+    errSpy.mockRestore();
+  });
 });

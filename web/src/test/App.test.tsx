@@ -961,5 +961,71 @@ describe('Vision Pipeline App', () => {
     });
   });
 
+  it('Feature: identify-processing-log-polling | polls processing logs and renders streamed messages', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/queue')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ items: [] }) });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true, pipelines: [{ id: 'default', name: 'Default Vision Pipeline' }] }) });
+      }
+      if (url === '/api/identify') {
+        return new Promise(() => undefined);
+      }
+      if (url.startsWith('/api/logs/session-')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ logs: [{ message: '[Node: Vision] processing' }, { message: '🏁 done' }] }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    });
+
+    const { container } = render(<App />);
+    const identifyUploadInput = container.querySelectorAll('input[type="file"]')[1] as HTMLInputElement;
+    fireEvent.change(identifyUploadInput, { target: { files: [new File(['abc'], 'single.jpg', { type: 'image/jpeg' })] } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Pipeline Processing/i)).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/logs\/session-/));
+      expect(screen.getByText(/\[Node: Vision\] processing/i)).toBeInTheDocument();
+    }, { timeout: 3000 });
+  });
+
+  it('Feature: identify-processing-log-non-ok | skips log updates when polling endpoint returns non-ok', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/queue')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ items: [] }) });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true, pipelines: [{ id: 'default', name: 'Default Vision Pipeline' }] }) });
+      }
+      if (url === '/api/identify') {
+        return new Promise(() => undefined);
+      }
+      if (url.startsWith('/api/logs/session-')) {
+        return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    });
+
+    const { container } = render(<App />);
+    const identifyUploadInput = container.querySelectorAll('input[type="file"]')[1] as HTMLInputElement;
+    fireEvent.change(identifyUploadInput, { target: { files: [new File(['abc'], 'single.jpg', { type: 'image/jpeg' })] } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Pipeline Processing/i)).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/logs\/session-/));
+    }, { timeout: 3000 });
+    expect(screen.queryByText(/\[Node: Vision\] processing/i)).not.toBeInTheDocument();
+  });
+
 });
 
