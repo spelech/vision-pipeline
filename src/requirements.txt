@@ -8,6 +8,7 @@ pillow
 python-dotenv
 opencv-python-headless
 sqlalchemy
+alembic
 aiosqlite
 asyncpg
 psycopg2-binary

@@ -1,5 +1,6 @@
 [MASTER]
 ignore-patterns=test_.*\.py
+ignore-paths=src/migrations/.*
 
 [MESSAGES CONTROL]
 disable=

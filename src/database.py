@@ -1,10 +1,13 @@
 import os
+import asyncio
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncAttrs
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, relationship
 from dotenv import load_dotenv
+from alembic import command  # type: ignore[import-untyped]
+from alembic.config import Config  # type: ignore[import-untyped]
 
 # Search for .env in current or parent directory
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
@@ -151,6 +154,23 @@ async_session_local = sessionmaker(
     expire_on_commit=False)  # type: ignore
 
 
+def to_sync_database_url(url: str) -> str:
+    """Convert async SQLAlchemy URLs into sync URLs for Alembic migrations."""
+    if "+asyncpg" in url:
+        return url.replace("+asyncpg", "+psycopg2")
+    if "+aiosqlite" in url:
+        return url.replace("+aiosqlite", "")
+    return url
+
+
+def run_migrations() -> None:
+    """Apply Alembic migrations up to the latest revision."""
+    base_dir = os.path.dirname(__file__)
+    alembic_ini_path = os.path.join(base_dir, "alembic.ini")
+    alembic_cfg = Config(alembic_ini_path)
+    alembic_cfg.set_main_option("sqlalchemy.url", to_sync_database_url(DATABASE_URL))
+    command.upgrade(alembic_cfg, "head")
+
+
 async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await asyncio.to_thread(run_migrations)
