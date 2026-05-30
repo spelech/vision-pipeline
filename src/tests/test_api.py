@@ -54,7 +54,15 @@ async def test_identify_endpoint():
 
         mock_pipeline = MagicMock()
         mock_pipeline.run.return_value = mock_results
-        with patch('app.get_pipeline', return_value=mock_pipeline):
+        with patch('app.get_pipeline', return_value=mock_pipeline), patch(
+            'app.get_runtime_service_prompt_configs',
+            AsyncMock(return_value={
+                "homebox": {"service": "homebox", "enabled": True},
+                "mealie": {"service": "mealie", "enabled": True},
+                "pricebuddy": {"service": "pricebuddy", "enabled": True},
+                "changedetection": {"service": "changedetection", "enabled": True},
+            })
+        ):
             # Mock services pre_enrichment
             for svc in SERVICES.values():
                 svc.get_pre_enrichment = AsyncMock(return_value={})
