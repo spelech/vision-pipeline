@@ -24,7 +24,8 @@ jobs:
       matrix:
         include:
           - image_name: vision-pipeline
-            context: ./src
+            context: .
+            dockerfile: src/Dockerfile
           - image_name: vision-playwright
             context: ./playwright
 
