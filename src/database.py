@@ -169,7 +169,15 @@ def run_migrations() -> None:
     alembic_ini_path = os.path.join(base_dir, "alembic.ini")
     alembic_cfg = Config(alembic_ini_path)
     alembic_cfg.set_main_option("sqlalchemy.url", to_sync_database_url(DATABASE_URL))
-    command.upgrade(alembic_cfg, "head")
+    try:
+        command.upgrade(alembic_cfg, "head")
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        # Support legacy installs where tables were created before Alembic.
+        error_text = str(exc)
+        if "DuplicateTable" in error_text or "already exists" in error_text:
+            command.stamp(alembic_cfg, "head")
+            return
+        raise
 
 
 async def init_db():

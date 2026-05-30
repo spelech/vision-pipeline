@@ -27,6 +27,16 @@ def main() -> int:
     cfg.set_main_option("sqlalchemy.url", db_url)
 
     try:
+        # Ensure DB revision is current before checking for model/migration drift.
+        try:
+            command.upgrade(cfg, "head")
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            error_text = str(exc)
+            if "DuplicateTable" in error_text or "already exists" in error_text:
+                # Legacy DB existed before Alembic tracking; adopt current head.
+                command.stamp(cfg, "head")
+            else:
+                raise
         command.check(cfg)
     except SystemExit as exc:
         # Alembic check exits non-zero when autogenerate would produce operations.
