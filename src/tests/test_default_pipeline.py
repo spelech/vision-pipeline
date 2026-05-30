@@ -14,7 +14,10 @@ def test_default_pipeline_refines_when_search_has_results(monkeypatch: pytest.Mo
             "product_name": "Item",
         },
     )
-    monkeypatch.setattr("pipelines.default.web_search", lambda query, log_cb=None: [{"url": "https://example.com"}])
+    monkeypatch.setattr(
+        "pipelines.default.web_search",
+        lambda query, max_results=7, log_cb=None: [{"url": "https://example.com"}],
+    )
     monkeypatch.setattr(
         "pipelines.default.data_refine",
         lambda llm_output, context, model=None, prompt=None, log_cb=None: {
@@ -78,7 +81,7 @@ def test_default_pipeline_handles_missing_image_path(monkeypatch: pytest.MonkeyP
         "pipelines.default.vision_identify",
         lambda image, text_description, model=None, prompt=None, log_cb=None: {"product_name": "Widget"},
     )
-    monkeypatch.setattr("pipelines.default.web_search", lambda query, log_cb=None: [])
+    monkeypatch.setattr("pipelines.default.web_search", lambda query, max_results=7, log_cb=None: [])
 
     pipeline = DefaultPipeline()
     out = pipeline.run(image=None, text_description="from text only", settings={})

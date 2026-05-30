@@ -12,6 +12,7 @@ interface BatchTabProps {
   queueStatus: QueueStatus;
   selectedPipelineId: string;
   selectedPipelineName: string;
+  searchResultsLimit: number;
   pipelines: PipelineSummary[];
   defaultPipelineOption: PipelineSummary;
   rowVirtualizer: Virtualizer<HTMLDivElement, Element>;
@@ -19,6 +20,7 @@ interface BatchTabProps {
   batchInputRef: React.RefObject<HTMLInputElement | null>;
   onRefreshQueue: () => void;
   onSetSelectedPipelineId: (pipelineId: string) => void;
+  onSetSearchResultsLimit: (value: number) => void;
   onHandleUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onSelectAll: () => void;
   onToggleSelection: (id: string) => void;
@@ -34,6 +36,7 @@ export function BatchTab({
   queueStatus,
   selectedPipelineId,
   selectedPipelineName,
+  searchResultsLimit,
   pipelines,
   defaultPipelineOption,
   rowVirtualizer,
@@ -41,6 +44,7 @@ export function BatchTab({
   batchInputRef,
   onRefreshQueue,
   onSetSelectedPipelineId,
+  onSetSearchResultsLimit,
   onHandleUpload,
   onSelectAll,
   onToggleSelection,
@@ -68,17 +72,30 @@ export function BatchTab({
           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Batch Pipeline</p>
           <p className="text-lg font-bold text-white mt-2">{selectedPipelineName}</p>
         </div>
-        <select
-          value={selectedPipelineId}
-          onChange={(event) => onSetSelectedPipelineId(event.target.value)}
-          className="bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white focus:outline-none"
-        >
-          {(pipelines.length ? pipelines : [defaultPipelineOption]).map((pipeline) => (
-            <option key={pipeline.id} value={pipeline.id} className="bg-black text-white">
-              {pipeline.name}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-3">
+          <select
+            value={selectedPipelineId}
+            onChange={(event) => onSetSelectedPipelineId(event.target.value)}
+            className="bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white focus:outline-none"
+          >
+            {(pipelines.length ? pipelines : [defaultPipelineOption]).map((pipeline) => (
+              <option key={pipeline.id} value={pipeline.id} className="bg-black text-white">
+                {pipeline.name}
+              </option>
+            ))}
+          </select>
+          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+            <label className="text-[9px] font-black uppercase tracking-widest text-white/50">Search Results</label>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={searchResultsLimit}
+              onChange={(event) => onSetSearchResultsLimit(Number(event.target.value) || 7)}
+              className="w-16 rounded-xl bg-black/30 px-2 py-1 text-sm font-bold text-white focus:outline-none"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="glass rounded-[2rem] p-8 border border-white/10 space-y-6">

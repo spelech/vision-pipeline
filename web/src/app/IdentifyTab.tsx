@@ -10,6 +10,7 @@ interface IdentifyTabProps {
   pipelines: PipelineSummary[];
   selectedPipelineId: string;
   selectedPipelineName: string;
+  searchResultsLimit: number;
   defaultPipelineOption: PipelineSummary;
   processingFile: File | null;
   processingFileUrl: string;
@@ -20,6 +21,7 @@ interface IdentifyTabProps {
   cameraInputRef: React.RefObject<HTMLInputElement | null>;
   galleryInputRef: React.RefObject<HTMLInputElement | null>;
   onSetSelectedPipelineId: (pipelineId: string) => void;
+  onSetSearchResultsLimit: (value: number) => void;
   onOpenPipelineEditor: () => void;
   onOpenCamera: () => void;
   onHandleUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -34,6 +36,7 @@ export function IdentifyTab({
   pipelines,
   selectedPipelineId,
   selectedPipelineName,
+  searchResultsLimit,
   defaultPipelineOption,
   processingFile,
   processingFileUrl,
@@ -44,6 +47,7 @@ export function IdentifyTab({
   cameraInputRef,
   galleryInputRef,
   onSetSelectedPipelineId,
+  onSetSearchResultsLimit,
   onOpenPipelineEditor,
   onOpenCamera,
   onHandleUpload,
@@ -77,6 +81,17 @@ export function IdentifyTab({
               </option>
             ))}
           </select>
+          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+            <label className="text-[9px] font-black uppercase tracking-widest text-white/50">Search Results</label>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={searchResultsLimit}
+              onChange={(event) => onSetSearchResultsLimit(Number(event.target.value) || 7)}
+              className="w-16 rounded-xl bg-black/30 px-2 py-1 text-sm font-bold text-white focus:outline-none"
+            />
+          </div>
           <button
             type="button"
             onClick={onOpenPipelineEditor}

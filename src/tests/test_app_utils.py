@@ -204,9 +204,14 @@ def test_normalize_pipeline_schema_settings_and_list_apply_model_aliases() -> No
     assert normalized_schema["vision_model"]["default"] == expected
     assert normalized_schema["refine_model"]["default"] == expected
 
-    settings = normalize_pipeline_settings({"vision_model": legacy, "refine_model": legacy})
+    settings = normalize_pipeline_settings({
+        "vision_model": legacy,
+        "refine_model": legacy,
+        "search_results_limit": "77",
+    })
     assert settings["vision_model"] == expected
     assert settings["refine_model"] == expected
+    assert settings["search_results_limit"] == 50
 
     normalized_list = normalize_pipeline_list([
         {"id": "x", "schema": schema},

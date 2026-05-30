@@ -146,6 +146,14 @@ def normalize_pipeline_settings(settings: Any) -> Dict[str, Any]:
     for model_field in ["vision_model", "refine_model"]:
         if model_field in normalized:
             normalized[model_field] = normalize_model_id(normalized.get(model_field))
+
+    if "search_results_limit" in normalized:
+        raw_search_limit = normalized.get("search_results_limit")
+        try:
+            search_limit = int(raw_search_limit if raw_search_limit is not None else 7)
+        except (TypeError, ValueError):
+            search_limit = 7
+        normalized["search_results_limit"] = max(1, min(search_limit, 50))
     return normalized
 
 

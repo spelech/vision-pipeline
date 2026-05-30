@@ -54,6 +54,11 @@ class ComposablePipeline(BasePipeline):
                 "label": "Refine Model",
                 "default": "qwen/qwen3-235b-a22b-2507"
             },
+            "search_results_limit": {
+                "type": "number",
+                "label": "Search Results Limit",
+                "default": 7
+            },
             "scrape_wait_time": {
                 "type": "number",
                 "label": "Scrape Wait (ms)",
@@ -67,7 +72,7 @@ class ComposablePipeline(BasePipeline):
             text_description=None,
             settings=None,
             log_cb=None):
-        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-branches,too-many-locals
         if not settings:
             settings = {}
 
@@ -110,8 +115,12 @@ class ComposablePipeline(BasePipeline):
                 query = results["barcode"] or results["llm_output"].get(
                     "search_query") or results["llm_output"].get("product_name")
                 if query and query not in ["Unknown", "Error"]:
+                    search_results_limit = settings.get("search_results_limit", 7)
                     results["searxng_results"] = web_search(
-                        query, log_cb=log_cb)
+                        query,
+                        max_results=search_results_limit,
+                        log_cb=log_cb,
+                    )
                 else:
                     if log_cb:
                         log_cb(

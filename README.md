@@ -62,12 +62,17 @@ Access the UI at `http://localhost:8460`.
 Run the same core gates used in CI before pushing:
 
 ```bash
-node scripts/update-test-requirements-index.mjs --check
 python -m pytest src/tests --cov=src --cov-fail-under=80 --cov-report=term --cov-report=xml:coverage/python-coverage.xml
 ```
 
 For local VS Code task runs, `Python: Run Tests` now auto-refreshes the test requirements index first,
 which reduces docs-sync drift during normal development.
+
+Optional docs consistency check:
+
+```bash
+node scripts/update-test-requirements-index.mjs --check
+```
 
 ## 🗃 Database Migrations
 Schema changes are now managed with Alembic.

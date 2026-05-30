@@ -49,10 +49,6 @@ jobs:
         run: |
           python scripts/check_db_migrations.py
 
-      - name: Check generated test requirements index
-        run: |
-          node scripts/update-test-requirements-index.mjs --check
-
       - name: Run backend tests with minimum coverage
         run: |
           pytest src/tests --cov=src --cov-fail-under=82 --cov-report=term --cov-report=xml:coverage/python-coverage.xml

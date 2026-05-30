@@ -17,7 +17,7 @@ def test_advanced_pipeline_runs_full_search_scrape_refine_flow(monkeypatch: pyte
     )
     monkeypatch.setattr(
         "pipelines.advanced.web_search",
-        lambda query, log_cb=None: [{"url": "https://example.com/item", "title": "Example", "snippet": "..."}],
+        lambda query, max_results=7, log_cb=None: [{"url": "https://example.com/item", "title": "Example", "snippet": "..."}],
     )
     monkeypatch.setattr(
         "pipelines.advanced.web_scrape",
@@ -80,7 +80,7 @@ def test_advanced_pipeline_handles_no_search_results(monkeypatch: pytest.MonkeyP
             "barcode": None,
         },
     )
-    monkeypatch.setattr("pipelines.advanced.web_search", lambda query, log_cb=None: [])
+    monkeypatch.setattr("pipelines.advanced.web_search", lambda query, max_results=7, log_cb=None: [])
 
     called = {"scrape": False, "refine": False}
 
@@ -117,7 +117,7 @@ def test_advanced_pipeline_uses_barcode_query_and_defaults_without_settings(monk
 
     search_queries: list[str] = []
 
-    def _search(query, log_cb=None):
+    def _search(query, max_results=7, log_cb=None):
         search_queries.append(query)
         return []
 

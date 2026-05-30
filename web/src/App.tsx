@@ -25,6 +25,7 @@ export default function App() {
   const [previewItem, setPreviewItem] = useState<{item: Asset, service: string, payload: Record<string, unknown>} | null>(null);
   const [pipelines, setPipelines] = useState<PipelineSummary[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState('default');
+  const [searchResultsLimit, setSearchResultsLimit] = useState(7);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [lastIdentifyResult, setLastIdentifyResult] = useState<Asset | null>(null);
@@ -251,7 +252,7 @@ export default function App() {
         const formData = new FormData();
         formData.append('file', files[0]);
         formData.append('pipeline_id', selectedPipelineId);
-        formData.append('settings', '{}');
+        formData.append('settings', JSON.stringify({ search_results_limit: searchResultsLimit }));
         formData.append('session_id', sessionId);
         
         const resp = await fetch('/api/identify', {
@@ -286,6 +287,7 @@ export default function App() {
         const formData = new FormData();
         files.forEach((file) => formData.append('files', file));
         formData.append('pipeline_id', selectedPipelineId);
+        formData.append('settings', JSON.stringify({ search_results_limit: searchResultsLimit }));
         
         const resp = await fetch('/api/batch-upload', {
           method: 'POST',
@@ -410,6 +412,7 @@ export default function App() {
                 pipelines={pipelines}
                 selectedPipelineId={selectedPipelineId}
                 selectedPipelineName={selectedPipelineName}
+                searchResultsLimit={searchResultsLimit}
                 defaultPipelineOption={DEFAULT_PIPELINE_OPTION}
                 processingFile={processingFile}
                 processingFileUrl={processingFileUrl}
@@ -420,6 +423,7 @@ export default function App() {
                 cameraInputRef={cameraInputRef}
                 galleryInputRef={galleryInputRef}
                 onSetSelectedPipelineId={setSelectedPipelineId}
+                onSetSearchResultsLimit={setSearchResultsLimit}
                 onOpenPipelineEditor={() => handleTabChange('pipelines')}
                 onOpenCamera={() => void openCamera()}
                 onHandleUpload={(event) => {
@@ -443,6 +447,7 @@ export default function App() {
                 queueStatus={queueStatus}
                 selectedPipelineId={selectedPipelineId}
                 selectedPipelineName={selectedPipelineName}
+                searchResultsLimit={searchResultsLimit}
                 pipelines={pipelines}
                 defaultPipelineOption={DEFAULT_PIPELINE_OPTION}
                 rowVirtualizer={rowVirtualizer}
@@ -450,6 +455,7 @@ export default function App() {
                 batchInputRef={batchInputRef}
                 onRefreshQueue={() => void fetchQueue(queueStatus)}
                 onSetSelectedPipelineId={setSelectedPipelineId}
+                onSetSearchResultsLimit={setSearchResultsLimit}
                 onHandleUpload={(event) => {
                   void handleUpload(event);
                 }}

@@ -139,10 +139,15 @@ def vision_identify(
         return {"error": str(e)}
 
 
-def web_search(query, log_cb=None):
+def web_search(query, max_results=7, log_cb=None):
     searxng_url = os.getenv("SEARXNG_URL")
     if not searxng_url:
         return []
+    try:
+        limit = int(max_results)
+    except (TypeError, ValueError):
+        limit = 7
+    limit = max(1, min(limit, 50))
     if log_cb:
         log_cb(f"🌐 [Node: Search] Looking up '{query}'...")
     try:
@@ -153,7 +158,7 @@ def web_search(query, log_cb=None):
             timeout=10)
         data = response.json()
         return [{"title": r['title'], "url": r['url'], "snippet": r.get(
-            'content', '')} for r in data.get('results', [])[:5]]
+            'content', '')} for r in data.get('results', [])[:limit]]
     except requests.RequestException as e:
         if log_cb:
             log_cb(f"⚠️ [Node: Search] Failed: {str(e)}")

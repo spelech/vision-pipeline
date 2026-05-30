@@ -59,6 +59,11 @@ class DefaultPipeline(BasePipeline):
                     "Refine the metadata using search results and preserve "
                     "the existing JSON schema."
                 )
+            },
+            "search_results_limit": {
+                "type": "number",
+                "label": "Search Results Limit",
+                "default": 7
             }}
 
     def run(
@@ -91,7 +96,12 @@ class DefaultPipeline(BasePipeline):
         query = results["barcode"] or results["llm_output"].get(
             "search_query") or results["llm_output"].get("product_name")
         if query and query not in ["Unknown", "Error"]:
-            results["searxng_results"] = web_search(query, log_cb=log_cb)
+            search_results_limit = settings.get("search_results_limit", 7) if settings else 7
+            results["searxng_results"] = web_search(
+                query,
+                max_results=search_results_limit,
+                log_cb=log_cb,
+            )
 
             # 4. Refine
             if results["searxng_results"]:

@@ -53,6 +53,11 @@ class AdvancedPipeline(BasePipeline):
                     "preserving JSON schema and factual consistency."
                 )
             },
+            "search_results_limit": {
+                "type": "number",
+                "label": "Search Results Limit",
+                "default": 7
+            },
             "scrape_wait_time": {
                 "type": "string",
                 "label": "Playwright JS Wait Time (ms)",
@@ -97,7 +102,12 @@ class AdvancedPipeline(BasePipeline):
         query = results["barcode"] or results["llm_output"].get(
             "search_query") or results["llm_output"].get("product_name")
         if query and query not in ["Unknown", "Error"]:
-            results["searxng_results"] = web_search(query, log_cb=log_cb)
+            search_results_limit = settings.get("search_results_limit", 7) if settings else 7
+            results["searxng_results"] = web_search(
+                query,
+                max_results=search_results_limit,
+                log_cb=log_cb,
+            )
 
             # 3. Playwright Scraping
             best_url = None
