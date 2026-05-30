@@ -147,6 +147,36 @@
 			]
 		},
 		{
+			"label": "Python: DB Migration Drift Check",
+			"type": "shell",
+			"command": "${command:python.interpreterPath} scripts/check_db_migrations.py",
+			"options": {
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Python: DB Migration Upgrade",
+			"type": "shell",
+			"command": "set MIGRATION_DB_URL=postgresql+psycopg2://vision:vision_pass@localhost:5432/vision_pipeline&& ${command:python.interpreterPath} -m alembic -c src/alembic.ini upgrade head",
+			"options": {
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
+			"problemMatcher": []
+		},
+		{
 			"label": "Cleanup old files",
 			"type": "shell",
 			"command": "if exist src\\templates rd /s /q src\\templates && if exist src\\.nicegui rd /s /q src\\.nicegui && if exist src\\test_output.py del /q src\\test_output.py",

@@ -69,6 +69,35 @@ python -m pytest src/tests --cov=src --cov-fail-under=80 --cov-report=term --cov
 For local VS Code task runs, `Python: Run Tests` now auto-refreshes the test requirements index first,
 which reduces docs-sync drift during normal development.
 
+## 🗃 Database Migrations
+Schema changes are now managed with Alembic.
+
+- On app startup, backend runs `alembic upgrade head` automatically.
+- Migration config lives in `src/alembic.ini` and scripts are under `src/migrations/versions`.
+- CI now runs migration drift detection and fails if model changes are missing a migration.
+
+When changing DB models in a commit:
+
+```bash
+python scripts/create_db_migration.py -m "describe change"
+python scripts/check_db_migrations.py
+```
+
+Commit both the model changes and the new file in `src/migrations/versions/`.
+
+Useful local commands:
+
+```bash
+npm run db:migrations:create -- -m "describe change"
+npm run db:migrations:check
+```
+
+In VS Code, use tasks `Python: DB Migration Upgrade` then `Python: DB Migration Drift Check`
+for a one-click local upgrade and validation flow.
+
+By default these use `postgresql+psycopg2://vision:vision_pass@localhost:5432/vision_pipeline`.
+Override using `MIGRATION_DB_URL` when needed.
+
 ## 📖 Documentation
 - [Architecture & Design](docs/ARCHITECTURE.md)
 - [Pipeline Registry](docs/PIPELINES.md)

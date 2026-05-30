@@ -11,6 +11,8 @@
     "test:e2e": "playwright test",
     "test:e2e:coverage": "node scripts/run-playwright-with-coverage.mjs",
     "coverage:web:check-regression": "node scripts/check-frontend-coverage-regression.mjs",
+    "db:migrations:check": "python scripts/check_db_migrations.py",
+    "db:migrations:create": "python scripts/create_db_migration.py",
     "docs:test-index": "node scripts/update-test-requirements-index.mjs",
     "docs:test-index:check": "node scripts/update-test-requirements-index.mjs --check"
   },
