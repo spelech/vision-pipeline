@@ -188,6 +188,13 @@ REVIEW_IMAGE_MAX_DIM = int(os.getenv("REVIEW_IMAGE_MAX_DIM", "1280"))
 REVIEW_IMAGE_JPEG_QUALITY = int(os.getenv("REVIEW_IMAGE_JPEG_QUALITY", "72"))
 WEB_DIST_DIR = Path(os.getenv("WEB_DIST_DIR", "/app/web_dist"))
 WEB_INDEX_FILE = WEB_DIST_DIR / "index.html"
+WEB_DIST_FALLBACKS = [
+    Path("/app/dist"),
+    Path("/app/web/dist"),
+    Path("/app/frontend/dist"),
+    Path("web_dist"),
+    Path("dist"),
+]
 
 # Ensure directories exist
 os.makedirs("data/uploads", exist_ok=True)
@@ -236,6 +243,25 @@ def item_source_image_data_uri(item: Any) -> Optional[str]:
     candidates = [raw_value, preview_value]
     for candidate in candidates:
         if isinstance(candidate, str) and candidate.startswith("data:image"):
+            return candidate
+    return None
+
+
+def resolve_web_dist_dir() -> Path:
+    candidates = [WEB_DIST_DIR, *WEB_DIST_FALLBACKS]
+    for candidate in candidates:
+        if (candidate / "index.html").exists():
+            return candidate
+    return WEB_DIST_DIR
+
+
+def resolve_web_index_file() -> Optional[Path]:
+    candidates = [WEB_INDEX_FILE]
+    for directory in WEB_DIST_FALLBACKS:
+        candidates.append(directory / "index.html")
+
+    for candidate in candidates:
+        if candidate.exists():
             return candidate
     return None
 
@@ -1201,33 +1227,37 @@ app.include_router(api_router)
 
 @app.get("/")
 async def root():
-    if WEB_INDEX_FILE.exists():
-        return FileResponse(str(WEB_INDEX_FILE))
+    index_file = resolve_web_index_file()
+    if index_file is not None:
+        return FileResponse(str(index_file))
     return RedirectResponse(url="/docs")
 
 
 @app.get("/{full_path:path}", include_in_schema=False)
 async def spa_fallback(full_path: str):
+    dist_dir = resolve_web_dist_dir()
+    index_file = dist_dir / "index.html"
+
     if not full_path:
-        if WEB_INDEX_FILE.exists():
-            return FileResponse(str(WEB_INDEX_FILE))
+        if index_file.exists():
+            return FileResponse(str(index_file))
         return RedirectResponse(url="/docs")
 
     excluded_prefixes = ("api/", "docs", "openapi.json", "uploads/", "internal/")
     if full_path.startswith(excluded_prefixes):
         raise HTTPException(status_code=404, detail="Not found")
 
-    candidate = (WEB_DIST_DIR / full_path).resolve()
+    candidate = (dist_dir / full_path).resolve()
     try:
-        candidate.relative_to(WEB_DIST_DIR.resolve())
+        candidate.relative_to(dist_dir.resolve())
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Not found") from exc
 
     if candidate.is_file():
         return FileResponse(str(candidate))
 
-    if WEB_INDEX_FILE.exists():
-        return FileResponse(str(WEB_INDEX_FILE))
+    if index_file.exists():
+        return FileResponse(str(index_file))
 
     raise HTTPException(status_code=404, detail="Not found")
 

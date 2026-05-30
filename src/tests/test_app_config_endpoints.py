@@ -254,6 +254,30 @@ async def test_root_and_spa_fallback_serve_index_and_assets(tmp_path: Path, monk
 
 
 @pytest.mark.asyncio
+async def test_root_uses_fallback_web_dist_when_primary_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    primary = tmp_path / "primary_dist"
+    fallback = tmp_path / "fallback_dist"
+    primary.mkdir(parents=True)
+    fallback.mkdir(parents=True)
+
+    index_file = fallback / "index.html"
+    index_file.write_text("<html>fallback</html>", encoding="utf-8")
+
+    monkeypatch.setattr("app.WEB_DIST_DIR", primary)
+    monkeypatch.setattr("app.WEB_INDEX_FILE", primary / "index.html")
+    monkeypatch.setattr("app.WEB_DIST_FALLBACKS", [fallback])
+
+    root_resp = await root()
+    assert isinstance(root_resp, FileResponse)
+
+    spa_resp = await spa_fallback("settings/profile")
+    assert isinstance(spa_resp, FileResponse)
+
+
+@pytest.mark.asyncio
 async def test_scrape_endpoint_returns_503_when_playwright_missing():
     import builtins
 
