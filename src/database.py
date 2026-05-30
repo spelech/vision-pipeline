@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncAttrs
@@ -23,7 +23,7 @@ class Base(AsyncAttrs, DeclarativeBase):
 
 def utc_now_naive() -> datetime:
     """Return UTC time without tzinfo for TIMESTAMP WITHOUT TIME ZONE columns."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Batch(Base):

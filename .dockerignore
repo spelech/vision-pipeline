@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.coverage
+coverage/
+
+# Node
+**/node_modules/
+web/node_modules/
+web/dist/
+playwright-report/
+
+# Local runtime data and outputs
+data/postgres/
+uploads/
+test-results/
+web/test-results/
+web/playwright-report/
+
+# Environment / editor files
+.env
+.env.*
+!.env.remote
+.vscode/
+
+# Misc
+bash.exe.stackdump

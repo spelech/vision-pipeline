@@ -163,9 +163,13 @@ def web_search(query, log_cb=None):
 def web_scrape(url, wait_time=2000, log_cb=None):
     if log_cb:
         log_cb(f"🕸️ [Node: Scrape] Scraping {url}...")
+    scraper_url = os.getenv(
+        "PLAYWRIGHT_SCRAPER_URL",
+        "http://127.0.0.1:8501/internal/scrape",
+    )
     try:
         resp = requests.post(
-            "http://playwright-scraper:3000/scrape",
+            scraper_url,
             json={
                 "url": url,
                 "wait_time": int(wait_time)},

@@ -5,10 +5,13 @@ import uuid
 import base64
 import logging
 import asyncio
-from datetime import datetime, UTC
+import importlib
+from pathlib import Path
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 from typing import Optional, List, Dict, Any, cast
 import requests
+from pydantic import BaseModel
 from fastapi import (
     FastAPI,
     UploadFile,
@@ -19,7 +22,7 @@ from fastapi import (
     APIRouter,
     HTTPException,
 )
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -924,6 +927,8 @@ SERVICES = {
 
 REVIEW_IMAGE_MAX_DIM = int(os.getenv("REVIEW_IMAGE_MAX_DIM", "1280"))
 REVIEW_IMAGE_JPEG_QUALITY = int(os.getenv("REVIEW_IMAGE_JPEG_QUALITY", "72"))
+WEB_DIST_DIR = Path(os.getenv("WEB_DIST_DIR", "/app/web_dist"))
+WEB_INDEX_FILE = WEB_DIST_DIR / "index.html"
 
 # Ensure directories exist
 os.makedirs("data/uploads", exist_ok=True)
@@ -974,6 +979,59 @@ def item_source_image_data_uri(item: Any) -> Optional[str]:
         if isinstance(candidate, str) and candidate.startswith("data:image"):
             return candidate
     return None
+
+
+class ScrapeRequest(BaseModel):
+    url: str
+    wait_time: int = 2000
+
+
+@app.post("/internal/scrape", include_in_schema=False)
+async def scrape_url(req: ScrapeRequest):
+    try:
+        # pylint: disable=import-outside-toplevel
+        from playwright.async_api import async_playwright
+    except ImportError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Playwright is unavailable: {e}",
+        ) from e
+
+    stealth = None
+    try:
+        stealth_module = importlib.import_module("playwright_stealth")
+        stealth_cls = getattr(stealth_module, "Stealth", None)
+        if stealth_cls is not None:
+            stealth = stealth_cls()
+    except ImportError:
+        stealth = None
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox"],
+        )
+        context = await browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1920, "height": 1080},
+        )
+        page = await context.new_page()
+        if stealth is not None:
+            await stealth.apply_stealth_async(page)
+
+        try:
+            await page.goto(req.url, wait_until="domcontentloaded", timeout=30000)
+            await asyncio.sleep(req.wait_time / 1000.0)
+            text_content = await page.evaluate("document.body.innerText")
+            return {"success": True, "url": req.url, "text": text_content}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+        finally:
+            await browser.close()
 
 # --- Endpoints ---
 
@@ -1553,7 +1611,7 @@ async def execute_services(data: Dict):  # pylint: disable=too-many-locals
                     mapping.external_id = new_ext_id
                     mapping.external_url = ext_url
                     mapping.last_sync_payload = service_data
-                    mapping.synced_at = datetime.now(UTC).replace(tzinfo=None)
+                    mapping.synced_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 else:
                     mapping = ServiceMapping(
                         item_id=item_id,
@@ -1884,7 +1942,35 @@ app.include_router(api_router)
 
 @app.get("/")
 async def root():
+    if WEB_INDEX_FILE.exists():
+        return FileResponse(str(WEB_INDEX_FILE))
     return RedirectResponse(url="/docs")
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_fallback(full_path: str):
+    if not full_path:
+        if WEB_INDEX_FILE.exists():
+            return FileResponse(str(WEB_INDEX_FILE))
+        return RedirectResponse(url="/docs")
+
+    excluded_prefixes = ("api/", "docs", "openapi.json", "uploads/", "internal/")
+    if full_path.startswith(excluded_prefixes):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    candidate = (WEB_DIST_DIR / full_path).resolve()
+    try:
+        candidate.relative_to(WEB_DIST_DIR.resolve())
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Not found") from exc
+
+    if candidate.is_file():
+        return FileResponse(str(candidate))
+
+    if WEB_INDEX_FILE.exists():
+        return FileResponse(str(WEB_INDEX_FILE))
+
+    raise HTTPException(status_code=404, detail="Not found")
 
 if __name__ == "__main__":
     import uvicorn

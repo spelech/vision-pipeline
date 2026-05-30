@@ -4,7 +4,7 @@ import json
 import uuid
 import base64
 import os
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from types import SimpleNamespace
 
@@ -557,7 +557,7 @@ async def test_search_endpoint_returns_merged_item_data():
         product_type="food",
         ai_output={"llm_output": {"product_name": "Sriracha", "brand": "Huy Fong"}},
         user_overrides={},
-        created_at=datetime.now(UTC),
+        created_at=datetime.now(timezone.utc),
     )
     mock_mapping = SimpleNamespace(service_name="mealie", external_id="r-1", external_url="http://x")
 

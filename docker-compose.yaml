@@ -22,7 +22,8 @@ services:
 
   vision-pipeline:
     build:
-      context: ./src
+      context: .
+      dockerfile: src/Dockerfile
     container_name: vision-pipeline
     env_file:
       - .env.remote
@@ -33,24 +34,13 @@ services:
     ports:
       - "${APP_PORT:-8460}:8501"
     volumes:
-      - ./src:/app
       - ./config:/app/config
       - ./data:/app/data
-      - ./web:/web
     environment:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
     depends_on:
       db:
         condition: service_healthy
-    restart: unless-stopped
-
-  playwright-scraper:
-    build:
-      context: ./playwright
-    container_name: vision-playwright
-    image: ghcr.io/spelech/vision-playwright:latest
-    networks:
-      - default
     restart: unless-stopped
 
 networks:

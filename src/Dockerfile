@@ -1,6 +1,14 @@
-FROM python:3.11-slim
+FROM node:24-alpine AS web-build
 
-# Install system dependencies for pyzbar, healthcheck, and opencv
+WORKDIR /web
+COPY web/package*.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
+
+# Install system dependencies for pyzbar, healthcheck, and opencv.
 RUN apt-get update && apt-get install -y \
     libzbar0 \
     curl \
@@ -10,10 +18,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY src/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir playwright-stealth
 
-COPY . .
+COPY src/ ./
+COPY --from=web-build /web/dist /app/web_dist
 
 # FastAPI on 8501 to match existing proxy
 EXPOSE 8501
