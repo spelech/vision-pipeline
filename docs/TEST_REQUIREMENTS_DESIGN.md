@@ -1,6 +1,6 @@
 # Test-Scraped Requirements and Design Document
 
-Generated: 2026-05-25
+Generated: 2026-05-30
 Source of truth: automated test suite names, feature labels, and pytest feature metadata conventions.
 
 ## 1. Scope and Intent
@@ -269,20 +269,28 @@ Evidence:
 - Progressive enhancement: camera and pipeline-selection workflows need capability fallbacks.
 - User feedback contract: operational failures must surface clear user-visible alerts/toasts.
 
+Architecture evolution (current):
+- `src/app.py` has been decomposed by extracting configuration/pipeline/service-output helpers into `src/app_helpers.py`.
+- `src/app.py` remains the API surface entrypoint and re-exports helper symbols used by existing tests.
+- Design requirement: future extraction should preserve the import contract for tests that import helper functions from `app`.
+
 ## 7. Coverage and Verification Snapshot
 Latest validated frontend coverage:
-- Statements: 76.41%
-- Branches: 71.50%
-- Functions: 70.43%
-- Lines: 78.21%
+- Statements: 90.08%
+- Branches: 89.04%
+- Functions: 85.33%
+- Lines: 91.82%
 
 Latest validated backend coverage:
-- Total: 80% (previous validated run in session)
+- Total: 87% (latest full run)
+- `src/app.py`: 83%
+- `src/app_helpers.py`: 86%
 
 ## 8. Recommended Next Documentation/Testing Steps
 - Add explicit `Feature:` docstrings to older backend tests in `test_api.py`, `test_homebox.py`, `test_mealie.py`, `test_enrichers.py`, etc., for consistency.
 - Add an automated CI check that fails if new tests are missing feature metadata.
 - Generate this document from a script (parsing test titles/docstrings) to keep it always current.
+- Add branch-focused tests for remaining `src/app.py` error/edge paths and uncovered `src/app_helpers.py` catalog/config branches.
 
 <!-- AUTO-GENERATED-TEST-INDEX:START -->
 ## 9. Auto-Generated Test Index
@@ -321,6 +329,18 @@ Updated by script: scripts/update-test-requirements-index.mjs
   - queue-missing-items-fallback | falls back to empty queue when items field is absent
   - identify-upload-non-error-rejection | uses generic upload error when rejection is not an Error instance
   - identify-upload-empty-file-selection | returns early when no files are selected
+  - identify-processing-log-polling | polls processing logs and renders streamed messages
+  - identify-processing-log-non-ok | skips log updates when polling endpoint returns non-ok
+- web/src/test/AppTabsAndQueueCards.test.tsx
+  - queue-cards-loading | renders spinner while loading
+  - queue-cards-empty-states | renders status-specific empty messages
+  - queue-cards-selection-controls | toggles select-all and bulk approval controls
+  - queue-cards-callback-wrappers | forwards toggle preview execute events through item-bound handlers
+  - batch-tab-wrapper | renders controls and delegates queue rendering
+  - identify-tab-wrapper | renders camera/upload state and processing dashboard branches
+  - identify-tab-upload-and-fallback-pipeline | uses default pipeline option and triggers gallery input click
+  - identify-tab-callbacks | updates pipeline selection and forwards result card actions
+  - review-tab-wrapper | switches queue filters and delegates pending selection mode
 - web/src/test/AssetCard.test.tsx
   - asset-card-collapsed | renders collapsed state correctly
   - asset-card-expand | expands when clicking the chevron
@@ -338,6 +358,17 @@ Updated by script: scripts/update-test-requirements-index.mjs
   - asset-card-service-generation-error | shows retry state when service generation fails
   - asset-card-service-toggle-off | does not regenerate service output when disabling a selected service
   - asset-card-homebox-object-fields | renders object technical details as JSON text
+  - asset-card-review-image-precedence | opens review image data uri when available
+  - asset-card-data-uri-image-path | opens data uri image path directly
+  - asset-card-service-retry | retries generation and enables changedetection fields
+  - asset-card-stage-status | reflects pending active completed and failed stages from logs
+  - asset-card-pricebuddy-fields | renders editable price-tracking fields after generation succeeds
+  - asset-card-preview-priority | prefers expanded ready service when selecting preview payload
+  - asset-card-running-disable | disables execute while service generation is in running state
+  - asset-card-homebox-edit-fields | updates homebox fields and submits edited overrides
+  - asset-card-mealie-edit-fields | updates recipe fields and submits edited payload
+  - asset-card-changedetection-edit-fields | updates monitoring fields and submits edited payload
+  - asset-card-service-generation-exception | enters error state when service generation throws and recovers on retry
 - web/src/test/NetworkCheck.test.tsx
   - network-check-success | logs success when backend responds OK
   - network-check-non-ok | logs error with status when backend returns non-OK
@@ -350,6 +381,7 @@ Updated by script: scripts/update-test-requirements-index.mjs
   - pipeline-editor-discard | closes editor without saving when discard is clicked
   - pipeline-editor-save-error | shows alert when save fails
   - pipeline-editor-save-success | saves a pipeline through DB API endpoint
+  - pipeline-editor-save-non-ok | alerts when save API returns non-ok response
   - pipeline-editor-vision-config | updates vision prompt through node settings and saves
   - pipeline-editor-helpers | resolves node lists for configured, advanced, and fallback pipelines
   - pipeline-editor-helper-prompts | detects persistence flags and prompt fallbacks
@@ -358,6 +390,9 @@ Updated by script: scripts/update-test-requirements-index.mjs
   - pipeline-editor-create-fallback-model | uses fallback vision model when no model catalog loaded
   - pipeline-editor-node-config-variants | opens refine, scrape, and system-managed node config states
   - pipeline-editor-subtitles | renders subtitle variants for default, advanced, and custom pipelines
+  - pipeline-editor-modal-scroll-lock | locks and restores body scrolling when modal opens and closes
+  - pipeline-editor-reorder-save | saves modified node order after move controls
+  - pipeline-editor-fetch-fallback | continues rendering when config and models requests are rejected
 - web/src/test/pipelineStageStatus.test.ts
   - stage-status-default | returns pending for unknown progress logs
   - stage-status-active | returns active for currently running stage logs
@@ -370,6 +405,10 @@ Updated by script: scripts/update-test-requirements-index.mjs
   - preview-modal-close-icon | calls onClose when header close icon clicked
   - preview-modal-confirm | allows payload editing and confirms
   - preview-modal-invalid-json | shows error on bad JSON and clears when editing
+- web/src/test/ProcessingDashboard.test.tsx
+  - processing-dashboard-empty | returns null when no processing file
+  - processing-dashboard-stages-and-logs | renders active completed pending and log styles
+  - processing-dashboard-error | shows dismiss controls and error message
 - web/src/test/Settings.test.tsx
   - settings-load | renders correctly and loads data
   - settings-model-add | allows adding a new model
@@ -383,6 +422,9 @@ Updated by script: scripts/update-test-requirements-index.mjs
   - settings-template-derive | derives prompt templates from pipeline schema prompt keys only
   - settings-secret-visibility | keeps URLs visible while masking key/token secrets
   - settings-model-add-duplicate | does not add a duplicate model id
+  - settings-load-fallback | keeps UI stable when config/models/pipelines requests fail
+  - settings-save-empty-template-array | persists prompt_templates as empty when templates originated from config
+  - settings-save-updated-secret-and-image-optimization | persists edited secret key and optimization values
 
 ### 9.2 Backend Feature Tests
 - src/tests/test_advanced_pipeline.py
@@ -428,6 +470,20 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_preview_endpoint_item_not_found
     - test_delete_item_endpoint_deletes_item_without_filesystem_dependency
     - test_update_config_handles_homebox_username_secret
+- src/tests/test_app_config_endpoints.py
+  - Test functions:
+    - test_list_pipelines_success_and_failure_paths
+    - test_upsert_pipeline_insert_and_update_paths
+    - test_delete_pipeline_found_and_missing_paths
+    - test_list_models_success_and_error_paths
+    - test_get_config_masks_secrets_and_handles_pipeline_failure
+    - test_update_config_persists_settings_models_and_secret_values
+    - test_root_and_spa_fallback_serve_index_and_assets
+    - test_scrape_endpoint_returns_503_when_playwright_missing
+    - test_scrape_endpoint_success_and_runtime_error_paths
+    - test_process_item_task_success_and_error_and_safe_wrapper
+    - test_queue_item_update_delete_and_rerun_endpoints
+    - test_bulk_approve_success_failure_and_missing_item_paths
 - src/tests/test_app_utils.py
   - Feature labels:
     - normalize mixed prompt template representations into stable objects.
@@ -459,6 +515,10 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_service_feedback_gate_and_fallback_population
     - test_get_service_prompt_config_overlays_defaults_and_overrides
     - test_item_data_helpers_project_base_context_and_service_data
+    - test_helper_catalog_and_settings_seed_paths
+    - test_helper_pipeline_catalog_error_and_listing_paths
+    - test_helper_pipeline_exists_and_custom_persistence_paths
+    - test_helper_runtime_service_prompt_configs_merges_settings
 - src/tests/test_composable_pipeline.py
   - Test functions:
     - test_pipeline_respects_custom_order
