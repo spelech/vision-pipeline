@@ -479,6 +479,7 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_get_config_masks_secrets_and_handles_pipeline_failure
     - test_update_config_persists_settings_models_and_secret_values
     - test_root_and_spa_fallback_serve_index_and_assets
+    - test_root_uses_fallback_web_dist_when_primary_missing
     - test_scrape_endpoint_returns_503_when_playwright_missing
     - test_scrape_endpoint_success_and_runtime_error_paths
     - test_process_item_task_success_and_error_and_safe_wrapper
@@ -536,6 +537,10 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_base_pipeline_defaults_and_abstract_errors
     - test_base_service_abstract_bodies_are_well_formed
     - test_session_logger_delayed_cleanup
+- src/tests/test_database_migrations.py
+  - Test functions:
+    - test_to_sync_database_url_handles_async_drivers
+    - test_init_db_runs_migrations_in_thread
 - src/tests/test_default_pipeline.py
   - Feature labels:
     - full default pipeline path with query/search/refine.
