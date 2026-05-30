@@ -1,5 +1,11 @@
 import pytest
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import cast
+
+import app_helpers
 
 from app import (
     apply_service_output_feedback_fallbacks,
@@ -23,6 +29,38 @@ from app import (
     set_secret_value,
     get_pipeline,
 )
+
+
+class _RowsResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def all(self):
+        return self._rows
+
+
+class _ScalarsResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def scalars(self):
+        return SimpleNamespace(all=lambda: self._rows)
+
+
+class _ScalarOneResult:
+    def __init__(self, value):
+        self._value = value
+
+    def scalar_one_or_none(self):
+        return self._value
+
+
+class _FirstResult:
+    def __init__(self, value):
+        self._value = value
+
+    def first(self):
+        return self._value
 
 
 @pytest.mark.feature("config-templates")
@@ -242,3 +280,83 @@ def test_item_data_helpers_project_base_context_and_service_data() -> None:
     context = get_service_context_from_item(item, "homebox")
     assert isinstance(context["search"], list)
     assert context["service_enrichment"]["location_id"] == "123"
+
+
+@pytest.mark.asyncio
+async def test_helper_catalog_and_settings_seed_paths() -> None:
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                _RowsResult([]),
+                _RowsResult([("qwen/qwen2.5-vl-72b-instruct",)]),
+            ]
+        ),
+        add=MagicMock(),
+        commit=AsyncMock(),
+    )
+
+    await app_helpers.ensure_model_catalog(cast(AsyncSession, db))
+    assert db.add.call_count >= 1
+    assert db.commit.await_count == 1
+
+    with patch("app_helpers.get_app_settings", AsyncMock(return_value={})), patch(
+        "app_helpers.upsert_app_setting", AsyncMock()
+    ) as upsert:
+        await app_helpers.ensure_app_settings_seed(cast(AsyncSession, db))
+
+    assert upsert.await_count >= 2
+
+
+@pytest.mark.asyncio
+async def test_helper_pipeline_catalog_error_and_listing_paths() -> None:
+    err_db = SimpleNamespace(execute=AsyncMock(side_effect=SQLAlchemyError("db down")), commit=AsyncMock())
+    await app_helpers.ensure_pipeline_catalog(cast(AsyncSession, err_db))
+
+    list_db = SimpleNamespace(execute=AsyncMock(side_effect=SQLAlchemyError("nope")))
+    listed = await app_helpers.list_pipeline_definitions(cast(AsyncSession, list_db), include_system=False)
+    assert listed == []
+
+
+@pytest.mark.asyncio
+async def test_helper_pipeline_exists_and_custom_persistence_paths() -> None:
+    exists_db = SimpleNamespace(execute=AsyncMock(return_value=_FirstResult((1,))))
+    missing_db = SimpleNamespace(execute=AsyncMock(side_effect=SQLAlchemyError("fail")))
+
+    assert await app_helpers.pipeline_definition_exists(cast(AsyncSession, exists_db), "default") is True
+    assert await app_helpers.pipeline_definition_exists(cast(AsyncSession, missing_db), "default") is False
+
+    row = SimpleNamespace(pipeline_id="old")
+    persist_db = SimpleNamespace(
+        execute=AsyncMock(return_value=_ScalarsResult([row])),
+        delete=AsyncMock(),
+        add=MagicMock(),
+        commit=AsyncMock(),
+    )
+
+    await app_helpers.persist_custom_pipelines(
+        cast(AsyncSession, persist_db),
+        [{"id": "", "name": "Skip"}, {"id": "custom_1", "name": "Custom", "schema": {}}],
+    )
+
+    persist_db.delete.assert_awaited_once_with(row)
+    assert persist_db.add.call_count == 1
+    assert persist_db.commit.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_helper_runtime_service_prompt_configs_merges_settings() -> None:
+    db = SimpleNamespace()
+    cm = AsyncMock()
+    cm.__aenter__.return_value = db
+    cm.__aexit__.return_value = None
+
+    with patch("app_helpers.AsyncSessionLocal", return_value=cm), patch(
+        "app_helpers.ensure_app_settings_seed", AsyncMock()
+    ), patch(
+        "app_helpers.get_app_settings",
+        AsyncMock(return_value={"service_prompts": {"homebox": {"prompt": "custom"}}}),
+    ):
+        configs = await app_helpers.get_runtime_service_prompt_configs()
+
+    assert configs["homebox"]["prompt"] == "custom"
+    assert "mealie" in configs

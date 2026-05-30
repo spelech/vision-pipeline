@@ -294,14 +294,15 @@ async def test_update_and_rerun_item_endpoints():
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            update_resp = await ac.post("/api/items/5/update", json={"status": "approved"})
-            assert update_resp.status_code == 200
-            assert update_resp.json()["success"] is True
+        with patch("app.process_item_task_safe", AsyncMock(return_value=None)):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                update_resp = await ac.post("/api/items/5/update", json={"status": "approved"})
+                assert update_resp.status_code == 200
+                assert update_resp.json()["success"] is True
 
-            rerun_resp = await ac.post("/api/items/5/rerun")
-            assert rerun_resp.status_code == 200
-            assert rerun_resp.json()["success"] is True
+                rerun_resp = await ac.post("/api/items/5/rerun")
+                assert rerun_resp.status_code == 200
+                assert rerun_resp.json()["success"] is True
     finally:
         app.dependency_overrides.pop(get_db, None)
 

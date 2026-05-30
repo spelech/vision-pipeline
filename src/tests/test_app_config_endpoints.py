@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+import types
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -15,13 +17,24 @@ with patch("os.makedirs"), patch("os.path.exists", return_value=True), patch(
     from app import (
         ConfigUpdateRequest,
         delete_pipeline,
+        delete_item,
+        get_item,
+        get_queue,
         get_config,
         list_models,
         list_pipelines,
+        bulk_approve,
+        rerun_item,
         root,
         spa_fallback,
         update_config,
+        update_item_data,
         upsert_pipeline,
+        process_item_task,
+        process_item_task_safe,
+        scrape_url,
+        ScrapeRequest,
+        encode_image_bytes_to_data_uri,
     )
 
 
@@ -43,6 +56,14 @@ class _Result:
 
     def scalars(self):
         return _ScalarRows(self._rows)
+
+
+class _BackgroundTasks:
+    def __init__(self):
+        self.calls = []
+
+    def add_task(self, func, *args):
+        self.calls.append((func, args))
 
 
 @pytest.mark.asyncio
@@ -230,3 +251,261 @@ async def test_root_and_spa_fallback_serve_index_and_assets(tmp_path: Path, monk
     with pytest.raises(HTTPException) as exc:
         await spa_fallback("api/health")
     assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_scrape_endpoint_returns_503_when_playwright_missing():
+    import builtins
+
+    original_import = builtins.__import__
+
+    def _raising_import(name, *args, **kwargs):
+        if name == "playwright.async_api":
+            raise ImportError("playwright not installed")
+        return original_import(name, *args, **kwargs)
+
+    with patch("builtins.__import__", side_effect=_raising_import):
+        with pytest.raises(HTTPException) as exc:
+            await scrape_url(ScrapeRequest(url="https://example.com"))
+    assert exc.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_scrape_endpoint_success_and_runtime_error_paths():
+    class _FakePage:
+        def __init__(self, should_fail: bool = False):
+            self.should_fail = should_fail
+
+        async def goto(self, *_args, **_kwargs):
+            if self.should_fail:
+                raise RuntimeError("boom")
+
+        async def evaluate(self, _expr):
+            return "scraped text"
+
+    class _FakeContext:
+        def __init__(self, should_fail: bool = False):
+            self._should_fail = should_fail
+
+        async def new_page(self):
+            return _FakePage(should_fail=self._should_fail)
+
+    class _FakeBrowser:
+        def __init__(self, should_fail: bool = False):
+            self._should_fail = should_fail
+
+        async def new_context(self, **_kwargs):
+            return _FakeContext(should_fail=self._should_fail)
+
+        async def close(self):
+            return None
+
+    class _FakeChromium:
+        def __init__(self, should_fail: bool = False):
+            self._should_fail = should_fail
+
+        async def launch(self, **_kwargs):
+            return _FakeBrowser(should_fail=self._should_fail)
+
+    class _PlaywrightCtx:
+        def __init__(self, should_fail: bool = False):
+            self._should_fail = should_fail
+
+        async def __aenter__(self):
+            return SimpleNamespace(chromium=_FakeChromium(should_fail=self._should_fail))
+
+        async def __aexit__(self, *_args):
+            return None
+
+    async_api_mod = types.ModuleType("playwright.async_api")
+
+    def _async_playwright_ok():
+        return _PlaywrightCtx(should_fail=False)
+
+    async_api_mod.async_playwright = _async_playwright_ok
+
+    stealth_mod = types.ModuleType("playwright_stealth")
+
+    class _Stealth:
+        async def apply_stealth_async(self, _page):
+            return None
+
+    stealth_mod.Stealth = _Stealth
+
+    with patch.dict(
+        sys.modules,
+        {
+            "playwright": types.ModuleType("playwright"),
+            "playwright.async_api": async_api_mod,
+            "playwright_stealth": stealth_mod,
+        },
+    ):
+        result = await scrape_url(ScrapeRequest(url="https://example.com", wait_time=0))
+    assert result["success"] is True
+    assert result["text"] == "scraped text"
+
+    def _async_playwright_fail():
+        return _PlaywrightCtx(should_fail=True)
+
+    async_api_mod.async_playwright = _async_playwright_fail
+    with patch.dict(
+        sys.modules,
+        {
+            "playwright": types.ModuleType("playwright"),
+            "playwright.async_api": async_api_mod,
+        },
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await scrape_url(ScrapeRequest(url="https://example.com", wait_time=0))
+    assert exc.value.status_code == 500
+
+
+@pytest.mark.asyncio
+async def test_process_item_task_success_and_error_and_safe_wrapper():
+    review_uri = encode_image_bytes_to_data_uri(b"img", mime="image/jpeg")
+    item = SimpleNamespace(
+        id=1,
+        batch_id=2,
+        image_path=review_uri,
+        raw_image_path=review_uri,
+        status="processing",
+        error=None,
+        ai_output={},
+        product_type="product",
+    )
+    batch = SimpleNamespace(description="desc")
+
+    execute_results = [
+        _Result(item),
+        _Result(batch),
+        _Result(item),
+        _Result(batch),
+    ]
+    db = SimpleNamespace(
+        execute=AsyncMock(side_effect=execute_results),
+        commit=AsyncMock(),
+    )
+    session_cm = AsyncMock()
+    session_cm.__aenter__.return_value = db
+    session_cm.__aexit__.return_value = None
+
+    mock_pipeline = MagicMock()
+    mock_pipeline.run.return_value = {
+        "llm_output": {"product_name": "Widget", "is_food": False},
+        "searxng_results": [],
+        "scraped_content": "",
+    }
+
+    with patch("app.AsyncSessionLocal", return_value=session_cm), patch(
+        "app.get_pipeline", return_value=mock_pipeline
+    ), patch("app.run_in_threadpool", AsyncMock(return_value=mock_pipeline.run.return_value)), patch(
+        "app.decode_data_uri_to_bytes", return_value=b"bytes"
+    ), patch("app.Image.open", return_value=SimpleNamespace()), patch(
+        "app.ImageOps.exif_transpose", return_value=SimpleNamespace()
+    ), patch("app.build_review_image_data_uri", return_value=review_uri), patch(
+        "app.get_runtime_service_prompt_configs", AsyncMock(return_value={"homebox": {}})
+    ), patch("app.generate_service_output", return_value={"status": "ready", "data": {}}), patch.object(
+        list(__import__("app").SERVICES.values())[0],
+        "get_pre_enrichment",
+        AsyncMock(return_value={}),
+    ), patch.object(
+        list(__import__("app").SERVICES.values())[1],
+        "get_pre_enrichment",
+        AsyncMock(return_value={}),
+    ), patch.object(
+        list(__import__("app").SERVICES.values())[2],
+        "get_pre_enrichment",
+        AsyncMock(return_value={}),
+    ), patch.object(
+        list(__import__("app").SERVICES.values())[3],
+        "get_pre_enrichment",
+        AsyncMock(return_value={}),
+    ):
+        await process_item_task(1, "default", "{}")
+
+    assert item.status == "pending"
+    assert db.commit.await_count >= 1
+
+    error_item = SimpleNamespace(
+        id=3,
+        batch_id=4,
+        image_path="no-data",
+        raw_image_path=None,
+        status="processing",
+        error=None,
+        ai_output={},
+    )
+    error_db = SimpleNamespace(
+        execute=AsyncMock(side_effect=[_Result(error_item), _Result(batch)]),
+        commit=AsyncMock(),
+    )
+    error_cm = AsyncMock()
+    error_cm.__aenter__.return_value = error_db
+    error_cm.__aexit__.return_value = None
+
+    with patch("app.AsyncSessionLocal", return_value=error_cm), patch("app.get_pipeline", return_value=mock_pipeline):
+        await process_item_task(3, "default", "{}")
+
+    assert error_item.status == "error"
+    assert isinstance(error_item.error, str)
+
+    with patch("app.process_item_task", AsyncMock(side_effect=RuntimeError("bg fail"))):
+        await process_item_task_safe(99, "default", "{}")
+
+
+@pytest.mark.asyncio
+async def test_queue_item_update_delete_and_rerun_endpoints():
+    items = [SimpleNamespace(id=1, created_at=1), SimpleNamespace(id=2, created_at=2)]
+    queue_db = SimpleNamespace(execute=AsyncMock(return_value=_Result(rows=items)))
+    queue_resp = await get_queue("all", queue_db)
+    assert queue_resp["items"] == items
+
+    item = SimpleNamespace(id=123, status="pending")
+    item_db = SimpleNamespace(execute=AsyncMock(return_value=_Result(item)))
+    item_resp = await get_item(123, item_db)
+    assert item_resp.id == 123
+
+    missing_db = SimpleNamespace(execute=AsyncMock(return_value=_Result(None)))
+    with pytest.raises(HTTPException) as exc:
+        await get_item(404, missing_db)
+    assert exc.value.status_code == 404
+
+    update_db = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
+    update_resp = await update_item_data(10, {"status": "approved"}, update_db)
+    assert update_resp["success"] is True
+    assert update_db.commit.await_count == 1
+
+    delete_db = SimpleNamespace(
+        execute=AsyncMock(side_effect=[_Result(item), _Result(None)]),
+        delete=AsyncMock(),
+        commit=AsyncMock(),
+    )
+    delete_resp = await delete_item(10, delete_db)
+    assert delete_resp["success"] is True
+    delete_db.delete.assert_awaited_once_with(item)
+
+    bg_tasks = _BackgroundTasks()
+    rerun_db = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
+    rerun_resp = await rerun_item(88, bg_tasks, rerun_db)
+    assert rerun_resp["success"] is True
+    assert len(bg_tasks.calls) == 1
+    assert bg_tasks.calls[0][1][0] == 88
+
+
+@pytest.mark.asyncio
+async def test_bulk_approve_success_failure_and_missing_item_paths():
+    item_food = SimpleNamespace(id=1, product_type="food")
+    item_product = SimpleNamespace(id=2, product_type="product")
+
+    db = SimpleNamespace(
+        execute=AsyncMock(side_effect=[_Result(item_food), _Result(item_product), _Result(None)]),
+    )
+
+    with patch(
+        "app.execute_services",
+        AsyncMock(side_effect=[{"success": True}, {"success": False, "error": "sync failed"}]),
+    ):
+        result = await bulk_approve({"item_ids": [1, 2, 999]}, db)
+
+    assert result["success"] == [1]
+    assert result["failed"] == [{"id": 2, "error": "sync failed"}]
