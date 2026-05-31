@@ -74,6 +74,18 @@ Optional docs consistency check:
 node scripts/update-test-requirements-index.mjs --check
 ```
 
+Post-deploy smoke validation (local default base URL):
+
+```bash
+npm run deploy:smoke
+```
+
+For non-local environments, pass an explicit base URL:
+
+```bash
+python scripts/smoke_deploy.py --base-url https://your-deployment.example.com
+```
+
 ## 📦 Release Hygiene
 When merging feature work into the main branch:
 
