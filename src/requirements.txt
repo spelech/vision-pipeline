@@ -5,6 +5,8 @@ requests
 openai
 pyzbar
 pillow
+pypdf
+pytesseract
 python-dotenv
 opencv-python-headless
 sqlalchemy

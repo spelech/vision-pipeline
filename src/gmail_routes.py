@@ -439,6 +439,7 @@ def build_gmail_router(
         background_tasks: BackgroundTasks,
         db: AsyncSession = Depends(get_db),
     ):
+        # pylint: disable=too-many-locals
         selected_message_ids = _coerce_processed_ids(data.message_ids)
         if not selected_message_ids:
             raise HTTPException(
@@ -451,7 +452,25 @@ def build_gmail_router(
         for message_id in selected_message_ids:
             try:
                 message = await run_in_threadpool(gmail_ingestor.get_message, message_id)
-                line_items = gmail_ingestor.extract_line_items_from_message(message)
+                attachment_text_parts: List[str] = []
+                for attachment in message.get("attachments", []):
+                    if not isinstance(attachment, dict):
+                        continue
+                    try:
+                        text = await run_in_threadpool(
+                            gmail_ingestor.extract_attachment_text,
+                            message_id,
+                            attachment,
+                        )
+                        if text:
+                            attachment_text_parts.append(text)
+                    except ValueError:
+                        continue
+
+                line_items = gmail_ingestor.extract_line_items_from_message(
+                    message,
+                    "\n".join(attachment_text_parts),
+                )
                 receipts_payload.append(
                     {
                         "message": message,

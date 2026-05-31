@@ -1,12 +1,16 @@
 import logging
 import base64
 import re
+import io
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Callable, Dict, List, Optional, Set
 from urllib.parse import urlencode
 
 import requests
+from PIL import Image
+from pypdf import PdfReader
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +27,9 @@ IGNORE_LINE_PREFIXES = (
     "order total",
     "discount",
 )
+GMAIL_OCR_BACKEND_TESSERACT = "tesseract"
+GMAIL_OCR_BACKEND_VISION_LLM = "vision_llm"
+DEFAULT_GMAIL_OCR_VISION_MODEL = "qwen/qwen2.5-vl-72b-instruct"
 
 
 class GmailIngestor:
@@ -36,6 +43,16 @@ class GmailIngestor:
 
     def connected(self) -> bool:
         return bool(self._get_secret("GWS_REFRESH_TOKEN"))
+
+    def ocr_backend(self) -> str:
+        configured = str(self._get_secret("GMAIL_OCR_BACKEND") or "").strip().lower()
+        if configured in {GMAIL_OCR_BACKEND_TESSERACT, GMAIL_OCR_BACKEND_VISION_LLM}:
+            return configured
+        return GMAIL_OCR_BACKEND_TESSERACT
+
+    def ocr_vision_model(self) -> str:
+        configured = str(self._get_secret("GMAIL_OCR_VISION_MODEL") or "").strip()
+        return configured or DEFAULT_GMAIL_OCR_VISION_MODEL
 
     def receipt_wrangler_configured(self) -> bool:
         return bool(
@@ -126,6 +143,66 @@ class GmailIngestor:
     def _decode_base64url(data: str) -> bytes:
         padded = data + "=" * (-len(data) % 4)
         return base64.urlsafe_b64decode(padded.encode("utf-8"))
+
+    @staticmethod
+    def _extract_text_from_pdf_bytes(pdf_bytes: bytes) -> str:
+        try:
+            reader = PdfReader(io.BytesIO(pdf_bytes))
+        except Exception:  # pylint: disable=broad-exception-caught
+            return ""
+
+        text_chunks: List[str] = []
+        for page in reader.pages:
+            text = page.extract_text() or ""
+            if text.strip():
+                text_chunks.append(text)
+
+        return "\n".join(text_chunks).strip()[:10000]
+
+    @staticmethod
+    def _extract_text_with_tesseract(image_bytes: bytes) -> str:
+        try:
+            # pylint: disable=import-outside-toplevel
+            import pytesseract  # type: ignore[import-untyped]
+        except ImportError as exc:
+            raise ValueError("pytesseract is not installed") from exc
+
+        image = Image.open(io.BytesIO(image_bytes))
+        text = pytesseract.image_to_string(image)
+        return text.strip()[:10000]
+
+    def _extract_text_with_vision_llm(self, image_bytes: bytes, mime_type: str) -> str:
+        api_key = self._get_secret("OPENROUTER_API_KEY")
+        if not api_key:
+            raise ValueError("Missing OPENROUTER_API_KEY for vision OCR backend")
+
+        model = self.ocr_vision_model()
+        data_uri = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode()}"
+        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+        response = client.chat.completions.create(
+            model=model,
+            temperature=0,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "Extract receipt text and line items exactly as written. "
+                                "Return plain text only."
+                            ),
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": data_uri},
+                        },
+                    ],
+                }
+            ],
+        )
+        content = response.choices[0].message.content if response.choices else ""
+        return str(content or "").strip()[:10000]
 
     @staticmethod
     def _extract_header(headers: List[Dict[str, str]], name: str) -> str:
@@ -234,14 +311,17 @@ class GmailIngestor:
         }
 
     @staticmethod
-    def extract_line_items_from_message(message: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def extract_line_items_from_message(
+        message: Dict[str, Any],
+        attachment_text: str = "",
+    ) -> List[Dict[str, Any]]:
         # pylint: disable=too-many-locals
         subject = str(message.get("subject") or "").strip()
         snippet = str(message.get("snippet") or "").strip()
         plain_text = str(message.get("plain_text") or "").strip()
 
         candidate_lines: List[str] = []
-        for source_text in [plain_text, snippet]:
+        for source_text in [plain_text, attachment_text, snippet]:
             if not source_text:
                 continue
             for line in source_text.splitlines():
@@ -347,3 +427,30 @@ class GmailIngestor:
         if not isinstance(encoded, str) or not encoded:
             raise ValueError("Gmail attachment payload missing data")
         return self._decode_base64url(encoded)
+
+    def extract_attachment_text(self, message_id: str, attachment: Dict[str, Any]) -> str:
+        attachment_id = str(attachment.get("attachment_id") or "").strip()
+        if not attachment_id:
+            return ""
+
+        mime_type = str(attachment.get("mime_type") or "application/octet-stream")
+        filename = str(attachment.get("filename") or "").lower()
+        attachment_bytes = self.download_attachment(message_id, attachment_id)
+
+        if mime_type == "application/pdf" or filename.endswith(".pdf"):
+            return self._extract_text_from_pdf_bytes(attachment_bytes)
+
+        is_image = mime_type.startswith("image/") or filename.endswith(
+            (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff")
+        )
+        if not is_image:
+            return ""
+
+        backend = self.ocr_backend()
+        if backend == GMAIL_OCR_BACKEND_VISION_LLM:
+            try:
+                return self._extract_text_with_vision_llm(attachment_bytes, mime_type)
+            except (requests.RequestException, ValueError):
+                return self._extract_text_with_tesseract(attachment_bytes)
+
+        return self._extract_text_with_tesseract(attachment_bytes)

@@ -142,6 +142,8 @@ CONFIG_SECRET_KEYS = [
     "RECEIPT_WRANGLER_URL",
     "RECEIPT_WRANGLER_API_KEY",
     "RECEIPT_WRANGLER_GROUP_ID",
+    "GMAIL_OCR_BACKEND",
+    "GMAIL_OCR_VISION_MODEL",
 ]
 
 def get_secret_value(key: str) -> str:

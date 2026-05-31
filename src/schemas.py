@@ -59,6 +59,8 @@ class ConfigSecretStatus(BaseModel):
     RECEIPT_WRANGLER_URL: str = ""
     RECEIPT_WRANGLER_API_KEY: str = ""
     RECEIPT_WRANGLER_GROUP_ID: str = ""
+    GMAIL_OCR_BACKEND: str = ""
+    GMAIL_OCR_VISION_MODEL: str = ""
 
 
 class ConfigResponse(BaseModel):
@@ -96,6 +98,8 @@ class ConfigUpdateRequest(BaseModel):
     RECEIPT_WRANGLER_URL: Optional[str] = None
     RECEIPT_WRANGLER_API_KEY: Optional[str] = None
     RECEIPT_WRANGLER_GROUP_ID: Optional[str] = None
+    GMAIL_OCR_BACKEND: Optional[str] = None
+    GMAIL_OCR_VISION_MODEL: Optional[str] = None
 
 
 class ServiceMappingInfo(BaseModel):

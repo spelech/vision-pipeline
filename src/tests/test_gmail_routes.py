@@ -47,6 +47,7 @@ async def test_gmail_status_endpoint_reports_settings_and_connection_state():
         app.dependency_overrides.clear()
 
 
+
 @pytest.mark.asyncio
 async def test_gmail_search_endpoint_excludes_processed_ids_by_default():
     mock_session = AsyncMock()
@@ -253,5 +254,82 @@ async def test_gmail_direct_ingest_requires_selection():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             response = await ac.post("/api/gmail/ingest-direct", json={"message_ids": []})
         assert response.status_code == 400
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_gmail_direct_ingest_uses_attachment_text_for_line_items():
+    mock_session = MagicMock()
+    mock_session.commit = AsyncMock()
+
+    async def refresh_with_ids(entity):
+        if getattr(entity, "id", None) is None:
+            entity.id = 101
+
+    mock_session.refresh = AsyncMock(side_effect=refresh_with_ids)
+    mock_session.add = MagicMock()
+    mock_session.execute = AsyncMock()
+
+    async def override_get_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with patch(
+            "app.gmail_ingestor.get_message",
+            return_value={
+                "message_id": "msg-1",
+                "subject": "Receipt",
+                "snippet": "",
+                "plain_text": "",
+                "attachments": [
+                    {
+                        "attachment_id": "att-1",
+                        "filename": "receipt.png",
+                        "mime_type": "image/png",
+                    }
+                ],
+            },
+        ), patch(
+            "app.gmail_ingestor.extract_attachment_text",
+            return_value="Widget Z $19.99",
+        ) as extract_attachment_text, patch(
+            "app.gmail_ingestor.extract_line_items_from_message",
+            return_value=[{"name": "Widget Z", "line_text": "Widget Z $19.99", "price": "$19.99"}],
+        ) as extract_line_items:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                response = await ac.post(
+                    "/api/gmail/ingest-direct",
+                    json={"message_ids": ["msg-1"], "mark_processed": False},
+                )
+
+        assert response.status_code == 200
+        assert response.json()["selected_count"] == 1
+        extract_attachment_text.assert_called_once_with(
+            "msg-1",
+            {
+                "attachment_id": "att-1",
+                "filename": "receipt.png",
+                "mime_type": "image/png",
+            },
+        )
+        extract_line_items.assert_called_once_with(
+            {
+                "message_id": "msg-1",
+                "subject": "Receipt",
+                "snippet": "",
+                "plain_text": "",
+                "attachments": [
+                    {
+                        "attachment_id": "att-1",
+                        "filename": "receipt.png",
+                        "mime_type": "image/png",
+                    }
+                ],
+            },
+            "Widget Z $19.99",
+        )
+        assert mock_session.commit.await_count >= 1
     finally:
         app.dependency_overrides.clear()
