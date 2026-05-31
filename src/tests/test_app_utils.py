@@ -287,6 +287,24 @@ def test_item_data_helpers_project_base_context_and_service_data() -> None:
     assert context["service_enrichment"]["location_id"] == "123"
 
 
+@pytest.mark.feature("item-data-projection")
+def test_item_data_helpers_include_receipt_metadata_with_user_overrides() -> None:
+    item = SimpleNamespace(
+        user_overrides={"product_name": "Milk", "quantity": 1},
+        ai_output={
+            "receipt_attachment_data_uri": "data:image/jpeg;base64,abc",
+            "receipt_filename": "receipt.jpg",
+            "source_receipt_id": "rw-1",
+        },
+    )
+
+    base = get_item_base_data(item)
+    assert base["product_name"] == "Milk"
+    assert base["receipt_attachment_data_uri"].startswith("data:image/")
+    assert base["receipt_filename"] == "receipt.jpg"
+    assert base["source_receipt_id"] == "rw-1"
+
+
 @pytest.mark.asyncio
 async def test_helper_catalog_and_settings_seed_paths() -> None:
     db = SimpleNamespace(

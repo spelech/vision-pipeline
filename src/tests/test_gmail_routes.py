@@ -7,6 +7,7 @@ with patch("os.makedirs"), patch("os.path.exists", return_value=True), patch(
     "fastapi.staticfiles.StaticFiles", return_value=MagicMock()
 ):
     from app import app, get_db
+    from gmail_routes import _extract_rw_line_items, _to_data_uri
 
 
 @pytest.mark.asyncio
@@ -295,6 +296,9 @@ async def test_gmail_direct_ingest_uses_attachment_text_for_line_items():
             "app.gmail_ingestor.extract_attachment_text",
             return_value="Widget Z $19.99",
         ) as extract_attachment_text, patch(
+            "app.gmail_ingestor.download_attachment",
+            return_value=b"png-bytes",
+        ), patch(
             "app.gmail_ingestor.extract_line_items_from_message",
             return_value=[{"name": "Widget Z", "line_text": "Widget Z $19.99", "price": "$19.99"}],
         ) as extract_line_items:
@@ -333,3 +337,88 @@ async def test_gmail_direct_ingest_uses_attachment_text_for_line_items():
         assert mock_session.commit.await_count >= 1
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_receipt_wrangler_process_pulls_and_resolves_pending_receipts():
+    mock_session = MagicMock()
+    mock_session.commit = AsyncMock()
+
+    async def refresh_with_ids(entity):
+        if getattr(entity, "id", None) is None:
+            entity.id = 202
+
+    mock_session.refresh = AsyncMock(side_effect=refresh_with_ids)
+    mock_session.add = MagicMock()
+    mock_session.execute = AsyncMock()
+
+    async def override_get_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with patch("app.receipt_wrangler_client.configured", return_value=True), patch(
+            "app.receipt_wrangler_client.get_pending_receipts",
+            return_value=[
+                {
+                    "id": "rw-1",
+                    "merchant": "Test Mart",
+                    "image_id": "img-1",
+                    "lineItems": [{"name": "Milk", "price": "3.99", "quantity": 2}],
+                }
+            ],
+        ), patch(
+            "app.receipt_wrangler_client.download_receipt_image",
+            return_value=b"jpg-bytes",
+        ), patch(
+            "app.receipt_wrangler_client.update_receipt_status",
+            return_value={"ok": True},
+        ) as update_status, patch(
+            "app.process_item_task_safe",
+            AsyncMock(),
+        ):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                response = await ac.post(
+                    "/api/gmail/receipt-wrangler-process",
+                    json={"limit": 10, "mark_resolved": True},
+                )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["pending_count"] == 1
+        assert payload["processed_count"] == 1
+        assert payload["resolved_count"] == 1
+        assert payload["created_items"] == 1
+        assert payload["batch_id"] == 202
+        assert mock_session.add.call_count >= 2
+        added_item = mock_session.add.call_args_list[1].args[0]
+        assert added_item.ai_output["source"] == "receipt_wrangler"
+        assert added_item.ai_output["receipt_line_item"]["name"] == "Milk"
+        assert added_item.ai_output["receipt_image_data_uri"].startswith(
+            "data:image/jpeg;base64,"
+        )
+        update_status.assert_called_once_with("rw-1", "RESOLVED")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_receipt_wrangler_helpers_cover_line_item_and_data_uri_fallbacks():
+    items = _extract_rw_line_items(
+        {
+            "lineItems": [
+                {"name": "Eggs", "price": "2.99", "quantity": 2, "barcode": "123"},
+                {"description": "Bread", "amount": "1.99"},
+            ]
+        }
+    )
+    assert len(items) == 2
+    assert items[0]["name"] == "Eggs"
+    assert items[0]["barcode"] == "123"
+    assert items[1]["name"] == "Bread"
+
+    fallback_items = _extract_rw_line_items({"merchant": "Store X", "note": "Manual receipt"})
+    assert fallback_items[0]["name"] == "Store X"
+    assert fallback_items[0]["line_text"] == "Manual receipt"
+
+    assert _to_data_uri(b"", "image/png") == ""
+    assert _to_data_uri(b"abc", "image/png").startswith("data:image/png;base64,")
