@@ -1,3 +1,5 @@
+import { APP_VERSION } from '../version';
+
 import { useState, useEffect } from 'react';
 import {
   normalizePromptTemplates,
@@ -215,7 +217,7 @@ export function Settings() {
         </div>
         <div className="text-right">
           <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/20">Version</span>
-          <p className="text-lg font-black tracking-tighter text-white/40">3.6.0</p>
+          <p className="text-lg font-black tracking-tighter text-white/40">{APP_VERSION}</p>
         </div>
       </header>
 

@@ -3,6 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import App from '../App';
 
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getTotalSize: () => count * 360,
+    getVirtualItems: () => Array.from({ length: count }, (_, index) => ({ index, start: index * 360 })),
+    measureElement: vi.fn(),
+  }),
+}));
+
 describe('Vision Pipeline App', () => {
   beforeEach(() => {
     vi.resetAllMocks();

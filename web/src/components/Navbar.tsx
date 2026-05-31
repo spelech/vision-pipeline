@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Camera, Menu, X } from 'lucide-react';
 import type { ActiveTab } from '../app/types';
+import { APP_VERSION } from '../version';
 
 interface NavbarProps {
   activeTab: ActiveTab;
@@ -25,7 +26,7 @@ export function Navbar({ activeTab, setActiveTab }: NavbarProps) {
           </div>
           <h1 className="text-lg font-black tracking-tighter uppercase italic flex items-center gap-2">
             <div>Vision<span className="text-blue-500 ml-1">Pipeline</span></div>
-            <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[8px] tracking-[0.2em] font-black text-white/30 not-italic">V3.6.0</span>
+            <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[8px] tracking-[0.2em] font-black text-white/30 not-italic">V{APP_VERSION}</span>
           </h1>
         </div>
 
