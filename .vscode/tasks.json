@@ -164,7 +164,7 @@
 		{
 			"label": "Python: DB Migration Upgrade",
 			"type": "shell",
-			"command": "set MIGRATION_DB_URL=postgresql+psycopg2://vision:vision_pass@localhost:5432/vision_pipeline&& ${command:python.interpreterPath} -m alembic -c src/alembic.ini upgrade head",
+			"command": "docker compose exec -T vision-pipeline python -m alembic -c alembic.ini upgrade head",
 			"options": {
 				"shell": {
 					"executable": "C:\\Windows\\System32\\cmd.exe",
