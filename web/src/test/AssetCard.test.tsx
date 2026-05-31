@@ -72,6 +72,16 @@ describe('AssetCard', () => {
     expect(handleToggleSelect).toHaveBeenCalled();
   });
 
+  it('Feature: asset-card-delete | exposes a delete action when provided', () => {
+    const handleDelete = vi.fn();
+
+    render(<AssetCard item={mockItem} onDelete={handleDelete} onPreview={vi.fn()} onExecute={vi.fn()} />);
+
+    fireEvent.click(screen.getByLabelText('Delete Asset'));
+
+    expect(handleDelete).toHaveBeenCalledTimes(1);
+  });
+
   it('Feature: asset-card-preview | uses first selected service for preview', () => {
     const handlePreview = vi.fn();
     render(<AssetCard item={mockItem} onPreview={handlePreview} onExecute={vi.fn()} />);

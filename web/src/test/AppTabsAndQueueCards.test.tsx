@@ -12,11 +12,13 @@ vi.mock('../components/AssetCard', () => ({
   AssetCard: ({
     item,
     onToggleSelect,
+    onDelete,
     onPreview,
     onExecute,
   }: {
     item: Asset;
     onToggleSelect?: () => void;
+    onDelete?: () => void;
     onPreview: (service: string, overrides: Record<string, unknown>) => void;
     onExecute: (services: string[], overrides: Record<string, unknown>) => void;
   }) => (
@@ -30,6 +32,9 @@ vi.mock('../components/AssetCard', () => ({
       </button>
       <button data-testid={`execute-${item.id}`} onClick={() => onExecute(['homebox'], { sample: true })}>
         execute
+      </button>
+      <button data-testid={`delete-${item.id}`} onClick={() => onDelete?.()}>
+        delete
       </button>
     </div>
   ),
@@ -147,6 +152,7 @@ describe('QueueCards', () => {
 
   it('Feature: queue-cards-callback-wrappers | forwards toggle preview execute events through item-bound handlers', () => {
     const onToggleSelection = vi.fn();
+    const onDelete = vi.fn();
     const onPreview = vi.fn();
     const onExecute = vi.fn();
 
@@ -162,6 +168,7 @@ describe('QueueCards', () => {
         onSelectAll={vi.fn()}
         onToggleSelection={onToggleSelection}
         onBulkApprove={vi.fn()}
+        onDelete={onDelete}
         onPreview={onPreview}
         onExecute={onExecute}
       />,
@@ -170,10 +177,12 @@ describe('QueueCards', () => {
     fireEvent.click(screen.getByTestId('toggle-a1'));
     fireEvent.click(screen.getByTestId('preview-a1'));
     fireEvent.click(screen.getByTestId('execute-a1'));
+    fireEvent.click(screen.getByTestId('delete-a1'));
 
     expect(onToggleSelection).toHaveBeenCalledWith('a1');
     expect(onPreview).toHaveBeenCalledWith(baseAsset, 'homebox', { sample: true });
     expect(onExecute).toHaveBeenCalledWith(baseAsset, ['homebox'], { sample: true });
+    expect(onDelete).toHaveBeenCalledWith(baseAsset);
   });
 });
 

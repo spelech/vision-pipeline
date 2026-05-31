@@ -1,4 +1,4 @@
-# Vision Pipeline v3.6.0
+# Vision Pipeline v3.6.1
 
 # Project Features
 

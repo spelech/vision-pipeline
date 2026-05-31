@@ -129,6 +129,65 @@ describe('Vision Pipeline App', () => {
     });
   });
 
+  it('Feature: review-delete-item | deletes a queue item from the review page', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.startsWith('/api/queue')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            items: [
+              {
+                id: '1',
+                image_path: 'pending.jpg',
+                status: 'pending',
+                product_type: 'product',
+                ai_output: { llm_output: { product_name: 'Delete Me' } },
+                user_overrides: {},
+                selected_services: ['homebox'],
+              },
+            ],
+          }),
+        });
+      }
+      if (url === '/api/items/1' && init?.method === 'DELETE') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true }),
+        });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, pipelines: [] }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+      });
+    });
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^review$/i }));
+
+    await screen.findByText(/Delete Me/i);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+    fireEvent.click(screen.getByLabelText('Delete Asset'));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/items/1', expect.objectContaining({ method: 'DELETE' }));
+    });
+    await waitFor(() => {
+      expect(screen.queryByText(/Delete Me/i)).not.toBeInTheDocument();
+    });
+  });
+
   it('Feature: identify-upload-single | uploads a single file and fetches item details', async () => {
     globalThis.fetch = vi.fn().mockImplementation((url: string) => {
       if (url.startsWith('/api/queue')) {

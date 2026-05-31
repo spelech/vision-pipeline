@@ -18,6 +18,7 @@ interface ReviewTabProps {
   onSelectAll: () => void;
   onToggleSelection: (id: string) => void;
   onBulkApprove: () => void;
+  onDelete?: (item: Asset) => void;
   onPreview: (item: Asset, service: string, overrides?: Record<string, unknown>) => void;
   onExecute: (item: Asset, services: string[], overrides?: Record<string, unknown>) => void;
   onFetchQueue: (status: QueueStatus) => void;
@@ -36,6 +37,7 @@ export function ReviewTab({
   onSelectAll,
   onToggleSelection,
   onBulkApprove,
+  onDelete,
   onPreview,
   onExecute,
   onFetchQueue,
@@ -106,6 +108,7 @@ export function ReviewTab({
           onSelectAll={onSelectAll}
           onToggleSelection={onToggleSelection}
           onBulkApprove={onBulkApprove}
+          onDelete={onDelete}
           onPreview={onPreview}
           onExecute={onExecute}
         />

@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [3.6.1] - 2026-05-31
+
+### Added
+- Review queue items can now be deleted directly from the review page.
+
+### Changed
+- Item deletion now removes stored upload files when present.
+- Visible version labels now match the current release version.
+
+### Tests
+- Added coverage for the review-page delete action, queue-card callback wiring, and delete cleanup behavior.
+
 ## [3.6.0] - 2026-05-31
 
 ### Added

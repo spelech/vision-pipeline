@@ -234,6 +234,27 @@ export default function App() {
     }
   };
 
+  const deleteItem = async (item: Asset) => {
+    try {
+      const resp = await fetch(`/api/items/${item.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!resp.ok) {
+        showToast('Delete failed', 'error');
+        return;
+      }
+
+      setQueue((current) => current.filter((queuedItem) => queuedItem.id !== item.id));
+      setSelectedItems((current) => current.filter((selectedItemId) => selectedItemId !== item.id));
+      setPreviewItem((current) => (current?.item.id === item.id ? null : current));
+      showToast('Deleted item', 'success');
+    } catch (e) {
+      console.error('Delete failed', e);
+      showToast('Delete failed', 'error');
+    }
+  };
+
   const uploadFiles = async (files: File[]) => {
     if (files.length === 0) return;
 
@@ -404,6 +425,7 @@ export default function App() {
                 onSelectAll={selectAll}
                 onToggleSelection={toggleSelection}
                 onBulkApprove={() => void handleBulkApprove()}
+                onDelete={deleteItem}
                 onPreview={handlePreview}
                 onExecute={executeItem}
                 onFetchQueue={(status) => void fetchQueue(status)}

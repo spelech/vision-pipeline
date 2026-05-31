@@ -16,6 +16,7 @@ interface QueueCardsProps {
   onSelectAll: () => void;
   onToggleSelection: (id: string) => void;
   onBulkApprove: () => void;
+  onDelete?: (item: Asset) => void;
   onPreview: (item: Asset, service: string, overrides?: Record<string, unknown>) => void;
   onExecute: (item: Asset, services: string[], overrides?: Record<string, unknown>) => void;
 }
@@ -31,6 +32,7 @@ export function QueueCards({
   onSelectAll,
   onToggleSelection,
   onBulkApprove,
+  onDelete,
   onPreview,
   onExecute,
 }: QueueCardsProps) {
@@ -115,6 +117,7 @@ export function QueueCards({
                   item={item}
                   isSelected={showSelection ? selectedItems.includes(item.id) : false}
                   onToggleSelect={showSelection ? () => onToggleSelection(item.id) : undefined}
+                  onDelete={onDelete ? () => onDelete(item) : undefined}
                   onPreview={(svc, overrides) => onPreview(item, svc, overrides)}
                   onExecute={(svcs, overrides) => onExecute(item, svcs, overrides)}
                 />

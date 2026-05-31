@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown, Search, Send, Box, Utensils, Eye, DollarSign, Info } from 'lucide-react';
+import { ChevronDown, Search, Send, Box, Utensils, Eye, DollarSign, Info, Trash2 } from 'lucide-react';
 import type { Asset, AssetEditData } from '../types';
 import { Field } from './Field';
 
@@ -7,13 +7,14 @@ interface AssetCardProps {
   item: Asset;
   isSelected?: boolean;
   onToggleSelect?: () => void;
+  onDelete?: () => void;
   onPreview: (service: string, overrides: Record<string, unknown>) => void;
   onExecute: (services: string[], overrides: Record<string, unknown>) => void;
 }
 
 type PipelineStageId = 'barcode' | 'vision' | 'search' | 'refine' | 'sync';
 
-export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecute }: AssetCardProps) {
+export function AssetCard({ item, isSelected, onToggleSelect, onDelete, onPreview, onExecute }: AssetCardProps) {
     const itemImageSrc =
       (typeof item.ai_output?.review_image_data_uri === 'string' && item.ai_output.review_image_data_uri.startsWith('data:image'))
         ? item.ai_output.review_image_data_uri
@@ -314,6 +315,16 @@ export function AssetCard({ item, isSelected, onToggleSelect, onPreview, onExecu
         >
           <ChevronDown className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
         </button>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="w-12 h-12 rounded-full border border-red-500/20 bg-red-500/5 flex items-center justify-center text-red-300 hover:bg-red-500/15 hover:text-red-200 shrink-0 transition-colors"
+            aria-label="Delete Asset"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {isExpanded && (

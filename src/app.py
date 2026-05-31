@@ -6,6 +6,7 @@ import base64
 import logging
 import asyncio
 import importlib
+from contextlib import suppress
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, cast
@@ -212,7 +213,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="Vision Pipeline API",
-    version="3.6.0",
+    version="3.6.1",
     redoc_url=None,
 )
 api_router = APIRouter(prefix="/api")
@@ -1588,6 +1589,22 @@ async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Item).where(Item.id == item_id))
     item = result.scalar_one_or_none()
     if item:
+        stored_paths = (
+            getattr(item, "image_path", None),
+            getattr(item, "raw_image_path", None),
+        )
+        for stored_path in stored_paths:
+            if (
+                not isinstance(stored_path, str)
+                or not stored_path
+                or stored_path.startswith("data:")
+            ):
+                continue
+
+            candidate_path = Path("data/uploads") / Path(stored_path).name
+            with suppress(FileNotFoundError):
+                candidate_path.unlink()
+
         await db.delete(item)
         await db.commit()
     return {"success": True}

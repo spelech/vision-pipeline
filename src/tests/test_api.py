@@ -4,6 +4,7 @@ import json
 import uuid
 import base64
 import os
+from pathlib import Path
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from types import SimpleNamespace
@@ -653,9 +654,18 @@ async def test_preview_endpoint_item_not_found():
 
 @pytest.mark.feature("delete-item")
 @pytest.mark.asyncio
-async def test_delete_item_endpoint_deletes_item_without_filesystem_dependency():
+async def test_delete_item_endpoint_deletes_item_and_cleans_up_upload_files():
     mock_session = AsyncMock()
-    mock_item = SimpleNamespace(id=3, image_path="masked.png", raw_image_path="raw.jpg")
+    uploads_dir = Path("data/uploads")
+    image_name = f"delete-test-{uuid.uuid4().hex}.png"
+    raw_name = f"delete-test-{uuid.uuid4().hex}.jpg"
+    image_path = uploads_dir / image_name
+    raw_path = uploads_dir / raw_name
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    image_path.write_text("image", encoding="utf-8")
+    raw_path.write_text("raw", encoding="utf-8")
+
+    mock_item = SimpleNamespace(id=3, image_path=image_name, raw_image_path=raw_name)
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = mock_item
     mock_session.execute.return_value = mock_result
@@ -671,6 +681,8 @@ async def test_delete_item_endpoint_deletes_item_without_filesystem_dependency()
             assert response.json()["success"] is True
             mock_session.delete.assert_awaited_once_with(mock_item)
             mock_session.commit.assert_awaited()
+            assert not image_path.exists()
+            assert not raw_path.exists()
     finally:
         app.dependency_overrides.pop(get_db, None)
 

@@ -1,4 +1,4 @@
-# Vision Pipeline v3.6.0
+# Vision Pipeline v3.6.1
 
 An automated product identification and enrichment system that bridges physical items with digital home services.
 
@@ -94,7 +94,7 @@ When merging feature work into the main branch:
 - Update feature-level docs (`README.md`, `FEATURES.md`, or specific files under `docs/`) for any behavior changes.
 - Run lint, typecheck, and tests before pushing the merge.
 
-## 🔁 LLM Migration Guidance (v3.6.0)
+## 🔁 LLM Migration Guidance (v3.6.1)
 This release adds OpenAI-compatible endpoint configuration so existing OpenRouter deployments continue working, while local LiteLLM is supported without code changes.
 
 For existing OpenRouter deployments:
