@@ -14,3 +14,4 @@ def test_receipt_pipeline_identity_and_defaults():
         "refine",
     ]
     assert "receipt line items" in schema["vision_prompt"]["default"].lower()
+    assert "ocr output" in schema["refine_prompt"]["default"].lower()

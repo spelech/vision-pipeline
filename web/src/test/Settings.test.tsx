@@ -137,6 +137,14 @@ describe('Settings', () => {
                   vision_prompt: { default: 'vision instructions' },
                   refine_prompt: { default: 'refine instructions' }
                 }
+              },
+              {
+                id: 'receipt',
+                name: 'Receipt Pipeline',
+                schema: {
+                  vision_prompt: { default: 'receipt vision instructions' },
+                  refine_prompt: { default: 'receipt refine instructions' }
+                }
               }
             ]
           }),
@@ -148,6 +156,8 @@ describe('Settings', () => {
     render(<Settings />);
     expect(await screen.findByDisplayValue(/Default Vision Pipeline vision prompt/i)).toBeInTheDocument();
     expect(await screen.findByDisplayValue(/Default Vision Pipeline refine prompt/i)).toBeInTheDocument();
+    expect(await screen.findByDisplayValue(/Receipt Pipeline vision prompt/i)).toBeInTheDocument();
+    expect(await screen.findByDisplayValue(/Receipt Pipeline refine prompt/i)).toBeInTheDocument();
   });
 
   it('Feature: settings-star-remove | toggles star and removes model from registry', async () => {
@@ -295,6 +305,15 @@ describe('Settings', () => {
         },
       },
       {
+        id: 'receipt',
+        name: 'Receipt Pipeline',
+        schema: {
+          vision_prompt: { default: 'receipt vision' },
+          refine_prompt: { default: 'receipt refine' },
+          active_nodes: { default: [] },
+        },
+      },
+      {
         id: 'secondary',
         name: 'Secondary',
         schema: {},
@@ -311,6 +330,16 @@ describe('Settings', () => {
         id: 'default-refine_prompt',
         name: 'Default Vision Pipeline refine prompt',
         prompt: 'refine text',
+      },
+      {
+        id: 'receipt-vision_prompt',
+        name: 'Receipt Pipeline vision prompt',
+        prompt: 'receipt vision',
+      },
+      {
+        id: 'receipt-refine_prompt',
+        name: 'Receipt Pipeline refine prompt',
+        prompt: 'receipt refine',
       },
     ]);
 

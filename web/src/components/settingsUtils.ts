@@ -9,7 +9,7 @@ export interface PipelineApiResponse {
   pipelines?: Array<{
     id: string;
     name: string;
-    schema?: Record<string, { default?: string }>;
+    schema?: Record<string, { default?: unknown }>;
   }>;
 }
 
