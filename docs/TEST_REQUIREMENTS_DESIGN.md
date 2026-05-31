@@ -492,6 +492,7 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_delete_pipeline_found_and_missing_paths
     - test_list_models_success_and_error_paths
     - test_get_config_masks_secrets_and_handles_pipeline_failure
+    - test_get_config_derives_prompt_templates_from_pipeline_defaults_when_empty
     - test_update_config_persists_settings_models_and_secret_values
     - test_root_and_spa_fallback_serve_index_and_assets
     - test_root_uses_fallback_web_dist_when_primary_missing

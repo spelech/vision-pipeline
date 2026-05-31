@@ -97,6 +97,41 @@ def normalize_prompt_templates(value: Any) -> List[Dict[str, str]]:
     return []
 
 
+def derive_prompt_templates_from_pipelines(pipeline_entries: Any) -> List[Dict[str, str]]:
+    if not isinstance(pipeline_entries, list):
+        return []
+
+    templates: List[Dict[str, str]] = []
+    for pipeline in pipeline_entries:
+        if not isinstance(pipeline, dict):
+            continue
+
+        pipeline_id = str(pipeline.get("id", "")).strip()
+        pipeline_name = str(pipeline.get("name", pipeline_id or "Pipeline")).strip()
+        schema = pipeline.get("schema")
+        if not isinstance(schema, dict):
+            continue
+
+        for key, definition in schema.items():
+            if "prompt" not in str(key).lower():
+                continue
+            prompt_default = ""
+            if isinstance(definition, dict):
+                raw_default = definition.get("default")
+                if isinstance(raw_default, str):
+                    prompt_default = raw_default
+
+            templates.append(
+                {
+                    "id": f"{pipeline_id}-{key}" if pipeline_id else str(key),
+                    "name": f"{pipeline_name} {str(key).replace('_', ' ')}".strip(),
+                    "prompt": prompt_default,
+                }
+            )
+
+    return templates
+
+
 def merge_unique_str_lists(*values: Any) -> List[str]:
     merged: List[str] = []
     for value in values:

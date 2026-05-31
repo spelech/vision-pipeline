@@ -32,6 +32,7 @@ from PIL import Image, ImageOps
 
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
+import pipelines
 
 # pylint: disable=too-many-lines
 
@@ -76,6 +77,7 @@ from gmail_routes import build_gmail_router  # pylint: disable=wrong-import-posi
 from logger import session_logger  # pylint: disable=wrong-import-position
 from app_helpers import (  # pylint: disable=wrong-import-position,unused-import
     normalize_prompt_templates,
+    derive_prompt_templates_from_pipelines,
     merge_unique_str_lists,
     get_pipeline,
     _service_target_for_pipeline_id,
@@ -482,10 +484,17 @@ async def list_pipelines(db: AsyncSession = Depends(get_db)) -> PipelineListResp
     try:
         await ensure_pipeline_catalog(db)
         all_pipelines = await list_pipeline_definitions(db, include_system=True)
+        if not all_pipelines:
+            all_pipelines = normalize_pipeline_list(pipelines.get_all_pipelines())
         return PipelineListResponse(success=True, pipelines=all_pipelines)
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error("Error listing DB pipelines: %s", e)
-        return PipelineListResponse(success=False, pipelines=[], error=str(e))
+        fallback = normalize_pipeline_list(pipelines.get_all_pipelines())
+        return PipelineListResponse(
+            success=bool(fallback),
+            pipelines=fallback,
+            error=str(e),
+        )
 
 
 @api_router.put("/pipelines/{pipeline_id}")
@@ -578,8 +587,13 @@ async def list_models(db: AsyncSession = Depends(get_db)) -> ModelListResponse:
 async def get_config(db: AsyncSession = Depends(get_db)) -> ConfigResponse:
     await ensure_app_settings_seed(db)
     settings = await get_app_settings(db)
+    prompt_templates = normalize_prompt_templates(settings.get("prompt_templates"))
+    if not prompt_templates:
+        prompt_templates = derive_prompt_templates_from_pipelines(
+            normalize_pipeline_list(pipelines.get_all_pipelines())
+        )
     data: Dict[str, Any] = {
-        "prompt_templates": normalize_prompt_templates(settings.get("prompt_templates")),
+        "prompt_templates": prompt_templates,
         "service_prompts": merge_service_prompt_configs(settings.get("service_prompts")),
         "model_favorites": merge_unique_str_lists(settings.get("model_favorites")),
         "starred_models": merge_unique_str_lists(settings.get("starred_models")),

@@ -23,6 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir playwright-stealth
 
 COPY src/ ./
+RUN chmod +x /app/docker-entrypoint.sh
 COPY --from=web-build /web/dist /app/web_dist
 
 # FastAPI on 8501 to match existing proxy
@@ -30,4 +31,4 @@ EXPOSE 8501
 
 HEALTHCHECK CMD curl --fail http://localhost:8501/health || exit 1
 
-ENTRYPOINT ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8501"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
