@@ -61,6 +61,17 @@ def test_ocr_backend_accepts_vision_llm_value():
     assert ingestor.ocr_backend() == "vision_llm"
 
 
+def test_receipt_wrangler_configured_accepts_api_token_fallback():
+    ingestor = GmailIngestor(
+        lambda key: {
+            "RECEIPT_WRANGLER_URL": "https://rw.example.com",
+            "RECEIPT_WRANGLER_API_TOKEN": "token-only",
+        }.get(key, "")
+    )
+
+    assert ingestor.receipt_wrangler_configured() is True
+
+
 def test_build_auth_url_and_validation_paths():
     ingestor = GmailIngestor(lambda key: {"GWS_CLIENT_ID": "client-id"}.get(key, ""))
 

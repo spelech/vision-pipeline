@@ -21,7 +21,9 @@ const SECRET_KEYS = [
   "GWS_CLIENT_ID",
   "GWS_CLIENT_SECRET",
   "GWS_REFRESH_TOKEN",
+  "UPCITEMDB_API_KEY",
   "RECEIPT_WRANGLER_URL",
+  "RECEIPT_WRANGLER_API_TOKEN",
   "RECEIPT_WRANGLER_API_KEY",
   "RECEIPT_WRANGLER_GROUP_ID",
   "GMAIL_OCR_BACKEND",
@@ -49,6 +51,7 @@ export function Settings() {
   const [templatesFromConfig, setTemplatesFromConfig] = useState(false);
   const [gmailAutoSyncEnabled, setGmailAutoSyncEnabled] = useState(false);
   const [gmailPollIntervalMinutes, setGmailPollIntervalMinutes] = useState(30);
+  const [connectingGmail, setConnectingGmail] = useState(false);
   const [gmailAutoSyncQuery, setGmailAutoSyncQuery] = useState(
     'has:attachment (subject:receipt OR subject:"order confirmation" OR subject:invoice)'
   );
@@ -178,6 +181,29 @@ export function Settings() {
     }
   };
 
+  const connectGmail = async () => {
+    setConnectingGmail(true);
+    try {
+      const redirectUri = `${window.location.origin}/`;
+      const response = await fetch('/api/gmail/auth-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ redirect_uri: redirectUri, state: 'settings-connect' }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.auth_url) {
+        alert(payload?.detail || payload?.error || 'Failed to create Gmail auth URL.');
+        return;
+      }
+      window.open(String(payload.auth_url), '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to connect Gmail.');
+    } finally {
+      setConnectingGmail(false);
+    }
+  };
+
   return (
     <div className="space-y-12 pb-32">
       <header className="flex justify-between items-end">
@@ -300,6 +326,20 @@ export function Settings() {
       <section className="space-y-6">
         <label className="label-apple">Gmail Auto Sync</label>
         <div className="glass rounded-[3rem] p-10 grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="md:col-span-2 flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
+            <div>
+              <p className="text-xs font-bold text-white/70 tracking-wider">Connect Gmail (OAuth)</p>
+              <p className="text-[10px] text-white/40 mt-1">Launches Google consent flow in a new tab.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void connectGmail()}
+              disabled={connectingGmail}
+              className="btn-apple px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+            >
+              {connectingGmail ? 'Connecting...' : 'Connect Gmail'}
+            </button>
+          </div>
           <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
             <label className="text-xs font-bold text-white/70 tracking-wider">Enable Background Sync</label>
             <input

@@ -525,4 +525,91 @@ describe('Settings', () => {
 
     alertSpy.mockRestore();
   });
+
+  it('Feature: settings-connect-gmail | opens auth url from backend when connect is clicked', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url, opts) => {
+      if (url === '/api/gmail/auth-url' && opts?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ auth_url: 'https://accounts.google.com/o/oauth2/v2/auth?x=1' }),
+        });
+      }
+      if (url === '/api/config') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            secrets_status: {},
+            model_favorites: [],
+            starred_models: [],
+            image_optimization: { max_dimension: 1024, quality: 85 },
+            prompt_templates: [],
+          }),
+        });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, models: [] }) });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, pipelines: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    render(<Settings />);
+    await screen.findByText('System Settings');
+
+    fireEvent.click(screen.getByText('Connect Gmail'));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/gmail/auth-url', expect.objectContaining({ method: 'POST' }));
+    });
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://accounts.google.com/o/oauth2/v2/auth?x=1',
+      '_blank',
+      'noopener,noreferrer'
+    );
+    openSpy.mockRestore();
+  });
+
+  it('Feature: settings-connect-gmail-error | shows alert when auth url request fails', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url, opts) => {
+      if (url === '/api/gmail/auth-url' && opts?.method === 'POST') {
+        return Promise.resolve({
+          ok: false,
+          json: () => Promise.resolve({ detail: 'OAuth is not configured' }),
+        });
+      }
+      if (url === '/api/config') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            secrets_status: {},
+            model_favorites: [],
+            starred_models: [],
+            image_optimization: { max_dimension: 1024, quality: 85 },
+            prompt_templates: [],
+          }),
+        });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, models: [] }) });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, pipelines: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    render(<Settings />);
+    await screen.findByText('System Settings');
+
+    fireEvent.click(screen.getByText('Connect Gmail'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith('OAuth is not configured');
+    });
+    alertSpy.mockRestore();
+  });
 });

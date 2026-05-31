@@ -15,6 +15,15 @@ def _secret_getter(key: str) -> str:
     return data.get(key, "")
 
 
+def _token_secret_getter(key: str) -> str:
+    data = {
+        "RECEIPT_WRANGLER_URL": "https://rw.example.com",
+        "RECEIPT_WRANGLER_API_TOKEN": "rw-token",
+        "RECEIPT_WRANGLER_GROUP_ID": "1",
+    }
+    return data.get(key, "")
+
+
 def test_get_pending_receipts_list_and_wrapped_payloads():
     client = ReceiptWranglerClient(_secret_getter)
 
@@ -76,3 +85,18 @@ def test_quick_scan_empty_bytes_raises_error():
     ):
         with pytest.raises(requests.RequestException):
             client.quick_scan_attachment(b"123", "receipt.jpg")
+
+
+def test_receipt_wrangler_uses_api_token_fallback_when_api_key_missing():
+    client = ReceiptWranglerClient(_token_secret_getter)
+    assert client.configured() is True
+
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = {"ok": True}
+
+    with patch("services.receipt_wrangler.requests.post", return_value=response) as post_mock:
+        client.quick_scan_attachment(b"123", "receipt.jpg")
+
+    headers = post_mock.call_args.kwargs["headers"]
+    assert headers["Authorization"] == "Bearer rw-token"
