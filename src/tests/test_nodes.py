@@ -245,3 +245,28 @@ def test_gmail_search_node_success_and_failure_paths():
 
     with patch.dict("os.environ", {}, clear=True):
         assert nodes.gmail_search_node("subject:receipt") == []
+
+
+def test_get_client_uses_litellm_base_url_and_api_key_overrides():
+    fake_client = object()
+    with patch.dict(
+        "os.environ",
+        {
+            "LLM_BASE_URL": "http://127.0.0.1:4000/v1",
+            "LLM_API_KEY": "litellm-key",
+        },
+        clear=False,
+    ), patch("llm_client.OpenAI", return_value=fake_client) as openai_ctor:
+        client = nodes.get_client()
+
+    assert client is fake_client
+    openai_ctor.assert_called_once_with(
+        base_url="http://127.0.0.1:4000/v1",
+        api_key="litellm-key",
+    )
+
+
+def test_get_client_requires_key_for_openrouter_default():
+    with patch.dict("os.environ", {}, clear=True):
+        with pytest.raises(ValueError, match="Missing LLM API key"):
+            nodes.get_client()
