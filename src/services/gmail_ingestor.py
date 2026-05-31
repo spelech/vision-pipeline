@@ -26,6 +26,12 @@ class GmailIngestor:
     def connected(self) -> bool:
         return bool(self._get_secret("GWS_REFRESH_TOKEN"))
 
+    def receipt_wrangler_configured(self) -> bool:
+        return bool(
+            self._get_secret("RECEIPT_WRANGLER_URL")
+            and self._get_secret("RECEIPT_WRANGLER_API_KEY")
+        )
+
     def build_auth_url(self, redirect_uri: str, state: Optional[str] = None) -> str:
         client_id = self._get_secret("GWS_CLIENT_ID")
         if not client_id:

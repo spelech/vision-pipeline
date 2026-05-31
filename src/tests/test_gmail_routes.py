@@ -29,6 +29,8 @@ async def test_gmail_status_endpoint_reports_settings_and_connection_state():
             ),
         ), patch("app.gmail_ingestor.oauth_configured", return_value=True), patch(
             "app.gmail_ingestor.connected", return_value=False
+        ), patch(
+            "app.gmail_ingestor.receipt_wrangler_configured", return_value=True
         ):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
                 response = await ac.get("/api/gmail/status")
@@ -38,7 +40,9 @@ async def test_gmail_status_endpoint_reports_settings_and_connection_state():
         assert payload["success"] is True
         assert payload["oauth_configured"] is True
         assert payload["connected"] is False
+        assert payload["receipt_wrangler_configured"] is True
         assert payload["processed_message_count"] == 2
+        assert "default" in payload["query_presets"]
     finally:
         app.dependency_overrides.clear()
 
@@ -64,9 +68,56 @@ async def test_gmail_search_endpoint_excludes_processed_ids_by_default():
 
         assert response.status_code == 200
         assert response.json()["message_count"] == 1
-        assert search_receipts.call_args.args[0] == "receipt"
+        assert search_receipts.call_args.args[0].startswith("receipt")
         assert search_receipts.call_args.args[1] == 5
         assert search_receipts.call_args.args[2] == {"seen-1"}
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_gmail_search_builds_query_from_preset_and_filters():
+    mock_session = AsyncMock()
+
+    async def override_get_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with patch("gmail_routes.ensure_app_settings_seed", AsyncMock()), patch(
+            "gmail_routes.get_app_settings",
+            AsyncMock(return_value={"gmail_processed_message_ids": []}),
+        ), patch(
+            "app.gmail_ingestor.search_receipts",
+            return_value={"query": "q", "message_count": 0, "messages": []},
+        ) as search_receipts:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                response = await ac.post(
+                    "/api/gmail/search",
+                    json={
+                        "preset": "orders",
+                        "max_results": 7,
+                        "days_back": 30,
+                        "has_attachment": True,
+                        "include_promotions": False,
+                        "include_social": False,
+                        "sender_includes": ["amazon.com"],
+                        "sender_excludes": ["newsletter@foo.com"],
+                        "subject_terms": ["receipt"],
+                    },
+                )
+
+        assert response.status_code == 200
+        built_query = search_receipts.call_args.args[0]
+        assert "subject:\"your order\"" in built_query
+        assert "newer_than:30d" in built_query
+        assert "has:attachment" in built_query
+        assert "-category:promotions" in built_query
+        assert "-category:social" in built_query
+        assert "from:amazon.com" in built_query
+        assert "-from:newsletter@foo.com" in built_query
+        assert "subject:receipt" in built_query
+        assert search_receipts.call_args.args[1] == 7
     finally:
         app.dependency_overrides.clear()
 

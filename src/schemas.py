@@ -56,6 +56,9 @@ class ConfigSecretStatus(BaseModel):
     GWS_CLIENT_ID: str = ""
     GWS_CLIENT_SECRET: str = ""
     GWS_REFRESH_TOKEN: str = ""
+    RECEIPT_WRANGLER_URL: str = ""
+    RECEIPT_WRANGLER_API_KEY: str = ""
+    RECEIPT_WRANGLER_GROUP_ID: str = ""
 
 
 class ConfigResponse(BaseModel):
@@ -90,6 +93,9 @@ class ConfigUpdateRequest(BaseModel):
     GWS_CLIENT_ID: Optional[str] = None
     GWS_CLIENT_SECRET: Optional[str] = None
     GWS_REFRESH_TOKEN: Optional[str] = None
+    RECEIPT_WRANGLER_URL: Optional[str] = None
+    RECEIPT_WRANGLER_API_KEY: Optional[str] = None
+    RECEIPT_WRANGLER_GROUP_ID: Optional[str] = None
 
 
 class ServiceMappingInfo(BaseModel):

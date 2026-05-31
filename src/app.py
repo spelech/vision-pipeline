@@ -138,6 +138,9 @@ CONFIG_SECRET_KEYS = [
     "GWS_CLIENT_ID",
     "GWS_CLIENT_SECRET",
     "GWS_REFRESH_TOKEN",
+    "RECEIPT_WRANGLER_URL",
+    "RECEIPT_WRANGLER_API_KEY",
+    "RECEIPT_WRANGLER_GROUP_ID",
 ]
 
 def get_secret_value(key: str) -> str:
