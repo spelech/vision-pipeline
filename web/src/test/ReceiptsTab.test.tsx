@@ -195,4 +195,71 @@ describe('ReceiptsTab', () => {
       expect(onToast).toHaveBeenCalledWith('Action failed', 'error');
     });
   });
+
+  it('Feature: receipts-rw-process-pending | processes pending receipt wrangler receipts', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify({ oauth_configured: true, connected: true })),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify({ processed_count: 3 })),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify({ oauth_configured: true, connected: true })),
+      });
+
+    const onToast = vi.fn();
+    render(<ReceiptsTab onToast={onToast} />);
+
+    await screen.findByText('Connected');
+    fireEvent.click(screen.getByText('Process Pending RW Receipts'));
+
+    await waitFor(() => {
+      expect(onToast).toHaveBeenCalledWith('Processed 3 pending Receipt Wrangler receipts', 'success');
+    });
+  });
+
+  it('Feature: receipts-rw-process-error | surfaces API detail when pending processing fails', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify({ oauth_configured: true, connected: true })),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        text: () => Promise.resolve(JSON.stringify({ detail: 'Receipt Wrangler is not configured' })),
+      });
+
+    const onToast = vi.fn();
+    render(<ReceiptsTab onToast={onToast} />);
+
+    await screen.findByText('Connected');
+    fireEvent.click(screen.getByText('Process Pending RW Receipts'));
+
+    await waitFor(() => {
+      expect(onToast).toHaveBeenCalledWith('Receipt Wrangler is not configured', 'error');
+    });
+  });
+
+  it('Feature: receipts-rw-process-network-error | shows generic error when pending processing request throws', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify({ oauth_configured: true, connected: true })),
+      })
+      .mockRejectedValueOnce(new Error('network down'));
+
+    const onToast = vi.fn();
+    render(<ReceiptsTab onToast={onToast} />);
+
+    await screen.findByText('Connected');
+    fireEvent.click(screen.getByText('Process Pending RW Receipts'));
+
+    await waitFor(() => {
+      expect(onToast).toHaveBeenCalledWith('Action failed', 'error');
+    });
+  });
 });

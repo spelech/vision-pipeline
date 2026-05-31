@@ -32,6 +32,7 @@ export function ReceiptsTab({ onToast }: ReceiptsTabProps) {
   const [status, setStatus] = useState<GmailStatusPayload>({});
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [processingPendingReceipts, setProcessingPendingReceipts] = useState(false);
   const [messages, setMessages] = useState<GmailMessage[]>([]);
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
   const [preset, setPreset] = useState('default');
@@ -105,6 +106,30 @@ export function ReceiptsTab({ onToast }: ReceiptsTabProps) {
     } catch (error) {
       console.error(error);
       onToast('Action failed', 'error');
+    }
+  };
+
+  const processPendingReceipts = async () => {
+    setProcessingPendingReceipts(true);
+    try {
+      const response = await fetch('/api/gmail/receipt-wrangler-process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 25, mark_resolved: true }),
+      });
+      const payload = await parseJsonSafe<{ detail?: string; processed_count?: number }>(response);
+      if (!response.ok) {
+        onToast(payload.detail || 'Action failed', 'error');
+        return;
+      }
+      const processedCount = Number(payload.processed_count || 0);
+      onToast(`Processed ${processedCount} pending Receipt Wrangler receipts`, 'success');
+      await loadStatus();
+    } catch (error) {
+      console.error(error);
+      onToast('Action failed', 'error');
+    } finally {
+      setProcessingPendingReceipts(false);
     }
   };
 
@@ -199,6 +224,13 @@ export function ReceiptsTab({ onToast }: ReceiptsTabProps) {
       </div>
 
       <div className="flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={() => void processPendingReceipts()}
+          className="bg-amber-600 hover:bg-amber-500 rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-widest"
+        >
+          {processingPendingReceipts ? 'Processing Pending...' : 'Process Pending RW Receipts'}
+        </button>
         <button
           type="button"
           onClick={() => void withSelection('/api/gmail/ingest-direct', 'Direct ingestion started', { mark_processed: true })}
