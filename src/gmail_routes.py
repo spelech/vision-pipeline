@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, List, Optional, Set, cast
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,6 +71,13 @@ class GmailMarkProcessedRequest(BaseModel):
 
 class GmailReceiptWranglerSyncRequest(BaseModel):
     message_ids: List[str]
+
+
+class GmailDirectIngestRequest(BaseModel):
+    message_ids: List[str]
+    pipeline_id: str = "default"
+    settings: dict[str, Any] = {}
+    mark_processed: bool = True
 
 
 def _coerce_processed_ids(raw_value: Any) -> List[str]:
@@ -159,6 +166,7 @@ def build_gmail_router(
     get_db: Callable[[], Any],
     gmail_ingestor: Any,
     receipt_wrangler_client: Any,
+    ingest_direct_receipts: Callable[..., Any],
     upsert_secret: Callable[[AsyncSession, str, str], Any],
 ) -> APIRouter:
     # pylint: disable=too-many-statements
@@ -423,6 +431,61 @@ def build_gmail_router(
         return {
             "success": True,
             "processed_message_count": len(merged_ids),
+        }
+
+    @router.post("/ingest-direct")
+    async def gmail_ingest_direct(
+        data: GmailDirectIngestRequest,
+        background_tasks: BackgroundTasks,
+        db: AsyncSession = Depends(get_db),
+    ):
+        selected_message_ids = _coerce_processed_ids(data.message_ids)
+        if not selected_message_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="At least one Gmail message must be selected",
+            )
+
+        receipts_payload: List[dict[str, Any]] = []
+        failed: List[dict[str, str]] = []
+        for message_id in selected_message_ids:
+            try:
+                message = await run_in_threadpool(gmail_ingestor.get_message, message_id)
+                line_items = gmail_ingestor.extract_line_items_from_message(message)
+                receipts_payload.append(
+                    {
+                        "message": message,
+                        "line_items": line_items,
+                    }
+                )
+            except (requests.RequestException, ValueError) as exc:
+                failed.append({"message_id": message_id, "error": str(exc)})
+
+        ingestion_result = await ingest_direct_receipts(
+            db,
+            background_tasks,
+            receipts_payload,
+            data.pipeline_id,
+            data.settings,
+        )
+
+        if data.mark_processed:
+            settings = await get_app_settings(db)
+            existing_ids = _coerce_processed_ids(settings.get(GMAIL_PROCESSED_IDS_KEY))
+            successful_ids = [
+                str(receipt.get("message", {}).get("message_id", ""))
+                for receipt in receipts_payload
+                if receipt.get("line_items")
+            ]
+            merged_ids = _merge_processed_ids(existing_ids, _coerce_processed_ids(successful_ids))
+            await upsert_app_setting(db, GMAIL_PROCESSED_IDS_KEY, merged_ids)
+
+        await db.commit()
+        return {
+            "success": len(failed) == 0,
+            "selected_count": len(selected_message_ids),
+            "failed": failed,
+            **ingestion_result,
         }
 
     return router

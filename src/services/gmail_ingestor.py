@@ -1,5 +1,6 @@
 import logging
 import base64
+import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Callable, Dict, List, Optional, Set
@@ -13,6 +14,15 @@ GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
+PRICE_PATTERN = re.compile(r"\$?\d{1,6}\.\d{2}")
+IGNORE_LINE_PREFIXES = (
+    "subtotal",
+    "tax",
+    "shipping",
+    "total",
+    "order total",
+    "discount",
+)
 
 
 class GmailIngestor:
@@ -153,6 +163,38 @@ class GmailIngestor:
         return attachments
 
     @staticmethod
+    def _collect_plain_text(payload: Dict[str, Any]) -> str:
+        text_parts: List[str] = []
+
+        def decode_part_data(part: Dict[str, Any]) -> str:
+            body_raw = part.get("body")
+            body = body_raw if isinstance(body_raw, dict) else {}
+            encoded = body.get("data")
+            if not isinstance(encoded, str) or not encoded:
+                return ""
+            try:
+                decoded = GmailIngestor._decode_base64url(encoded)
+                return decoded.decode("utf-8", errors="ignore")
+            except (ValueError, UnicodeDecodeError):
+                return ""
+
+        def visit(part: Dict[str, Any]) -> None:
+            mime_type = str(part.get("mimeType") or "")
+            if mime_type.startswith("text/plain"):
+                text_value = decode_part_data(part)
+                if text_value:
+                    text_parts.append(text_value)
+            sub_parts_raw = part.get("parts")
+            sub_parts = sub_parts_raw if isinstance(sub_parts_raw, list) else []
+            for sub_part in sub_parts:
+                if isinstance(sub_part, dict):
+                    visit(sub_part)
+
+        visit(payload)
+        merged = "\n".join(text_parts).strip()
+        return merged[:10000]
+
+    @staticmethod
     def _parse_message(message: Dict[str, Any]) -> Dict[str, Any]:
         payload_raw = message.get("payload")
         payload: Dict[str, Any] = payload_raw if isinstance(payload_raw, dict) else {}
@@ -176,6 +218,7 @@ class GmailIngestor:
                 sent_at = ""
 
         attachments = GmailIngestor._collect_attachment_parts(payload)
+        plain_text = GmailIngestor._collect_plain_text(payload)
 
         return {
             "message_id": str(message.get("id") or ""),
@@ -187,7 +230,62 @@ class GmailIngestor:
             "internal_date": str(message.get("internalDate") or ""),
             "attachments": attachments,
             "has_attachments": len(attachments) > 0,
+            "plain_text": plain_text,
         }
+
+    @staticmethod
+    def extract_line_items_from_message(message: Dict[str, Any]) -> List[Dict[str, Any]]:
+        # pylint: disable=too-many-locals
+        subject = str(message.get("subject") or "").strip()
+        snippet = str(message.get("snippet") or "").strip()
+        plain_text = str(message.get("plain_text") or "").strip()
+
+        candidate_lines: List[str] = []
+        for source_text in [plain_text, snippet]:
+            if not source_text:
+                continue
+            for line in source_text.splitlines():
+                normalized = " ".join(line.split()).strip()
+                if normalized:
+                    candidate_lines.append(normalized)
+
+        items: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for line in candidate_lines:
+            line_lower = line.lower()
+            if any(line_lower.startswith(prefix) for prefix in IGNORE_LINE_PREFIXES):
+                continue
+            has_price = bool(PRICE_PATTERN.search(line))
+            if not has_price and len(line) < 12:
+                continue
+
+            product_name = line
+            price_match = PRICE_PATTERN.search(line)
+            price_value: Optional[str] = None
+            if price_match:
+                price_value = price_match.group(0)
+                product_name = line[:price_match.start()].strip(" -:") or line
+
+            normalized_key = product_name.lower()
+            if normalized_key in seen:
+                continue
+            seen.add(normalized_key)
+
+            items.append(
+                {
+                    "name": product_name,
+                    "line_text": line,
+                    "price": price_value,
+                }
+            )
+            if len(items) >= 50:
+                break
+
+        if items:
+            return items
+
+        fallback_name = subject or snippet or "Receipt Item"
+        return [{"name": fallback_name, "line_text": fallback_name, "price": None}]
 
     def search_receipts(
         self,

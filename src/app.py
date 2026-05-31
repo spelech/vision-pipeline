@@ -247,6 +247,12 @@ def build_review_image_data_uri(img: Image.Image) -> str:
     return encode_image_bytes_to_data_uri(out.getvalue(), mime="image/jpeg")
 
 
+def build_seed_image_data_uri() -> str:
+    """Generate a tiny placeholder image for text-only receipt items."""
+    img = Image.new("RGB", (64, 64), color=(250, 250, 250))
+    return build_review_image_data_uri(img)
+
+
 def item_source_image_data_uri(item: Any) -> Optional[str]:
     raw_value = getattr(item, "raw_image_path", None)
     preview_value = getattr(item, "image_path", None)
@@ -1047,7 +1053,7 @@ async def process_item_task(
         item_id: int,
         pipeline_id: str = "default",
         settings_str: str = "{}"):
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-locals,too-many-statements
     try:
         settings = json.loads(settings_str)
     except json.JSONDecodeError:
@@ -1069,6 +1075,12 @@ async def process_item_task(
         res = await db.execute(select(Batch).where(Batch.id == item.batch_id))
         batch = res.scalar_one_or_none()
         batch_text = batch.description if batch else None
+        item_seed_text = ""
+        if isinstance(item.ai_output, dict):
+            item_seed_text = str(item.ai_output.get("gmail_seed_text") or "").strip()
+        combined_text = "\n".join(
+            [part for part in [batch_text or "", item_seed_text] if part]
+        ).strip()
 
         try:
             image_data_uri = item_source_image_data_uri(item)
@@ -1078,7 +1090,13 @@ async def process_item_task(
             image_bytes = decode_data_uri_to_bytes(image_data_uri)
             img = Image.open(io.BytesIO(image_bytes))
             img = ImageOps.exif_transpose(img)  # type: ignore
-            results = await run_in_threadpool(core_pipeline.run, img, batch_text, settings, log_it)
+            results = await run_in_threadpool(
+                core_pipeline.run,
+                img,
+                combined_text or None,
+                settings,
+                log_it,
+            )
             results["review_image_data_uri"] = build_review_image_data_uri(img)
 
             enrichment_tasks = [
@@ -1136,6 +1154,99 @@ async def process_item_task(
 
         session_logger.end_session(sid)
         await db.commit()
+
+
+async def ingest_gmail_receipts_direct(
+    db: AsyncSession,
+    background_tasks: BackgroundTasks,
+    receipts_payload: List[Dict[str, Any]],
+    pipeline_id: str,
+    settings: Dict[str, Any],
+) -> Dict[str, Any]:
+    # pylint: disable=too-many-locals,too-many-statements
+    if not receipts_payload:
+        return {"batch_id": None, "created_items": 0, "receipt_count": 0}
+
+    batch = Batch(
+        name=f"Gmail Receipts {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        description="Gmail direct receipt ingestion",
+        status="processing",
+    )
+    db.add(batch)
+    await db.commit()
+    await db.refresh(batch)
+
+    seed_image_uri = build_seed_image_data_uri()
+    settings_str = json.dumps(settings if isinstance(settings, dict) else {})
+    created_items = 0
+
+    for receipt in receipts_payload:
+        message_raw = receipt.get("message")
+        message: Dict[str, Any] = message_raw if isinstance(message_raw, dict) else {}
+        line_items_raw = receipt.get("line_items")
+        line_items: List[Any] = line_items_raw if isinstance(line_items_raw, list) else []
+        if not line_items:
+            continue
+
+        subject = str(message.get("subject") or "").strip()
+        sender = str(message.get("from") or "").strip()
+        snippet = str(message.get("snippet") or "").strip()
+        message_id = str(message.get("message_id") or "").strip()
+
+        for line_item in line_items:
+            if not isinstance(line_item, dict):
+                continue
+            item_name = str(line_item.get("name") or "Receipt Item").strip() or "Receipt Item"
+            line_text_value = str(line_item.get("line_text") or "").strip()
+            price_value = str(line_item.get("price") or "").strip()
+            seed_text = "\n".join(
+                [
+                    f"Receipt Message Subject: {subject}",
+                    f"Sender: {sender}",
+                    f"Snippet: {snippet}",
+                    f"Line Item: {item_name}",
+                    f"Line Text: {line_text_value}",
+                    f"Price: {price_value}",
+                ]
+            ).strip()
+
+            ai_seed = {
+                "source": "gmail_direct",
+                "gmail_message_id": message_id,
+                "gmail_subject": subject,
+                "gmail_sender": sender,
+                "receipt_line_item": line_item,
+                "gmail_seed_text": seed_text,
+            }
+
+            item = Item(
+                batch_id=batch.id,
+                image_path=seed_image_uri,
+                raw_image_path=seed_image_uri,
+                status="processing",
+                ai_output=ai_seed,
+                product_type="product",
+            )
+            db.add(item)
+            await db.commit()
+            await db.refresh(item)
+            background_tasks.add_task(
+                process_item_task_safe,
+                int(item.id),
+                pipeline_id,
+                settings_str,
+            )
+            created_items += 1
+
+    await db.execute(
+        update(Batch).where(Batch.id == batch.id).values(status="completed")
+    )
+    await db.commit()
+    return {
+        "batch_id": batch.id,
+        "created_items": created_items,
+        "receipt_count": len(receipts_payload),
+    }
 
 
 async def process_item_task_safe(
@@ -1241,6 +1352,7 @@ api_router.include_router(
         get_db=get_db,
         gmail_ingestor=gmail_ingestor,
         receipt_wrangler_client=receipt_wrangler_client,
+        ingest_direct_receipts=ingest_gmail_receipts_direct,
         upsert_secret=upsert_secret,
     )
 )

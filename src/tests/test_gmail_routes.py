@@ -239,3 +239,19 @@ async def test_receipt_wrangler_sync_processes_selected_message_attachments():
         assert mock_session.commit.await_count == 1
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_gmail_direct_ingest_requires_selection():
+    mock_session = AsyncMock()
+
+    async def override_get_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.post("/api/gmail/ingest-direct", json={"message_ids": []})
+        assert response.status_code == 400
+    finally:
+        app.dependency_overrides.clear()
