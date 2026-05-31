@@ -1,4 +1,5 @@
 from pipelines.receipt import ReceiptPipeline
+import os
 from unittest.mock import patch
 
 
@@ -87,7 +88,8 @@ def test_receipt_pipeline_default_sequence_skips_initial_upc_without_barcode(
     }
     mock_search.return_value = [{"url": "https://example.com/bread"}]
 
-    pipeline.run(image=object(), settings=None)
+    with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=False):
+        pipeline.run(image=object(), settings=None)
 
     # In the default receipt node order, UPC runs before vision.
     # With no scanner result, it should skip UPC at that stage.

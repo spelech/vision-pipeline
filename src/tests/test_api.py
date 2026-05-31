@@ -42,7 +42,7 @@ async def test_identify_endpoint():
         "searxng_results": []
     }
 
-    with patch('app.AsyncSessionLocal') as mock_session_factory:
+    with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=False), patch('app.AsyncSessionLocal') as mock_session_factory:
         mock_session = AsyncMock()
         mock_session.add = MagicMock()
         mock_session_factory.return_value.__aenter__.return_value = mock_session

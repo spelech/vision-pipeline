@@ -1,4 +1,5 @@
 import pytest
+import os
 from unittest.mock import patch
 from PIL import Image
 
@@ -111,7 +112,8 @@ def test_pipeline_uses_default_sequence_when_settings_missing(
     mock_vision.return_value = {"product_name": "Widget", "search_query": "widget"}
     mock_search.return_value = []
 
-    results = pipeline.run(image=mock_image, settings=None)
+    with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=False):
+        results = pipeline.run(image=mock_image, settings=None)
 
     assert mock_vision.called
     assert mock_search.called
