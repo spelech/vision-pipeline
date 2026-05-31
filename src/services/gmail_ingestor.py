@@ -1,4 +1,5 @@
 import logging
+import base64
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Callable, Dict, List, Optional, Set
@@ -112,6 +113,11 @@ class GmailIngestor:
         return response.json()
 
     @staticmethod
+    def _decode_base64url(data: str) -> bytes:
+        padded = data + "=" * (-len(data) % 4)
+        return base64.urlsafe_b64decode(padded.encode("utf-8"))
+
+    @staticmethod
     def _extract_header(headers: List[Dict[str, str]], name: str) -> str:
         lower_name = name.lower()
         for header in headers:
@@ -222,3 +228,24 @@ class GmailIngestor:
             "messages": detailed_messages,
             "fetched_at": datetime.now(timezone.utc).isoformat(),
         }
+
+    def get_message(self, message_id: str) -> Dict[str, Any]:
+        if not message_id:
+            raise ValueError("Missing Gmail message id")
+        detailed = self._api_get(f"messages/{message_id}", params={"format": "full"})
+        return self._parse_message(detailed)
+
+    def download_attachment(self, message_id: str, attachment_id: str) -> bytes:
+        if not message_id:
+            raise ValueError("Missing Gmail message id")
+        if not attachment_id:
+            raise ValueError("Missing Gmail attachment id")
+
+        attachment = self._api_get(
+            f"messages/{message_id}/attachments/{attachment_id}",
+            params=None,
+        )
+        encoded = attachment.get("data")
+        if not isinstance(encoded, str) or not encoded:
+            raise ValueError("Gmail attachment payload missing data")
+        return self._decode_base64url(encoded)

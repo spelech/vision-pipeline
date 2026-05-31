@@ -160,14 +160,82 @@ async def test_gmail_sync_marks_messages_processed_when_requested():
 
 @pytest.mark.asyncio
 async def test_receipt_wrangler_sync_requires_explicit_selection_and_is_separate():
+    mock_session = AsyncMock()
+
+    async def override_get_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = override_get_db
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         missing_selection = await ac.post("/api/gmail/receipt-wrangler-sync", json={"message_ids": []})
         assert missing_selection.status_code == 400
 
-        response = await ac.post(
-            "/api/gmail/receipt-wrangler-sync",
-            json={"message_ids": ["msg-1", "msg-2"]},
-        )
+        with patch("app.receipt_wrangler_client.configured", return_value=False):
+            response = await ac.post(
+                "/api/gmail/receipt-wrangler-sync",
+                json={"message_ids": ["msg-1", "msg-2"]},
+            )
 
-    assert response.status_code == 501
-    assert "Selective Receipt Wrangler sync" in response.json()["detail"]
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert "Receipt Wrangler is not configured" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_receipt_wrangler_sync_processes_selected_message_attachments():
+    mock_session = AsyncMock()
+
+    async def override_get_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with patch("gmail_routes.ensure_app_settings_seed", AsyncMock()), patch(
+            "gmail_routes.get_app_settings",
+            AsyncMock(return_value={"gmail_processed_message_ids": ["old-1"]}),
+        ), patch(
+            "gmail_routes.upsert_app_setting", AsyncMock()
+        ) as upsert_app_setting, patch(
+            "app.receipt_wrangler_client.configured", return_value=True
+        ), patch(
+            "app.receipt_wrangler_client.default_group_id", return_value="1"
+        ), patch(
+            "app.gmail_ingestor.get_message",
+            return_value={
+                "message_id": "msg-1",
+                "attachments": [
+                    {
+                        "attachment_id": "att-1",
+                        "filename": "receipt.pdf",
+                        "mime_type": "application/pdf",
+                    }
+                ],
+            },
+        ) as get_message, patch(
+            "app.gmail_ingestor.download_attachment",
+            return_value=b"pdf-bytes",
+        ) as download_attachment, patch(
+            "app.receipt_wrangler_client.quick_scan_attachment",
+            return_value={"id": 42},
+        ) as quick_scan:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                response = await ac.post(
+                    "/api/gmail/receipt-wrangler-sync",
+                    json={"message_ids": ["msg-1"]},
+                )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["selected_count"] == 1
+        assert payload["synced_count"] == 1
+        assert payload["failed"] == []
+        get_message.assert_called_once_with("msg-1")
+        download_attachment.assert_called_once_with("msg-1", "att-1")
+        quick_scan.assert_called_once()
+        processed_update = upsert_app_setting.await_args_list[0]
+        assert processed_update.args[1] == "gmail_processed_message_ids"
+        assert processed_update.args[2] == ["old-1", "msg-1"]
+        assert mock_session.commit.await_count == 1
+    finally:
+        app.dependency_overrides.clear()

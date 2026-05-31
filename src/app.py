@@ -70,6 +70,7 @@ from services.homebox import HomeboxService  # pylint: disable=wrong-import-posi
 from services.mealie import MealieService  # pylint: disable=wrong-import-position
 from services.enrichers import PriceBuddyService, ChangeDetectionService  # pylint: disable=wrong-import-position
 from services.gmail_ingestor import GmailIngestor  # pylint: disable=wrong-import-position
+from services.receipt_wrangler import ReceiptWranglerClient  # pylint: disable=wrong-import-position
 from gmail_routes import build_gmail_router  # pylint: disable=wrong-import-position
 from logger import session_logger  # pylint: disable=wrong-import-position
 from app_helpers import (  # pylint: disable=wrong-import-position,unused-import
@@ -191,6 +192,7 @@ SERVICES = {
     "changedetection": ChangeDetectionService()
 }
 gmail_ingestor = GmailIngestor(get_secret_value)
+receipt_wrangler_client = ReceiptWranglerClient(get_secret_value)
 
 REVIEW_IMAGE_MAX_DIM = int(os.getenv("REVIEW_IMAGE_MAX_DIM", "1280"))
 REVIEW_IMAGE_JPEG_QUALITY = int(os.getenv("REVIEW_IMAGE_JPEG_QUALITY", "72"))
@@ -1238,6 +1240,7 @@ api_router.include_router(
     build_gmail_router(
         get_db=get_db,
         gmail_ingestor=gmail_ingestor,
+        receipt_wrangler_client=receipt_wrangler_client,
         upsert_secret=upsert_secret,
     )
 )

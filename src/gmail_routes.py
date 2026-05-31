@@ -158,6 +158,7 @@ def _build_query(data: Any) -> str:
 def build_gmail_router(
     get_db: Callable[[], Any],
     gmail_ingestor: Any,
+    receipt_wrangler_client: Any,
     upsert_secret: Callable[[AsyncSession, str, str], Any],
 ) -> APIRouter:
     # pylint: disable=too-many-statements
@@ -246,7 +247,11 @@ def build_gmail_router(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/receipt-wrangler-sync")
-    async def gmail_receipt_wrangler_sync(data: GmailReceiptWranglerSyncRequest):
+    async def gmail_receipt_wrangler_sync(
+        data: GmailReceiptWranglerSyncRequest,
+        db: AsyncSession = Depends(get_db),
+    ):
+        # pylint: disable=too-many-locals
         selected_message_ids = _coerce_processed_ids(data.message_ids)
         if not selected_message_ids:
             raise HTTPException(
@@ -254,13 +259,104 @@ def build_gmail_router(
                 detail="At least one Gmail message must be selected",
             )
 
-        raise HTTPException(
-            status_code=501,
-            detail=(
-                "Selective Receipt Wrangler sync is not implemented yet. "
-                "Use this route from the UI once the Receipt Wrangler client is added."
-            ),
+        if not receipt_wrangler_client.configured():
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Receipt Wrangler is not configured. "
+                    "Set RECEIPT_WRANGLER_URL and RECEIPT_WRANGLER_API_KEY first."
+                ),
+            )
+
+        synced = []
+        skipped = []
+        failed = []
+
+        for message_id in selected_message_ids:
+            try:
+                message = await run_in_threadpool(gmail_ingestor.get_message, message_id)
+            except (requests.RequestException, ValueError) as exc:
+                failed.append({"message_id": message_id, "error": str(exc)})
+                continue
+
+            attachments = message.get("attachments")
+            if not isinstance(attachments, list) or not attachments:
+                skipped.append({"message_id": message_id, "reason": "No attachments"})
+                continue
+
+            message_synced_count = 0
+            for attachment in attachments:
+                if not isinstance(attachment, dict):
+                    continue
+                attachment_id = str(attachment.get("attachment_id") or "").strip()
+                filename = str(attachment.get("filename") or "receipt.bin").strip() or "receipt.bin"
+                mime_type = str(attachment.get("mime_type") or "application/octet-stream")
+                if not attachment_id:
+                    continue
+
+                try:
+                    attachment_bytes = await run_in_threadpool(
+                        gmail_ingestor.download_attachment,
+                        message_id,
+                        attachment_id,
+                    )
+                    rw_result = await run_in_threadpool(
+                        receipt_wrangler_client.quick_scan_attachment,
+                        attachment_bytes,
+                        filename,
+                        receipt_wrangler_client.default_group_id(),
+                        mime_type,
+                    )
+                    synced.append(
+                        {
+                            "message_id": message_id,
+                            "attachment_id": attachment_id,
+                            "filename": filename,
+                            "result": rw_result,
+                        }
+                    )
+                    message_synced_count += 1
+                except (requests.RequestException, ValueError) as exc:
+                    failed.append(
+                        {
+                            "message_id": message_id,
+                            "attachment_id": attachment_id,
+                            "filename": filename,
+                            "error": str(exc),
+                        }
+                    )
+
+            if message_synced_count == 0:
+                skipped.append(
+                    {
+                        "message_id": message_id,
+                        "reason": "No syncable attachments",
+                    }
+                )
+
+        await ensure_app_settings_seed(db)
+        settings = await get_app_settings(db)
+        existing_ids = _coerce_processed_ids(settings.get(GMAIL_PROCESSED_IDS_KEY))
+        successful_message_ids = list(
+            dict.fromkeys([
+                str(item.get("message_id"))
+                for item in synced
+                if isinstance(item, dict) and item.get("message_id")
+            ])
         )
+        if successful_message_ids:
+            merged_ids = _merge_processed_ids(existing_ids, successful_message_ids)
+            await upsert_app_setting(db, GMAIL_PROCESSED_IDS_KEY, merged_ids)
+            await db.commit()
+
+        return {
+            "success": len(failed) == 0,
+            "selected_count": len(selected_message_ids),
+            "synced_count": len(synced),
+            "synced": synced,
+            "skipped": skipped,
+            "failed": failed,
+        }
 
     @router.post("/sync")
     async def gmail_sync(
