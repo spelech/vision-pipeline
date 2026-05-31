@@ -1,6 +1,6 @@
 {
   "name": "vision-pipeline",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "description": "An automated product identification and enrichment system that bridges physical items with digital home services.",
   "main": "index.js",
   "directories": {

@@ -1,4 +1,4 @@
-# Vision Pipeline v3.3.0
+# Vision Pipeline v3.5.0
 
 An automated product identification and enrichment system that bridges physical items with digital home services.
 
@@ -73,6 +73,14 @@ Optional docs consistency check:
 ```bash
 node scripts/update-test-requirements-index.mjs --check
 ```
+
+## 📦 Release Hygiene
+When merging feature work into the main branch:
+
+- Bump version numbers in `src/app.py`, `package.json`, and `web/package.json`.
+- Add an entry to `CHANGELOG.md` describing user-visible backend, frontend, and pipeline updates.
+- Update feature-level docs (`README.md`, `FEATURES.md`, or specific files under `docs/`) for any behavior changes.
+- Run lint, typecheck, and tests before pushing the merge.
 
 ## 🗃 Database Migrations
 Schema changes are now managed with Alembic.
