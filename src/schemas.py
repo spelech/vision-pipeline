@@ -70,6 +70,10 @@ class ConfigResponse(BaseModel):
     starred_models: Optional[List[str]] = None
     image_optimization: Optional[Dict[str, Any]] = None
     custom_pipelines: Optional[List[Dict[str, Any]]] = None
+    gmail_auto_sync_enabled: Optional[bool] = None
+    gmail_poll_interval_minutes: Optional[int] = None
+    gmail_auto_sync_query: Optional[str] = None
+    gmail_auto_sync_max_results: Optional[int] = None
     secrets_status: Optional[Dict[str, str]] = None
 
 
@@ -80,6 +84,10 @@ class ConfigUpdateRequest(BaseModel):
     starred_models: Optional[List[str]] = None
     image_optimization: Optional[Dict[str, Any]] = None
     custom_pipelines: Optional[List[Dict[str, Any]]] = None
+    gmail_auto_sync_enabled: Optional[bool] = None
+    gmail_poll_interval_minutes: Optional[int] = None
+    gmail_auto_sync_query: Optional[str] = None
+    gmail_auto_sync_max_results: Optional[int] = None
     # Secrets
     OPENROUTER_API_KEY: Optional[str] = None
     SEARXNG_URL: Optional[str] = None

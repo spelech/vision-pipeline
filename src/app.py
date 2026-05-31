@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, cast
 import requests
+from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore[import-untyped]
 from pydantic import BaseModel
 from fastapi import (
     FastAPI,
@@ -157,6 +158,11 @@ def set_secret_value(key: str, val: str) -> None:
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("VisionAPI")
+RUNTIME_STATE: Dict[str, Any] = {"gmail_scheduler": None}
+GMAIL_AUTO_SYNC_JOB_ID = "gmail-auto-sync"
+GMAIL_AUTO_SYNC_DEFAULT_QUERY = (
+    'has:attachment (subject:receipt OR subject:"order confirmation" OR subject:invoice)'
+)
 
 # --- Lifespan ---
 
@@ -175,7 +181,13 @@ async def lifespan(_app: FastAPI):
                 logger.info("Loaded encrypted secret: %s", secret.key)
             except ValueError as e:  # Fernet InvalidToken extends ValueError
                 logger.error("Failed to decrypt secret %s: %s", secret.key, e)
-    yield
+    await configure_gmail_auto_sync_scheduler()
+    try:
+        yield
+    finally:
+        scheduler = RUNTIME_STATE.get("gmail_scheduler")
+        if isinstance(scheduler, AsyncIOScheduler) and scheduler.running:
+            scheduler.shutdown(wait=False)
 
 # --- Setup ---
 app = FastAPI(
@@ -220,6 +232,105 @@ app.mount("/uploads", StaticFiles(directory="data/uploads"), name="uploads")
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
+
+
+def _parse_int_setting(value: Any, default: int, min_value: int, max_value: int) -> int:
+    try:
+        parsed = int(value if value is not None else default)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(min_value, min(parsed, max_value))
+
+
+async def run_gmail_auto_sync_once() -> None:
+    async with AsyncSessionLocal() as db:
+        await ensure_app_settings_seed(db)
+        settings = await get_app_settings(db)
+
+        enabled = bool(settings.get("gmail_auto_sync_enabled", False))
+        if not enabled:
+            return
+
+        query = str(
+            settings.get("gmail_auto_sync_query") or GMAIL_AUTO_SYNC_DEFAULT_QUERY
+        ).strip()
+        max_results = _parse_int_setting(
+            settings.get("gmail_auto_sync_max_results"),
+            default=25,
+            min_value=1,
+            max_value=100,
+        )
+
+        if not gmail_ingestor.oauth_configured() or not gmail_ingestor.connected():
+            await upsert_app_setting(
+                db,
+                "gmail_last_error",
+                "Gmail auto-sync skipped: OAuth not configured or connected",
+            )
+            await db.commit()
+            return
+
+        try:
+            result = await run_in_threadpool(
+                gmail_ingestor.search_receipts,
+                query,
+                max_results,
+                set(),
+            )
+            await upsert_app_setting(
+                db,
+                "gmail_last_sync_at",
+                datetime.now(timezone.utc).isoformat(),
+            )
+            await upsert_app_setting(db, "gmail_last_error", "")
+            await upsert_app_setting(
+                db,
+                "gmail_last_auto_sync_count",
+                int(result.get("message_count") or 0),
+            )
+        except (requests.RequestException, ValueError) as exc:
+            await upsert_app_setting(db, "gmail_last_error", str(exc))
+
+        await db.commit()
+
+
+async def configure_gmail_auto_sync_scheduler() -> None:
+    async with AsyncSessionLocal() as db:
+        await ensure_app_settings_seed(db)
+        settings = await get_app_settings(db)
+
+    interval_minutes = _parse_int_setting(
+        settings.get("gmail_poll_interval_minutes"),
+        default=30,
+        min_value=1,
+        max_value=1440,
+    )
+    enabled = bool(settings.get("gmail_auto_sync_enabled", False))
+
+    scheduler_raw = RUNTIME_STATE.get("gmail_scheduler")
+    scheduler = (
+        scheduler_raw
+        if scheduler_raw and hasattr(scheduler_raw, "add_job") and hasattr(scheduler_raw, "get_job")
+        else None
+    )
+    if scheduler is None:
+        scheduler = AsyncIOScheduler(timezone="UTC")
+        scheduler.start()
+        RUNTIME_STATE["gmail_scheduler"] = scheduler
+
+    if scheduler.get_job(GMAIL_AUTO_SYNC_JOB_ID):
+        scheduler.remove_job(GMAIL_AUTO_SYNC_JOB_ID)
+
+    if enabled:
+        scheduler.add_job(
+            run_gmail_auto_sync_once,
+            trigger="interval",
+            minutes=interval_minutes,
+            id=GMAIL_AUTO_SYNC_JOB_ID,
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+        )
 
 
 def encode_image_bytes_to_data_uri(image_bytes: bytes, mime: str = "image/jpeg") -> str:
@@ -456,6 +567,22 @@ async def get_config(db: AsyncSession = Depends(get_db)) -> ConfigResponse:
         "model_favorites": merge_unique_str_lists(settings.get("model_favorites")),
         "starred_models": merge_unique_str_lists(settings.get("starred_models")),
         "image_optimization": settings.get("image_optimization"),
+        "gmail_auto_sync_enabled": bool(settings.get("gmail_auto_sync_enabled", False)),
+        "gmail_poll_interval_minutes": _parse_int_setting(
+            settings.get("gmail_poll_interval_minutes"),
+            default=30,
+            min_value=1,
+            max_value=1440,
+        ),
+        "gmail_auto_sync_query": str(
+            settings.get("gmail_auto_sync_query") or GMAIL_AUTO_SYNC_DEFAULT_QUERY
+        ),
+        "gmail_auto_sync_max_results": _parse_int_setting(
+            settings.get("gmail_auto_sync_max_results"),
+            default=25,
+            min_value=1,
+            max_value=100,
+        ),
     }
     try:
         await ensure_pipeline_catalog(db)
@@ -493,6 +620,10 @@ async def update_config(
         "model_favorites",
         "starred_models",
         "image_optimization",
+        "gmail_auto_sync_enabled",
+        "gmail_poll_interval_minutes",
+        "gmail_auto_sync_query",
+        "gmail_auto_sync_max_results",
     ]
     data_dict = data.model_dump(exclude_unset=True)
     if "prompt_templates" in data_dict:
@@ -537,6 +668,15 @@ async def update_config(
             await upsert_secret(db, key, val)
 
     await db.commit()
+
+    scheduler_setting_keys = {
+        "gmail_auto_sync_enabled",
+        "gmail_poll_interval_minutes",
+        "gmail_auto_sync_query",
+        "gmail_auto_sync_max_results",
+    }
+    if scheduler_setting_keys.intersection(data_dict.keys()):
+        await configure_gmail_auto_sync_scheduler()
 
     return {"success": True}
 

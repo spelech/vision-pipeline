@@ -16,6 +16,7 @@ asyncpg
 psycopg2-binary
 cryptography
 jinja2
+apscheduler
 pytest
 pytest-asyncio
 pytest-cov

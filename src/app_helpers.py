@@ -34,6 +34,10 @@ DB_SETTING_KEYS = [
     "model_favorites",
     "starred_models",
     "image_optimization",
+    "gmail_auto_sync_enabled",
+    "gmail_poll_interval_minutes",
+    "gmail_auto_sync_query",
+    "gmail_auto_sync_max_results",
 ]
 
 DEFAULT_MODEL_CATALOG: List[Dict[str, str]] = [
@@ -382,6 +386,12 @@ async def ensure_app_settings_seed(db: AsyncSession) -> None:
         "model_favorites": [],
         "starred_models": [],
         "image_optimization": {},
+        "gmail_auto_sync_enabled": False,
+        "gmail_poll_interval_minutes": 30,
+        "gmail_auto_sync_query": (
+            'has:attachment (subject:receipt OR subject:"order confirmation" OR subject:invoice)'
+        ),
+        "gmail_auto_sync_max_results": 25,
     }
     for key in DB_SETTING_KEYS:
         if key in existing:
