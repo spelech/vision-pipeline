@@ -218,3 +218,26 @@ def test_extract_attachment_text_pdf_image_and_fallback_paths():
             )
             == ""
         )
+
+
+def test_extract_text_with_vision_llm_uses_configurable_llm_base_url_and_key():
+    secrets = {
+        "GMAIL_OCR_VISION_MODEL": "openai/gpt-4o-mini",
+        "LLM_BASE_URL": "http://127.0.0.1:4000/v1",
+        "LLM_API_KEY": "litellm-key",
+    }
+    ingestor = GmailIngestor(lambda key: secrets.get(key, ""))
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = MagicMock(
+        choices=[MagicMock(message=MagicMock(content="line one\nline two"))]
+    )
+
+    with patch("llm_client.OpenAI", return_value=mock_client) as openai_ctor:
+        text = ingestor._extract_text_with_vision_llm(b"img-bytes", "image/jpeg")
+
+    assert "line one" in text
+    openai_ctor.assert_called_once_with(
+        base_url="http://127.0.0.1:4000/v1",
+        api_key="litellm-key",
+    )

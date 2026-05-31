@@ -42,6 +42,8 @@ class ModelListResponse(BaseModel):
 
 
 class ConfigSecretStatus(BaseModel):
+    LLM_BASE_URL: str = ""
+    LLM_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
     SEARXNG_URL: str = ""
     HOMEBOX_URL: str = ""
@@ -91,6 +93,8 @@ class ConfigUpdateRequest(BaseModel):
     gmail_auto_sync_query: Optional[str] = None
     gmail_auto_sync_max_results: Optional[int] = None
     # Secrets
+    LLM_BASE_URL: Optional[str] = None
+    LLM_API_KEY: Optional[str] = None
     OPENROUTER_API_KEY: Optional[str] = None
     SEARXNG_URL: Optional[str] = None
     HOMEBOX_URL: Optional[str] = None

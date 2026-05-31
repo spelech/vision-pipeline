@@ -6,8 +6,9 @@ import re
 from io import BytesIO
 
 import requests
-from openai import OpenAI, OpenAIError
+from openai import OpenAIError
 from PIL import ImageEnhance, ImageFilter
+from llm_client import create_openai_client_from_env
 
 try:
     from pyzbar.pyzbar import decode  # type: ignore
@@ -157,10 +158,7 @@ def gmail_search_node(query, max_results=20, log_cb=None):
 
 
 def get_client():
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY"),
-    )
+    return create_openai_client_from_env()
 
 
 def scan_barcode(image, log_cb=None):

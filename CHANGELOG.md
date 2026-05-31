@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## [3.6.0] - 2026-05-31
+
+### Added
+- Configurable OpenAI-compatible LLM client resolution with support for `LLM_BASE_URL` and `LLM_API_KEY`.
+- Backend and Gmail OCR paths now support local LiteLLM-style gateways without code changes.
+- Additional test coverage for configurable LLM client behavior in node and Gmail OCR flows.
+
+### Changed
+- Pipeline and OCR client initialization now use shared LLM client construction with OpenRouter backward-compatible fallbacks.
+- Settings/config secret surfaces now include generic LLM endpoint and key fields for migration-safe configuration.
+
+### Migration Guidance
+- No Alembic or database migration is required for this release.
+- Existing OpenRouter deployments continue to work with `OPENROUTER_API_KEY`.
+- To move to local LiteLLM, set `LLM_BASE_URL` and optionally `LLM_API_KEY`.
+
 ## [3.5.0] - 2026-05-30
 
 ### Added
