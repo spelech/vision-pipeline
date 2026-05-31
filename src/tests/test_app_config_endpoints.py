@@ -80,9 +80,13 @@ async def test_list_pipelines_success_and_failure_paths():
     with patch("app.ensure_pipeline_catalog", AsyncMock()), patch(
         "app.list_pipeline_definitions",
         AsyncMock(side_effect=RuntimeError("db down")),
+    ), patch(
+        "app.pipelines.get_all_pipelines",
+        return_value=[{"id": "fallback", "name": "Fallback", "schema": {}}],
     ):
         response = await list_pipelines(db)
-        assert response.success is False
+        assert response.success is True
+        assert response.pipelines
         assert response.error
 
 
@@ -185,6 +189,37 @@ async def test_get_config_masks_secrets_and_handles_pipeline_failure():
     assert response.secrets_status["HOMEBOX_URL"] == "http://example.test"
     assert response.secrets_status["OPENROUTER_API_KEY"] == "********"
     assert response.custom_pipelines == []
+
+
+@pytest.mark.asyncio
+async def test_get_config_derives_prompt_templates_from_pipeline_defaults_when_empty():
+    db = SimpleNamespace()
+    settings = {
+        "prompt_templates": [],
+        "service_prompts": {},
+        "model_favorites": [],
+        "starred_models": [],
+        "image_optimization": {},
+    }
+
+    with patch("app.ensure_app_settings_seed", AsyncMock()), patch(
+        "app.get_app_settings", AsyncMock(return_value=settings)
+    ), patch("app.ensure_pipeline_catalog", AsyncMock()), patch(
+        "app.list_pipeline_definitions", AsyncMock(return_value=[])
+    ), patch("app.pipelines.get_all_pipelines", return_value=[
+        {
+            "id": "receipt",
+            "name": "Receipt",
+            "schema": {
+                "vision_prompt": {"default": "Extract receipt text"},
+                "search_results_limit": {"default": 7},
+            },
+        }
+    ]), patch("app.get_secret_value", return_value=""):
+        response = await get_config(db)
+
+    assert response.prompt_templates is not None
+    assert any(template.name == "Receipt vision prompt" for template in response.prompt_templates)
 
 
 @pytest.mark.asyncio

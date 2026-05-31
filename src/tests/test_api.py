@@ -379,11 +379,16 @@ async def test_pipelines_endpoint_handles_success_and_error():
                 assert ok_resp.json()["pipelines"][0]["id"] == "default"
 
     with patch("app.ensure_pipeline_catalog", new=AsyncMock()):
-        with patch("app.list_pipeline_definitions", new=AsyncMock(side_effect=RuntimeError("boom"))):
+        with patch("app.list_pipeline_definitions", new=AsyncMock(side_effect=RuntimeError("boom"))), patch(
+            "app.pipelines.get_all_pipelines",
+            return_value=[{"id": "fallback", "name": "Fallback", "schema": {}}],
+        ):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
                 err_resp = await ac.get("/api/pipelines")
                 assert err_resp.status_code == 200
-                assert err_resp.json()["success"] is False
+                assert err_resp.json()["success"] is True
+                assert err_resp.json()["pipelines"][0]["id"] == "fallback"
+                assert "boom" in str(err_resp.json().get("error"))
 
 
 @pytest.mark.feature("config-read")
