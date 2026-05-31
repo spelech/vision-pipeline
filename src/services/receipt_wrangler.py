@@ -65,3 +65,46 @@ class ReceiptWranglerClient:
         except ValueError:
             logger.warning("Receipt Wrangler quickScan returned non-JSON response")
             return {"success": True}
+
+    def get_pending_receipts(self, limit: int = 50) -> list[Dict[str, Any]]:
+        safe_limit = max(1, min(int(limit), 200))
+        response = requests.get(
+            f"{self._base_url()}/api/receipt",
+            headers=self._headers(),
+            params={"status": "OPEN", "take": str(safe_limit)},
+            timeout=20,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        receipts = payload if isinstance(payload, list) else payload.get("receipts", [])
+        if isinstance(receipts, list):
+            return [item for item in receipts if isinstance(item, dict)]
+        return []
+
+    def download_receipt_image(self, image_id: str) -> bytes:
+        if not image_id:
+            raise ValueError("Missing receipt image id")
+
+        response = requests.get(
+            f"{self._base_url()}/api/receipt/image/{image_id}",
+            headers=self._headers(),
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.content
+
+    def update_receipt_status(self, receipt_id: str, status: str = "RESOLVED") -> Dict[str, Any]:
+        if not receipt_id:
+            raise ValueError("Missing receipt id")
+
+        response = requests.patch(
+            f"{self._base_url()}/api/receipt/{receipt_id}",
+            headers=self._headers(),
+            json={"status": status},
+            timeout=20,
+        )
+        response.raise_for_status()
+        try:
+            return response.json()
+        except ValueError:
+            return {"success": True, "receipt_id": receipt_id, "status": status}

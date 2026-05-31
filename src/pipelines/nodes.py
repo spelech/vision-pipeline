@@ -21,10 +21,139 @@ logger = logging.getLogger("PipelineNodes")
 
 DEFAULT_VISION_MODEL = os.getenv("VISION_MODEL_DEFAULT", "qwen/qwen2.5-vl-72b-instruct")
 DEFAULT_REFINE_MODEL = os.getenv("REFINE_MODEL_DEFAULT", "qwen/qwen3-235b-a22b-2507")
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GMAIL_MESSAGES_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
 LEGACY_INVALID_MODEL_IDS = {
     "qwen/qwen2.5-72b-instruct",
     "qwen/qwen2.5-32b-instruct",
 }
+
+
+def upc_lookup_node(barcode, is_food=False, log_cb=None):
+    # pylint: disable=too-many-return-statements
+    if not barcode:
+        return {}
+
+    barcode_value = str(barcode).strip()
+    if not barcode_value:
+        return {}
+
+    if log_cb:
+        log_cb(f"🧾 [Node: UPC] Looking up barcode {barcode_value}...")
+
+    try:
+        if bool(is_food):
+            response = requests.get(
+                f"https://world.openfoodfacts.org/api/v0/product/{barcode_value}.json",
+                timeout=10,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            product = payload.get("product") if isinstance(payload, dict) else {}
+            if not isinstance(product, dict):
+                return {}
+            return {
+                "barcode": barcode_value,
+                "source": "openfoodfacts",
+                "product_name": str(product.get("product_name") or "").strip(),
+                "brand": str(product.get("brands") or "").strip(),
+                "category": str(product.get("categories") or "").strip(),
+                "description": str(product.get("generic_name") or "").strip(),
+            }
+
+        headers = {}
+        upcitemdb_key = str(os.getenv("UPCITEMDB_API_KEY") or "").strip()
+        if upcitemdb_key:
+            headers["user_key"] = upcitemdb_key
+
+        response = requests.get(
+            "https://api.upcitemdb.com/prod/trial/lookup",
+            params={"upc": barcode_value},
+            headers=headers,
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        items = payload.get("items") if isinstance(payload, dict) else []
+        item = items[0] if isinstance(items, list) and items else {}
+        if not isinstance(item, dict):
+            return {}
+        offers = item.get("offers") if isinstance(item.get("offers"), list) else []
+        first_offer = offers[0] if offers and isinstance(offers[0], dict) else {}
+
+        return {
+            "barcode": barcode_value,
+            "source": "upcitemdb",
+            "product_name": str(item.get("title") or "").strip(),
+            "brand": str(item.get("brand") or "").strip(),
+            "category": str(item.get("category") or "").strip(),
+            "description": str(item.get("description") or "").strip(),
+            "product_url": str(first_offer.get("link") or "").strip(),
+        }
+    except requests.RequestException as e:
+        if log_cb:
+            log_cb(f"⚠️ [Node: UPC] Lookup failed: {str(e)}")
+        return {}
+
+
+def _gmail_access_token() -> str:
+    client_id = str(os.getenv("GWS_CLIENT_ID") or "").strip()
+    client_secret = str(os.getenv("GWS_CLIENT_SECRET") or "").strip()
+    refresh_token = str(os.getenv("GWS_REFRESH_TOKEN") or "").strip()
+    if not client_id or not client_secret or not refresh_token:
+        raise ValueError("Missing Gmail OAuth credentials")
+
+    response = requests.post(
+        GOOGLE_TOKEN_URL,
+        data={
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token",
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    token = payload.get("access_token") if isinstance(payload, dict) else ""
+    if not isinstance(token, str) or not token:
+        raise ValueError("Failed to resolve Gmail access token")
+    return token
+
+
+def gmail_search_node(query, max_results=20, log_cb=None):
+    query_value = str(query or "").strip()
+    if not query_value:
+        return []
+
+    if log_cb:
+        log_cb(f"📨 [Node: Gmail Search] Querying Gmail for '{query_value}'...")
+
+    try:
+        token = _gmail_access_token()
+        response = requests.get(
+            GMAIL_MESSAGES_URL,
+            params={"q": query_value, "maxResults": max(1, min(int(max_results), 100))},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=15,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        messages = payload.get("messages") if isinstance(payload, dict) else []
+        if not isinstance(messages, list):
+            return []
+        return [
+            {
+                "id": str(message.get("id") or ""),
+                "thread_id": str(message.get("threadId") or ""),
+            }
+            for message in messages
+            if isinstance(message, dict)
+        ]
+    except (requests.RequestException, ValueError) as e:
+        if log_cb:
+            log_cb(f"⚠️ [Node: Gmail Search] Failed: {str(e)}")
+        return []
 
 
 def get_client():

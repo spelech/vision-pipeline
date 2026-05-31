@@ -10,6 +10,15 @@ from .base import BaseService
 logger = logging.getLogger(__name__)
 
 
+def _extract_data_uri_payload(data_uri: str) -> bytes:
+    if not isinstance(data_uri, str) or "," not in data_uri:
+        return b""
+    encoded = data_uri.split(",", 1)[1]
+    if not encoded:
+        return b""
+    return base64.b64decode(encoded)
+
+
 class HomeboxService(BaseService):
     def __init__(self):
         self.api_url = os.getenv("HOMEBOX_URL", "http://homebox:7745/api/v1")
@@ -81,7 +90,7 @@ class HomeboxService(BaseService):
         request_method = getattr(requests, method.lower())
         return await asyncio.to_thread(request_method, f"{self.api_url}{endpoint}", **kwargs)
 
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-locals,too-many-branches
     async def execute(self,
                       data: Dict[str,
                                  Any],
@@ -160,11 +169,30 @@ class HomeboxService(BaseService):
 
             # Upload attachment if item includes an image data URI.
             if isinstance(image_path, str) and image_path.startswith("data:image"):
-                encoded = image_path.split(",", 1)[1] if "," in image_path else ""
-                image_bytes = base64.b64decode(encoded) if encoded else b""
+                image_bytes = _extract_data_uri_payload(image_path)
                 if image_bytes:
                     files = {"file": ("vision-capture.jpg", image_bytes, "image/jpeg")}
                     attach_data = {"type": "photo", "name": "Vision Capture"}
+                    await self._request(
+                        "POST",
+                        f"/items/{item_id}/attachments",
+                        headers=headers,
+                        files=files,
+                        data=attach_data,
+                        timeout=10,
+                    )
+
+            receipt_data_uri = str(
+                data.get("receipt_attachment_data_uri")
+                or data.get("receipt_image_data_uri")
+                or ""
+            )
+            if receipt_data_uri.startswith("data:image"):
+                receipt_bytes = _extract_data_uri_payload(receipt_data_uri)
+                if receipt_bytes:
+                    receipt_name = str(data.get("receipt_filename") or "receipt.jpg")
+                    files = {"file": (receipt_name, receipt_bytes, "image/jpeg")}
+                    attach_data = {"type": "receipt", "name": "Receipt Image"}
                     await self._request(
                         "POST",
                         f"/items/{item_id}/attachments",

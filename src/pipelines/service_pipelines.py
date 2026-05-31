@@ -43,3 +43,15 @@ class ChangeDetectionServicePipeline(BaseServicePipeline):
     pipeline_id = "service_changedetection"
     pipeline_name = "Service Pipeline: ChangeDetection"
     default_nodes = ["vision", "search", "scrape", "refine"]
+
+
+class ReceiptWranglerServicePipeline(BaseServicePipeline):
+    pipeline_id = "receipt_wrangler"
+    pipeline_name = "Receipt Pipeline: Receipt Wrangler"
+    default_nodes = ["upc_lookup", "vision", "search", "scrape", "refine"]
+
+
+class GmailReceiptServicePipeline(BaseServicePipeline):
+    pipeline_id = "receipt_gmail"
+    pipeline_name = "Receipt Pipeline: Gmail"
+    default_nodes = ["gmail_search", "upc_lookup", "vision", "search", "scrape", "refine"]

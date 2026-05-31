@@ -7,6 +7,8 @@ from .service_pipelines import (
     MealieServicePipeline,
     PriceBuddyServicePipeline,
     ChangeDetectionServicePipeline,
+    ReceiptWranglerServicePipeline,
+    GmailReceiptServicePipeline,
 )
 
 PIPELINE_REGISTRY = {
@@ -17,6 +19,8 @@ PIPELINE_REGISTRY = {
     MealieServicePipeline.get_id(): MealieServicePipeline,
     PriceBuddyServicePipeline.get_id(): PriceBuddyServicePipeline,
     ChangeDetectionServicePipeline.get_id(): ChangeDetectionServicePipeline,
+    ReceiptWranglerServicePipeline.get_id(): ReceiptWranglerServicePipeline,
+    GmailReceiptServicePipeline.get_id(): GmailReceiptServicePipeline,
 }
 
 
