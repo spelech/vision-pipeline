@@ -1,4 +1,4 @@
-# Vision Pipeline v3.5.0
+# Vision Pipeline v3.6.0
 
 # Project Features
 
@@ -33,6 +33,7 @@ This file tracks the current capabilities and planned enhancements for the Visio
 - **Real-time Logging:** Custom session-based logger providing live feedback to the UI during pipeline execution.
 - **Responsive PWA UI:** Apple-style dark mode interface optimized for mobile use.
 - **SQLite Persistence:** Async database storage for batches, items, and AI outputs.
+- **Configurable LLM Gateway:** Supports OpenAI-compatible endpoints (including local LiteLLM) without hardcoding OpenRouter URLs.
 
 ### 🧾 Receipt Automation (New)
 - **Dedicated Receipt Pipeline:** New receipt-specific pipeline class and registration for OCR-oriented extraction flows.

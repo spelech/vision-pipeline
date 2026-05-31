@@ -1,4 +1,4 @@
-# Vision Pipeline v3.5.0
+# Vision Pipeline v3.6.0
 
 An automated product identification and enrichment system that bridges physical items with digital home services.
 
@@ -23,7 +23,7 @@ See [Architecture Documentation](docs/ARCHITECTURE.md) for more details.
 
 ### 1. Requirements
 - Docker & Docker Compose
-- OpenRouter API Key
+- OpenRouter API Key or a local OpenAI-compatible endpoint (LiteLLM)
 - SearxNG Instance (local or remote)
 
 ### 2. Setup
@@ -94,6 +94,30 @@ When merging feature work into the main branch:
 - Update feature-level docs (`README.md`, `FEATURES.md`, or specific files under `docs/`) for any behavior changes.
 - Run lint, typecheck, and tests before pushing the merge.
 
+## 🔁 LLM Migration Guidance (v3.6.0)
+This release adds OpenAI-compatible endpoint configuration so existing OpenRouter deployments continue working, while local LiteLLM is supported without code changes.
+
+For existing OpenRouter deployments:
+- No database migration is required.
+- You can keep `OPENROUTER_API_KEY` unchanged.
+- No `LLM_BASE_URL` is needed unless you want to override the provider endpoint.
+
+For local LiteLLM deployments:
+- Set `LLM_BASE_URL` to your local gateway (for example `http://127.0.0.1:4000/v1`).
+- Set `LLM_API_KEY` if your LiteLLM instance enforces auth.
+- If your local gateway allows unauthenticated or passthrough local traffic, the app uses a local default key value when the base URL is non-OpenRouter.
+
+Configuration precedence for API key resolution:
+- `LLM_API_KEY`
+- `OPENAI_API_KEY`
+- `OPENROUTER_API_KEY`
+
+Configuration precedence for base URL resolution:
+- `LLM_BASE_URL`
+- `OPENAI_BASE_URL`
+- `OPENAI_API_BASE`
+- fallback: `https://openrouter.ai/api/v1`
+
 ## 🗃 Database Migrations
 Schema changes are now managed with Alembic.
 
@@ -131,6 +155,6 @@ Override using `MIGRATION_DB_URL` when needed.
 
 ## 🛠 Tech Stack
 - **Backend**: FastAPI, SQLAlchemy, SQLite, OpenCV, pyzbar
-- **AI**: OpenRouter (Qwen 2.5 VL, Gemini 2.0)
+- **AI**: OpenAI-compatible backends (OpenRouter, LiteLLM, others)
 - **Frontend**: Alpine.js, Tailwind CSS, HTML5 Canvas
 - **Infrastructure**: Playwright, SearxNG, Docker
