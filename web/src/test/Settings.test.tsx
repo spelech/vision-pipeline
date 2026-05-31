@@ -469,4 +469,60 @@ describe('Settings', () => {
 
     alertSpy.mockRestore();
   });
+
+  it('Feature: settings-gmail-auto-sync-payload | persists gmail scheduler settings', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url, opts) => {
+      if (url === '/api/config' && opts?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      if (url === '/api/config') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            secrets_status: { OPENROUTER_API_KEY: true },
+            model_favorites: [],
+            starred_models: [],
+            image_optimization: { max_dimension: 1024, quality: 85 },
+            prompt_templates: [],
+            gmail_auto_sync_enabled: false,
+            gmail_poll_interval_minutes: 30,
+            gmail_auto_sync_query: 'subject:receipt',
+            gmail_auto_sync_max_results: 10,
+          }),
+        });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, models: [] }) });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, pipelines: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    render(<Settings />);
+    await screen.findByText('System Settings');
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.change(screen.getByDisplayValue('30'), { target: { value: '45' } });
+    fireEvent.change(screen.getByDisplayValue('subject:receipt'), { target: { value: 'subject:invoice' } });
+    fireEvent.change(screen.getByDisplayValue('10'), { target: { value: '35' } });
+    fireEvent.click(screen.getByText('Apply Full Configuration'));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/config', expect.objectContaining({ method: 'POST' }));
+    });
+
+    const postCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0] === '/api/config' && call[1]?.method === 'POST'
+    );
+    const payload = JSON.parse((postCall?.[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(payload.gmail_auto_sync_enabled).toBe(true);
+    expect(payload.gmail_poll_interval_minutes).toBe(45);
+    expect(payload.gmail_auto_sync_query).toBe('subject:invoice');
+    expect(payload.gmail_auto_sync_max_results).toBe(35);
+
+    alertSpy.mockRestore();
+  });
 });

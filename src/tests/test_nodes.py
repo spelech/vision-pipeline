@@ -172,3 +172,76 @@ def test_data_refine_client_init_error_returns_current_data():
 
     assert refined == current
     assert any("[Node: Refine] Failed" in entry for entry in logs)
+
+
+def test_upc_lookup_node_food_and_generic_paths():
+    food_payload = {
+        "product": {
+            "product_name": "Whole Milk",
+            "brands": "Farm Co",
+            "categories": "Dairy",
+            "generic_name": "Milk",
+        }
+    }
+    generic_payload = {
+        "items": [
+            {
+                "title": "Widget",
+                "brand": "Acme",
+                "category": "Tools",
+                "description": "Handy widget",
+                "offers": [{"link": "https://example.com/widget"}],
+            }
+        ]
+    }
+
+    with patch("pipelines.nodes.requests.get") as mock_get:
+        mock_get.return_value.json.return_value = food_payload
+        mock_get.return_value.raise_for_status.return_value = None
+        food = nodes.upc_lookup_node("123", is_food=True)
+
+    assert food["source"] == "openfoodfacts"
+    assert food["product_name"] == "Whole Milk"
+
+    with patch("pipelines.nodes.requests.get") as mock_get:
+        mock_get.return_value.json.return_value = generic_payload
+        mock_get.return_value.raise_for_status.return_value = None
+        generic = nodes.upc_lookup_node("456", is_food=False)
+
+    assert generic["source"] == "upcitemdb"
+    assert generic["product_name"] == "Widget"
+
+
+def test_upc_lookup_node_handles_request_failure():
+    with patch("pipelines.nodes.requests.get", side_effect=requests.RequestException("down")):
+        result = nodes.upc_lookup_node("123", is_food=True)
+
+    assert result == {}
+
+
+def test_gmail_search_node_success_and_failure_paths():
+    token_resp = MagicMock()
+    token_resp.raise_for_status.return_value = None
+    token_resp.json.return_value = {"access_token": "abc"}
+
+    listing_resp = MagicMock()
+    listing_resp.raise_for_status.return_value = None
+    listing_resp.json.return_value = {"messages": [{"id": "m1", "threadId": "t1"}]}
+
+    with patch.dict(
+        "os.environ",
+        {
+            "GWS_CLIENT_ID": "id",
+            "GWS_CLIENT_SECRET": "secret",
+            "GWS_REFRESH_TOKEN": "refresh",
+        },
+        clear=False,
+    ), patch("pipelines.nodes.requests.post", return_value=token_resp), patch(
+        "pipelines.nodes.requests.get", return_value=listing_resp
+    ):
+        rows = nodes.gmail_search_node("subject:receipt")
+
+    assert rows == [{"id": "m1", "thread_id": "t1"}]
+
+    with patch.dict("os.environ", {}, clear=True):
+        assert nodes.gmail_search_node("subject:receipt") == []
