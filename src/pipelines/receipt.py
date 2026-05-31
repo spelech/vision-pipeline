@@ -28,4 +28,10 @@ class ReceiptPipeline(ComposablePipeline):
             "and per-line pricing. Return strict JSON metadata suitable for "
             "inventory creation and downstream refinement."
         )
+        schema["refine_prompt"]["default"] = (
+            "Refine receipt metadata using OCR output, UPC lookup, search, "
+            "and scraped merchant context. Preserve the original JSON schema, "
+            "keep item-level fields intact, and only correct values when the "
+            "evidence is strong."
+        )
         return schema
