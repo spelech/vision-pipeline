@@ -1,5 +1,6 @@
+import base64
 from datetime import datetime, timezone
-from typing import Any, Callable, List, Optional, Set, cast
+from typing import Any, Callable, Dict, List, Optional, Set, cast
 
 import requests
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -78,6 +79,74 @@ class GmailDirectIngestRequest(BaseModel):
     pipeline_id: str = "default"
     settings: dict[str, Any] = {}
     mark_processed: bool = True
+
+
+class ReceiptWranglerProcessRequest(BaseModel):
+    limit: int = 25
+    pipeline_id: str = "receipt_wrangler"
+    settings: dict[str, Any] = {}
+    mark_resolved: bool = True
+
+
+def _to_data_uri(image_bytes: bytes, mime_type: str) -> str:
+    if not image_bytes:
+        return ""
+    mime = mime_type if isinstance(mime_type, str) and mime_type else "image/jpeg"
+    return f"data:{mime};base64,{base64.b64encode(image_bytes).decode()}"
+
+
+def _extract_rw_line_items(receipt: Dict[str, Any]) -> List[Dict[str, Any]]:
+    candidates = receipt.get("line_items")
+    if not isinstance(candidates, list):
+        candidates = receipt.get("lineItems")
+    if not isinstance(candidates, list):
+        candidates = receipt.get("items")
+
+    normalized: List[Dict[str, Any]] = []
+    if isinstance(candidates, list):
+        for item in candidates:
+            if not isinstance(item, dict):
+                continue
+            name = str(
+                item.get("name")
+                or item.get("product_name")
+                or item.get("description")
+                or item.get("lineText")
+                or ""
+            ).strip()
+            if not name:
+                continue
+            normalized.append(
+                {
+                    "name": name,
+                    "line_text": str(
+                        item.get("line_text") or item.get("description") or name
+                    ).strip(),
+                    "price": str(item.get("price") or item.get("amount") or "").strip() or None,
+                    "barcode": str(item.get("barcode") or "").strip() or None,
+                    "quantity": (
+                        item.get("quantity")
+                        if isinstance(item.get("quantity"), int)
+                        else 1
+                    ),
+                }
+            )
+
+    if normalized:
+        return normalized
+
+    fallback_name = str(
+        receipt.get("merchant")
+        or receipt.get("name")
+        or receipt.get("title")
+        or "Receipt Item"
+    ).strip()
+    fallback_note = str(
+        receipt.get("note")
+        or receipt.get("description")
+        or fallback_name
+    ).strip()
+    return [{"name": fallback_name or "Receipt Item", "line_text": fallback_note, "price": None}]
 
 
 def _coerce_processed_ids(raw_value: Any) -> List[str]:
@@ -453,9 +522,17 @@ def build_gmail_router(
             try:
                 message = await run_in_threadpool(gmail_ingestor.get_message, message_id)
                 attachment_text_parts: List[str] = []
+                image_data_uri = ""
+                receipt_filename = "receipt.jpg"
                 for attachment in message.get("attachments", []):
                     if not isinstance(attachment, dict):
                         continue
+                    mime_type = str(attachment.get("mime_type") or "")
+                    attachment_id = str(attachment.get("attachment_id") or "").strip()
+                    filename = (
+                        str(attachment.get("filename") or "receipt.jpg").strip()
+                        or "receipt.jpg"
+                    )
                     try:
                         text = await run_in_threadpool(
                             gmail_ingestor.extract_attachment_text,
@@ -467,14 +544,32 @@ def build_gmail_router(
                     except ValueError:
                         continue
 
+                    if not image_data_uri and attachment_id and mime_type.startswith("image/"):
+                        try:
+                            image_bytes = await run_in_threadpool(
+                                gmail_ingestor.download_attachment,
+                                message_id,
+                                attachment_id,
+                            )
+                            image_data_uri = _to_data_uri(image_bytes, mime_type)
+                            receipt_filename = filename
+                        except (requests.RequestException, ValueError):
+                            image_data_uri = ""
+
                 line_items = gmail_ingestor.extract_line_items_from_message(
                     message,
                     "\n".join(attachment_text_parts),
                 )
                 receipts_payload.append(
                     {
-                        "message": message,
+                        "source": "gmail_direct",
+                        "source_receipt_id": str(message.get("message_id") or "").strip(),
+                        "subject": str(message.get("subject") or "").strip(),
+                        "sender": str(message.get("from") or "").strip(),
+                        "snippet": str(message.get("snippet") or "").strip(),
                         "line_items": line_items,
+                        "image_data_uri": image_data_uri,
+                        "receipt_filename": receipt_filename,
                     }
                 )
             except (requests.RequestException, ValueError) as exc:
@@ -492,7 +587,7 @@ def build_gmail_router(
             settings = await get_app_settings(db)
             existing_ids = _coerce_processed_ids(settings.get(GMAIL_PROCESSED_IDS_KEY))
             successful_ids = [
-                str(receipt.get("message", {}).get("message_id", ""))
+                str(receipt.get("source_receipt_id") or "")
                 for receipt in receipts_payload
                 if receipt.get("line_items")
             ]
@@ -504,6 +599,128 @@ def build_gmail_router(
             "success": len(failed) == 0,
             "selected_count": len(selected_message_ids),
             "failed": failed,
+            **ingestion_result,
+        }
+
+    @router.post("/receipt-wrangler-process")
+    async def receipt_wrangler_process(
+        data: ReceiptWranglerProcessRequest,
+        background_tasks: BackgroundTasks,
+        db: AsyncSession = Depends(get_db),
+    ):
+        # pylint: disable=too-many-locals
+        if not receipt_wrangler_client.configured():
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Receipt Wrangler is not configured. "
+                    "Set RECEIPT_WRANGLER_URL and RECEIPT_WRANGLER_API_KEY first."
+                ),
+            )
+
+        limit = max(1, min(int(data.limit), 200))
+        try:
+            pending_receipts = await run_in_threadpool(
+                receipt_wrangler_client.get_pending_receipts,
+                limit,
+            )
+        except (requests.RequestException, ValueError) as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Receipt Wrangler fetch failed: {exc}",
+            ) from exc
+
+        normalized_payload: List[dict[str, Any]] = []
+        failed: List[dict[str, str]] = []
+        processed_receipt_ids: List[str] = []
+
+        for receipt in pending_receipts:
+            if not isinstance(receipt, dict):
+                continue
+
+            receipt_id = str(
+                receipt.get("id")
+                or receipt.get("receipt_id")
+                or receipt.get("receiptId")
+                or ""
+            ).strip()
+            if not receipt_id:
+                continue
+
+            image_id = str(
+                receipt.get("image_id")
+                or receipt.get("imageId")
+                or receipt.get("receipt_image_id")
+                or receipt.get("image")
+                or ""
+            ).strip()
+
+            image_data_uri = ""
+            receipt_filename = str(
+                receipt.get("filename")
+                or receipt.get("image_filename")
+                or f"rw-{receipt_id}.jpg"
+            ).strip() or f"rw-{receipt_id}.jpg"
+            if image_id:
+                try:
+                    image_bytes = await run_in_threadpool(
+                        receipt_wrangler_client.download_receipt_image,
+                        image_id,
+                    )
+                    image_data_uri = _to_data_uri(image_bytes, "image/jpeg")
+                except (requests.RequestException, ValueError) as exc:
+                    failed.append({"receipt_id": receipt_id, "error": str(exc)})
+
+            normalized_payload.append(
+                {
+                    "source": "receipt_wrangler",
+                    "source_receipt_id": receipt_id,
+                    "subject": str(
+                        receipt.get("merchant")
+                        or receipt.get("name")
+                        or receipt.get("title")
+                        or "Receipt Wrangler"
+                    ).strip(),
+                    "sender": "Receipt Wrangler",
+                    "snippet": str(
+                        receipt.get("note") or receipt.get("description") or ""
+                    ).strip(),
+                    "line_items": _extract_rw_line_items(receipt),
+                    "image_data_uri": image_data_uri,
+                    "receipt_filename": receipt_filename,
+                }
+            )
+            processed_receipt_ids.append(receipt_id)
+
+        ingestion_result = await ingest_direct_receipts(
+            db,
+            background_tasks,
+            normalized_payload,
+            data.pipeline_id,
+            data.settings,
+        )
+
+        resolved_ids: List[str] = []
+        resolve_failures: List[dict[str, str]] = []
+        if data.mark_resolved:
+            for receipt_id in processed_receipt_ids:
+                try:
+                    await run_in_threadpool(
+                        receipt_wrangler_client.update_receipt_status,
+                        receipt_id,
+                        "RESOLVED",
+                    )
+                    resolved_ids.append(receipt_id)
+                except (requests.RequestException, ValueError) as exc:
+                    resolve_failures.append({"receipt_id": receipt_id, "error": str(exc)})
+
+        return {
+            "success": not failed and not resolve_failures,
+            "pending_count": len(pending_receipts),
+            "processed_count": len(processed_receipt_ids),
+            "resolved_count": len(resolved_ids),
+            "failed": failed,
+            "resolve_failures": resolve_failures,
             **ingestion_result,
         }
 

@@ -1219,7 +1219,11 @@ async def process_item_task(
         batch_text = batch.description if batch else None
         item_seed_text = ""
         if isinstance(item.ai_output, dict):
-            item_seed_text = str(item.ai_output.get("gmail_seed_text") or "").strip()
+            item_seed_text = str(
+                item.ai_output.get("receipt_seed_text")
+                or item.ai_output.get("gmail_seed_text")
+                or ""
+            ).strip()
         combined_text = "\n".join(
             [part for part in [batch_text or "", item_seed_text] if part]
         ).strip()
@@ -1298,75 +1302,119 @@ async def process_item_task(
         await db.commit()
 
 
-async def ingest_gmail_receipts_direct(
+async def ingest_receipt_jobs_direct(
     db: AsyncSession,
     background_tasks: BackgroundTasks,
     receipts_payload: List[Dict[str, Any]],
     pipeline_id: str,
     settings: Dict[str, Any],
+    batch_name_prefix: str = "Receipts",
+    batch_description: str = "Direct receipt ingestion",
 ) -> Dict[str, Any]:
-    # pylint: disable=too-many-locals,too-many-statements
+    # pylint: disable=too-many-locals,too-many-statements,too-many-branches,too-many-arguments,too-many-positional-arguments
     if not receipts_payload:
         return {"batch_id": None, "created_items": 0, "receipt_count": 0}
 
     batch = Batch(
-        name=f"Gmail Receipts {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-        description="Gmail direct receipt ingestion",
+        name=f"{batch_name_prefix} {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        description=batch_description,
         status="processing",
     )
     db.add(batch)
     await db.commit()
     await db.refresh(batch)
 
-    seed_image_uri = build_seed_image_data_uri()
+    fallback_seed_image_uri = build_seed_image_data_uri()
     settings_str = json.dumps(settings if isinstance(settings, dict) else {})
     created_items = 0
 
     for receipt in receipts_payload:
-        message_raw = receipt.get("message")
-        message: Dict[str, Any] = message_raw if isinstance(message_raw, dict) else {}
+        source = str(receipt.get("source") or "receipt").strip() or "receipt"
+        source_receipt_id = str(
+            receipt.get("source_receipt_id")
+            or receipt.get("receipt_id")
+            or receipt.get("message_id")
+            or ""
+        ).strip()
+        subject = str(receipt.get("subject") or "").strip()
+        sender = str(receipt.get("sender") or receipt.get("from") or "").strip()
+        snippet = str(receipt.get("snippet") or "").strip()
+        receipt_filename = (
+            str(receipt.get("receipt_filename") or "receipt.jpg").strip()
+            or "receipt.jpg"
+        )
+        receipt_image_data_uri = str(receipt.get("image_data_uri") or "").strip()
+        if not receipt_image_data_uri.startswith("data:image"):
+            receipt_image_data_uri = ""
+
         line_items_raw = receipt.get("line_items")
         line_items: List[Any] = line_items_raw if isinstance(line_items_raw, list) else []
         if not line_items:
-            continue
-
-        subject = str(message.get("subject") or "").strip()
-        sender = str(message.get("from") or "").strip()
-        snippet = str(message.get("snippet") or "").strip()
-        message_id = str(message.get("message_id") or "").strip()
+            fallback_name = subject or snippet or "Receipt Item"
+            line_items = [{"name": fallback_name, "line_text": fallback_name, "price": None}]
 
         for line_item in line_items:
             if not isinstance(line_item, dict):
                 continue
-            item_name = str(line_item.get("name") or "Receipt Item").strip() or "Receipt Item"
-            line_text_value = str(line_item.get("line_text") or "").strip()
-            price_value = str(line_item.get("price") or "").strip()
+
+            item_name = (
+                str(line_item.get("name") or "Receipt Item").strip()
+                or "Receipt Item"
+            )
+            line_text_value = str(
+                line_item.get("line_text") or line_item.get("description") or ""
+            ).strip()
+            price_value = str(line_item.get("price") or line_item.get("amount") or "").strip()
+            barcode_value = str(line_item.get("barcode") or "").strip()
+            quantity_raw = line_item.get("quantity")
+            quantity = (
+                int(quantity_raw)
+                if isinstance(quantity_raw, int) and quantity_raw > 0
+                else 1
+            )
+
             seed_text = "\n".join(
                 [
-                    f"Receipt Message Subject: {subject}",
+                    f"Source: {source}",
+                    f"Receipt ID: {source_receipt_id}",
+                    f"Subject: {subject}",
                     f"Sender: {sender}",
                     f"Snippet: {snippet}",
                     f"Line Item: {item_name}",
                     f"Line Text: {line_text_value}",
                     f"Price: {price_value}",
+                    f"Barcode: {barcode_value}",
                 ]
             ).strip()
 
-            ai_seed = {
-                "source": "gmail_direct",
-                "gmail_message_id": message_id,
-                "gmail_subject": subject,
-                "gmail_sender": sender,
+            ai_seed: Dict[str, Any] = {
+                "source": source,
+                "source_receipt_id": source_receipt_id,
+                "receipt_subject": subject,
+                "receipt_sender": sender,
                 "receipt_line_item": line_item,
-                "gmail_seed_text": seed_text,
+                "receipt_seed_text": seed_text,
+                "receipt_filename": receipt_filename,
             }
+            if source == "gmail_direct":
+                ai_seed["gmail_seed_text"] = seed_text
+                ai_seed["gmail_message_id"] = source_receipt_id
+                ai_seed["gmail_subject"] = subject
+                ai_seed["gmail_sender"] = sender
+            if receipt_image_data_uri:
+                ai_seed["receipt_image_data_uri"] = receipt_image_data_uri
+                ai_seed["receipt_attachment_data_uri"] = receipt_image_data_uri
 
             item = Item(
                 batch_id=batch.id,
-                image_path=seed_image_uri,
-                raw_image_path=seed_image_uri,
+                image_path=receipt_image_data_uri or fallback_seed_image_uri,
+                raw_image_path=receipt_image_data_uri or fallback_seed_image_uri,
                 status="processing",
                 ai_output=ai_seed,
+                user_overrides={
+                    "product_name": item_name,
+                    "quantity": quantity,
+                },
                 product_type="product",
             )
             db.add(item)
@@ -1389,6 +1437,50 @@ async def ingest_gmail_receipts_direct(
         "created_items": created_items,
         "receipt_count": len(receipts_payload),
     }
+
+
+async def ingest_gmail_receipts_direct(
+    db: AsyncSession,
+    background_tasks: BackgroundTasks,
+    receipts_payload: List[Dict[str, Any]],
+    pipeline_id: str,
+    settings: Dict[str, Any],
+) -> Dict[str, Any]:
+    normalized_payload: List[Dict[str, Any]] = []
+    for entry in receipts_payload:
+        if not isinstance(entry, dict):
+            continue
+        message_raw = entry.get("message")
+        message: Dict[str, Any] = message_raw if isinstance(message_raw, dict) else {}
+        normalized_payload.append(
+            {
+                "source": "gmail_direct",
+                "source_receipt_id": str(message.get("message_id") or "").strip(),
+                "subject": str(message.get("subject") or "").strip(),
+                "sender": str(message.get("from") or "").strip(),
+                "snippet": str(message.get("snippet") or "").strip(),
+                "line_items": (
+                    entry.get("line_items")
+                    if isinstance(entry.get("line_items"), list)
+                    else []
+                ),
+                "image_data_uri": str(entry.get("image_data_uri") or "").strip(),
+                "receipt_filename": (
+                    str(entry.get("receipt_filename") or "receipt.jpg").strip()
+                    or "receipt.jpg"
+                ),
+            }
+        )
+
+    return await ingest_receipt_jobs_direct(
+        db=db,
+        background_tasks=background_tasks,
+        receipts_payload=normalized_payload,
+        pipeline_id=pipeline_id,
+        settings=settings,
+        batch_name_prefix="Gmail Receipts",
+        batch_description="Gmail direct receipt ingestion",
+    )
 
 
 async def process_item_task_safe(
@@ -1494,7 +1586,7 @@ api_router.include_router(
         get_db=get_db,
         gmail_ingestor=gmail_ingestor,
         receipt_wrangler_client=receipt_wrangler_client,
-        ingest_direct_receipts=ingest_gmail_receipts_direct,
+        ingest_direct_receipts=ingest_receipt_jobs_direct,
         upsert_secret=upsert_secret,
     )
 )

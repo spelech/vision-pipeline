@@ -702,7 +702,22 @@ def generate_service_output(
 def get_item_base_data(item: Any) -> Dict[str, Any]:
     user_overrides = item.user_overrides if isinstance(item.user_overrides, dict) else {}
     if user_overrides:
-        return dict(user_overrides)
+        base_with_overrides = dict(user_overrides)
+        ai_output_for_receipt: Dict[str, Any] = (
+            cast(Dict[str, Any], item.ai_output)
+            if isinstance(item.ai_output, dict)
+            else {}
+        )
+        for key in (
+            "receipt_attachment_data_uri",
+            "receipt_image_data_uri",
+            "receipt_filename",
+            "source_receipt_id",
+        ):
+            value = ai_output_for_receipt.get(key)
+            if isinstance(value, str) and value.strip():
+                base_with_overrides[key] = value
+        return base_with_overrides
 
     ai_output: Dict[str, Any] = cast(Dict[str, Any], item.ai_output) if isinstance(item.ai_output, dict) else {}
     llm_output_raw = ai_output.get("llm_output")
@@ -712,6 +727,15 @@ def get_item_base_data(item: Any) -> Dict[str, Any]:
         base_data["searxng_results"] = ai_output.get("searxng_results")
     if isinstance(ai_output.get("scraped_content"), str):
         base_data["scraped_content"] = ai_output.get("scraped_content")
+    for key in (
+        "receipt_attachment_data_uri",
+        "receipt_image_data_uri",
+        "receipt_filename",
+        "source_receipt_id",
+    ):
+        value = ai_output.get(key)
+        if isinstance(value, str) and value.strip():
+            base_data[key] = value
     return base_data
 
 
