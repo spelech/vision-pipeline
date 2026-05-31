@@ -57,7 +57,10 @@ class GmailIngestor:
     def receipt_wrangler_configured(self) -> bool:
         return bool(
             self._get_secret("RECEIPT_WRANGLER_URL")
-            and self._get_secret("RECEIPT_WRANGLER_API_KEY")
+            and (
+                self._get_secret("RECEIPT_WRANGLER_API_KEY")
+                or self._get_secret("RECEIPT_WRANGLER_API_TOKEN")
+            )
         )
 
     def build_auth_url(self, redirect_uri: str, state: Optional[str] = None) -> str:

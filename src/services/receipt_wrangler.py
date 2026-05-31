@@ -15,7 +15,13 @@ class ReceiptWranglerClient:
     def configured(self) -> bool:
         return bool(
             self._get_secret("RECEIPT_WRANGLER_URL")
-            and self._get_secret("RECEIPT_WRANGLER_API_KEY")
+            and self._api_token()
+        )
+
+    def _api_token(self) -> str:
+        return (
+            self._get_secret("RECEIPT_WRANGLER_API_KEY").strip()
+            or self._get_secret("RECEIPT_WRANGLER_API_TOKEN").strip()
         )
 
     def default_group_id(self) -> str:
@@ -28,10 +34,10 @@ class ReceiptWranglerClient:
         return base_url.rstrip("/")
 
     def _headers(self) -> Dict[str, str]:
-        api_key = self._get_secret("RECEIPT_WRANGLER_API_KEY").strip()
-        if not api_key:
-            raise ValueError("Missing RECEIPT_WRANGLER_API_KEY")
-        return {"Authorization": f"Bearer {api_key}"}
+        api_token = self._api_token()
+        if not api_token:
+            raise ValueError("Missing RECEIPT_WRANGLER_API_KEY/RECEIPT_WRANGLER_API_TOKEN")
+        return {"Authorization": f"Bearer {api_token}"}
 
     def quick_scan_attachment(
         self,

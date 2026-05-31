@@ -140,7 +140,9 @@ CONFIG_SECRET_KEYS = [
     "GWS_CLIENT_ID",
     "GWS_CLIENT_SECRET",
     "GWS_REFRESH_TOKEN",
+    "UPCITEMDB_API_KEY",
     "RECEIPT_WRANGLER_URL",
+    "RECEIPT_WRANGLER_API_TOKEN",
     "RECEIPT_WRANGLER_API_KEY",
     "RECEIPT_WRANGLER_GROUP_ID",
     "GMAIL_OCR_BACKEND",
@@ -148,7 +150,18 @@ CONFIG_SECRET_KEYS = [
 ]
 
 def get_secret_value(key: str) -> str:
-    return os.getenv(key) or ""
+    direct_value = os.getenv(key)
+    if direct_value:
+        return direct_value
+
+    aliases = {
+        "RECEIPT_WRANGLER_API_KEY": "RECEIPT_WRANGLER_API_TOKEN",
+        "RECEIPT_WRANGLER_API_TOKEN": "RECEIPT_WRANGLER_API_KEY",
+    }
+    alias_key = aliases.get(key)
+    if alias_key:
+        return os.getenv(alias_key) or ""
+    return ""
 
 
 def set_secret_value(key: str, val: str) -> None:
