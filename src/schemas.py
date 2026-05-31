@@ -53,6 +53,9 @@ class ConfigSecretStatus(BaseModel):
     MEALIE_API_TOKEN: str = ""
     PRICEBUDDY_API_KEY: str = ""
     CHANGEDETECTION_API_KEY: str = ""
+    GWS_CLIENT_ID: str = ""
+    GWS_CLIENT_SECRET: str = ""
+    GWS_REFRESH_TOKEN: str = ""
 
 
 class ConfigResponse(BaseModel):
@@ -84,6 +87,9 @@ class ConfigUpdateRequest(BaseModel):
     MEALIE_API_TOKEN: Optional[str] = None
     PRICEBUDDY_API_KEY: Optional[str] = None
     CHANGEDETECTION_API_KEY: Optional[str] = None
+    GWS_CLIENT_ID: Optional[str] = None
+    GWS_CLIENT_SECRET: Optional[str] = None
+    GWS_REFRESH_TOKEN: Optional[str] = None
 
 
 class ServiceMappingInfo(BaseModel):

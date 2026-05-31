@@ -69,6 +69,8 @@ from schemas import (  # pylint: disable=wrong-import-position
 from services.homebox import HomeboxService  # pylint: disable=wrong-import-position
 from services.mealie import MealieService  # pylint: disable=wrong-import-position
 from services.enrichers import PriceBuddyService, ChangeDetectionService  # pylint: disable=wrong-import-position
+from services.gmail_ingestor import GmailIngestor  # pylint: disable=wrong-import-position
+from gmail_routes import build_gmail_router  # pylint: disable=wrong-import-position
 from logger import session_logger  # pylint: disable=wrong-import-position
 from app_helpers import (  # pylint: disable=wrong-import-position,unused-import
     normalize_prompt_templates,
@@ -132,9 +134,11 @@ CONFIG_SECRET_KEYS = [
     "HOMEBOX_PASSWORD",
     "MEALIE_API_TOKEN",
     "PRICEBUDDY_API_KEY",
-    "CHANGEDETECTION_API_KEY"
+    "CHANGEDETECTION_API_KEY",
+    "GWS_CLIENT_ID",
+    "GWS_CLIENT_SECRET",
+    "GWS_REFRESH_TOKEN",
 ]
-
 
 def get_secret_value(key: str) -> str:
     return os.getenv(key) or ""
@@ -183,6 +187,7 @@ SERVICES = {
     "pricebuddy": PriceBuddyService(),
     "changedetection": ChangeDetectionService()
 }
+gmail_ingestor = GmailIngestor(get_secret_value)
 
 REVIEW_IMAGE_MAX_DIM = int(os.getenv("REVIEW_IMAGE_MAX_DIM", "1280"))
 REVIEW_IMAGE_JPEG_QUALITY = int(os.getenv("REVIEW_IMAGE_JPEG_QUALITY", "72"))
@@ -269,6 +274,17 @@ def resolve_web_index_file() -> Optional[Path]:
 class ScrapeRequest(BaseModel):
     url: str
     wait_time: int = 2000
+
+
+async def upsert_secret(db: AsyncSession, key: str, value: str) -> None:
+    set_secret_value(key, value)
+    encrypted = encrypt_secret(value)
+    result = await db.execute(select(ConfigSecret).where(ConfigSecret.key == key))
+    secret_obj = result.scalar_one_or_none()
+    if secret_obj:
+        secret_obj.encrypted_value = encrypted  # type: ignore
+    else:
+        db.add(ConfigSecret(key=key, encrypted_value=encrypted))
 
 
 @app.post("/internal/scrape", include_in_schema=False)
@@ -505,16 +521,7 @@ async def update_config(
     for key in CONFIG_SECRET_KEYS:
         val = getattr(data, key, None)
         if val and val != "********":
-            set_secret_value(key, val)
-            encrypted = encrypt_secret(val)
-
-            # Upsert into database
-            res = await db.execute(select(ConfigSecret).where(ConfigSecret.key == key))
-            secret_obj = res.scalar_one_or_none()
-            if secret_obj:
-                secret_obj.encrypted_value = encrypted  # type: ignore
-            else:
-                db.add(ConfigSecret(key=key, encrypted_value=encrypted))
+            await upsert_secret(db, key, val)
 
     await db.commit()
 
@@ -1222,6 +1229,15 @@ async def bulk_approve(data: dict, db: AsyncSession = Depends(get_db)):
             results["failed"].append(
                 {"id": iid, "error": exec_res.get("error")})
     return results
+
+
+api_router.include_router(
+    build_gmail_router(
+        get_db=get_db,
+        gmail_ingestor=gmail_ingestor,
+        upsert_secret=upsert_secret,
+    )
+)
 
 app.include_router(api_router)
 
