@@ -53,6 +53,14 @@ class ConfigSecretStatus(BaseModel):
     MEALIE_API_TOKEN: str = ""
     PRICEBUDDY_API_KEY: str = ""
     CHANGEDETECTION_API_KEY: str = ""
+    GWS_CLIENT_ID: str = ""
+    GWS_CLIENT_SECRET: str = ""
+    GWS_REFRESH_TOKEN: str = ""
+    RECEIPT_WRANGLER_URL: str = ""
+    RECEIPT_WRANGLER_API_KEY: str = ""
+    RECEIPT_WRANGLER_GROUP_ID: str = ""
+    GMAIL_OCR_BACKEND: str = ""
+    GMAIL_OCR_VISION_MODEL: str = ""
 
 
 class ConfigResponse(BaseModel):
@@ -62,6 +70,10 @@ class ConfigResponse(BaseModel):
     starred_models: Optional[List[str]] = None
     image_optimization: Optional[Dict[str, Any]] = None
     custom_pipelines: Optional[List[Dict[str, Any]]] = None
+    gmail_auto_sync_enabled: Optional[bool] = None
+    gmail_poll_interval_minutes: Optional[int] = None
+    gmail_auto_sync_query: Optional[str] = None
+    gmail_auto_sync_max_results: Optional[int] = None
     secrets_status: Optional[Dict[str, str]] = None
 
 
@@ -72,6 +84,10 @@ class ConfigUpdateRequest(BaseModel):
     starred_models: Optional[List[str]] = None
     image_optimization: Optional[Dict[str, Any]] = None
     custom_pipelines: Optional[List[Dict[str, Any]]] = None
+    gmail_auto_sync_enabled: Optional[bool] = None
+    gmail_poll_interval_minutes: Optional[int] = None
+    gmail_auto_sync_query: Optional[str] = None
+    gmail_auto_sync_max_results: Optional[int] = None
     # Secrets
     OPENROUTER_API_KEY: Optional[str] = None
     SEARXNG_URL: Optional[str] = None
@@ -84,6 +100,14 @@ class ConfigUpdateRequest(BaseModel):
     MEALIE_API_TOKEN: Optional[str] = None
     PRICEBUDDY_API_KEY: Optional[str] = None
     CHANGEDETECTION_API_KEY: Optional[str] = None
+    GWS_CLIENT_ID: Optional[str] = None
+    GWS_CLIENT_SECRET: Optional[str] = None
+    GWS_REFRESH_TOKEN: Optional[str] = None
+    RECEIPT_WRANGLER_URL: Optional[str] = None
+    RECEIPT_WRANGLER_API_KEY: Optional[str] = None
+    RECEIPT_WRANGLER_GROUP_ID: Optional[str] = None
+    GMAIL_OCR_BACKEND: Optional[str] = None
+    GMAIL_OCR_VISION_MODEL: Optional[str] = None
 
 
 class ServiceMappingInfo(BaseModel):

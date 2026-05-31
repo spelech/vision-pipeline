@@ -5,6 +5,8 @@ requests
 openai
 pyzbar
 pillow
+pypdf
+pytesseract
 python-dotenv
 opencv-python-headless
 sqlalchemy
@@ -14,6 +16,7 @@ asyncpg
 psycopg2-binary
 cryptography
 jinja2
+apscheduler
 pytest
 pytest-asyncio
 pytest-cov

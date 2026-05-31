@@ -10,6 +10,7 @@ import { PipelineEditor } from './components/PipelineEditor';
 import { ReviewTab } from './app/ReviewTab';
 import { IdentifyTab } from './app/IdentifyTab';
 import { BatchTab } from './app/BatchTab';
+import { ReceiptsTab } from './app/ReceiptsTab';
 import { CameraCaptureModal } from './app/CameraCaptureModal';
 import { ToastBanner } from './app/ToastBanner';
 import type { ActiveTab, PipelineSummary, QueueStatus, ToastState, ToastType } from './app/types';
@@ -465,6 +466,8 @@ export default function App() {
                 onPreview={handlePreview}
                 onExecute={executeItem}
               />
+            ) : activeTab === 'receipts' ? (
+              <ReceiptsTab onToast={showToast} />
             ) : activeTab === 'pipelines' ? (
               <PipelineEditor />
             ) : activeTab === 'system' ? (

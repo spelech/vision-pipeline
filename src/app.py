@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, cast
 import requests
+from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore[import-untyped]
 from pydantic import BaseModel
 from fastapi import (
     FastAPI,
@@ -69,6 +70,9 @@ from schemas import (  # pylint: disable=wrong-import-position
 from services.homebox import HomeboxService  # pylint: disable=wrong-import-position
 from services.mealie import MealieService  # pylint: disable=wrong-import-position
 from services.enrichers import PriceBuddyService, ChangeDetectionService  # pylint: disable=wrong-import-position
+from services.gmail_ingestor import GmailIngestor  # pylint: disable=wrong-import-position
+from services.receipt_wrangler import ReceiptWranglerClient  # pylint: disable=wrong-import-position
+from gmail_routes import build_gmail_router  # pylint: disable=wrong-import-position
 from logger import session_logger  # pylint: disable=wrong-import-position
 from app_helpers import (  # pylint: disable=wrong-import-position,unused-import
     normalize_prompt_templates,
@@ -132,9 +136,16 @@ CONFIG_SECRET_KEYS = [
     "HOMEBOX_PASSWORD",
     "MEALIE_API_TOKEN",
     "PRICEBUDDY_API_KEY",
-    "CHANGEDETECTION_API_KEY"
+    "CHANGEDETECTION_API_KEY",
+    "GWS_CLIENT_ID",
+    "GWS_CLIENT_SECRET",
+    "GWS_REFRESH_TOKEN",
+    "RECEIPT_WRANGLER_URL",
+    "RECEIPT_WRANGLER_API_KEY",
+    "RECEIPT_WRANGLER_GROUP_ID",
+    "GMAIL_OCR_BACKEND",
+    "GMAIL_OCR_VISION_MODEL",
 ]
-
 
 def get_secret_value(key: str) -> str:
     return os.getenv(key) or ""
@@ -147,6 +158,11 @@ def set_secret_value(key: str, val: str) -> None:
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("VisionAPI")
+RUNTIME_STATE: Dict[str, Any] = {"gmail_scheduler": None}
+GMAIL_AUTO_SYNC_JOB_ID = "gmail-auto-sync"
+GMAIL_AUTO_SYNC_DEFAULT_QUERY = (
+    'has:attachment (subject:receipt OR subject:"order confirmation" OR subject:invoice)'
+)
 
 # --- Lifespan ---
 
@@ -165,7 +181,13 @@ async def lifespan(_app: FastAPI):
                 logger.info("Loaded encrypted secret: %s", secret.key)
             except ValueError as e:  # Fernet InvalidToken extends ValueError
                 logger.error("Failed to decrypt secret %s: %s", secret.key, e)
-    yield
+    await configure_gmail_auto_sync_scheduler()
+    try:
+        yield
+    finally:
+        scheduler = RUNTIME_STATE.get("gmail_scheduler")
+        if isinstance(scheduler, AsyncIOScheduler) and scheduler.running:
+            scheduler.shutdown(wait=False)
 
 # --- Setup ---
 app = FastAPI(
@@ -183,6 +205,8 @@ SERVICES = {
     "pricebuddy": PriceBuddyService(),
     "changedetection": ChangeDetectionService()
 }
+gmail_ingestor = GmailIngestor(get_secret_value)
+receipt_wrangler_client = ReceiptWranglerClient(get_secret_value)
 
 REVIEW_IMAGE_MAX_DIM = int(os.getenv("REVIEW_IMAGE_MAX_DIM", "1280"))
 REVIEW_IMAGE_JPEG_QUALITY = int(os.getenv("REVIEW_IMAGE_JPEG_QUALITY", "72"))
@@ -210,6 +234,105 @@ async def get_db():
         yield session
 
 
+def _parse_int_setting(value: Any, default: int, min_value: int, max_value: int) -> int:
+    try:
+        parsed = int(value if value is not None else default)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(min_value, min(parsed, max_value))
+
+
+async def run_gmail_auto_sync_once() -> None:
+    async with AsyncSessionLocal() as db:
+        await ensure_app_settings_seed(db)
+        settings = await get_app_settings(db)
+
+        enabled = bool(settings.get("gmail_auto_sync_enabled", False))
+        if not enabled:
+            return
+
+        query = str(
+            settings.get("gmail_auto_sync_query") or GMAIL_AUTO_SYNC_DEFAULT_QUERY
+        ).strip()
+        max_results = _parse_int_setting(
+            settings.get("gmail_auto_sync_max_results"),
+            default=25,
+            min_value=1,
+            max_value=100,
+        )
+
+        if not gmail_ingestor.oauth_configured() or not gmail_ingestor.connected():
+            await upsert_app_setting(
+                db,
+                "gmail_last_error",
+                "Gmail auto-sync skipped: OAuth not configured or connected",
+            )
+            await db.commit()
+            return
+
+        try:
+            result = await run_in_threadpool(
+                gmail_ingestor.search_receipts,
+                query,
+                max_results,
+                set(),
+            )
+            await upsert_app_setting(
+                db,
+                "gmail_last_sync_at",
+                datetime.now(timezone.utc).isoformat(),
+            )
+            await upsert_app_setting(db, "gmail_last_error", "")
+            await upsert_app_setting(
+                db,
+                "gmail_last_auto_sync_count",
+                int(result.get("message_count") or 0),
+            )
+        except (requests.RequestException, ValueError) as exc:
+            await upsert_app_setting(db, "gmail_last_error", str(exc))
+
+        await db.commit()
+
+
+async def configure_gmail_auto_sync_scheduler() -> None:
+    async with AsyncSessionLocal() as db:
+        await ensure_app_settings_seed(db)
+        settings = await get_app_settings(db)
+
+    interval_minutes = _parse_int_setting(
+        settings.get("gmail_poll_interval_minutes"),
+        default=30,
+        min_value=1,
+        max_value=1440,
+    )
+    enabled = bool(settings.get("gmail_auto_sync_enabled", False))
+
+    scheduler_raw = RUNTIME_STATE.get("gmail_scheduler")
+    scheduler = (
+        scheduler_raw
+        if scheduler_raw and hasattr(scheduler_raw, "add_job") and hasattr(scheduler_raw, "get_job")
+        else None
+    )
+    if scheduler is None:
+        scheduler = AsyncIOScheduler(timezone="UTC")
+        scheduler.start()
+        RUNTIME_STATE["gmail_scheduler"] = scheduler
+
+    if scheduler.get_job(GMAIL_AUTO_SYNC_JOB_ID):
+        scheduler.remove_job(GMAIL_AUTO_SYNC_JOB_ID)
+
+    if enabled:
+        scheduler.add_job(
+            run_gmail_auto_sync_once,
+            trigger="interval",
+            minutes=interval_minutes,
+            id=GMAIL_AUTO_SYNC_JOB_ID,
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+        )
+
+
 def encode_image_bytes_to_data_uri(image_bytes: bytes, mime: str = "image/jpeg") -> str:
     return f"data:{mime};base64,{base64.b64encode(image_bytes).decode()}"
 
@@ -235,6 +358,12 @@ def build_review_image_data_uri(img: Image.Image) -> str:
         optimize=True,
     )
     return encode_image_bytes_to_data_uri(out.getvalue(), mime="image/jpeg")
+
+
+def build_seed_image_data_uri() -> str:
+    """Generate a tiny placeholder image for text-only receipt items."""
+    img = Image.new("RGB", (64, 64), color=(250, 250, 250))
+    return build_review_image_data_uri(img)
 
 
 def item_source_image_data_uri(item: Any) -> Optional[str]:
@@ -269,6 +398,17 @@ def resolve_web_index_file() -> Optional[Path]:
 class ScrapeRequest(BaseModel):
     url: str
     wait_time: int = 2000
+
+
+async def upsert_secret(db: AsyncSession, key: str, value: str) -> None:
+    set_secret_value(key, value)
+    encrypted = encrypt_secret(value)
+    result = await db.execute(select(ConfigSecret).where(ConfigSecret.key == key))
+    secret_obj = result.scalar_one_or_none()
+    if secret_obj:
+        secret_obj.encrypted_value = encrypted  # type: ignore
+    else:
+        db.add(ConfigSecret(key=key, encrypted_value=encrypted))
 
 
 @app.post("/internal/scrape", include_in_schema=False)
@@ -427,6 +567,22 @@ async def get_config(db: AsyncSession = Depends(get_db)) -> ConfigResponse:
         "model_favorites": merge_unique_str_lists(settings.get("model_favorites")),
         "starred_models": merge_unique_str_lists(settings.get("starred_models")),
         "image_optimization": settings.get("image_optimization"),
+        "gmail_auto_sync_enabled": bool(settings.get("gmail_auto_sync_enabled", False)),
+        "gmail_poll_interval_minutes": _parse_int_setting(
+            settings.get("gmail_poll_interval_minutes"),
+            default=30,
+            min_value=1,
+            max_value=1440,
+        ),
+        "gmail_auto_sync_query": str(
+            settings.get("gmail_auto_sync_query") or GMAIL_AUTO_SYNC_DEFAULT_QUERY
+        ),
+        "gmail_auto_sync_max_results": _parse_int_setting(
+            settings.get("gmail_auto_sync_max_results"),
+            default=25,
+            min_value=1,
+            max_value=100,
+        ),
     }
     try:
         await ensure_pipeline_catalog(db)
@@ -464,6 +620,10 @@ async def update_config(
         "model_favorites",
         "starred_models",
         "image_optimization",
+        "gmail_auto_sync_enabled",
+        "gmail_poll_interval_minutes",
+        "gmail_auto_sync_query",
+        "gmail_auto_sync_max_results",
     ]
     data_dict = data.model_dump(exclude_unset=True)
     if "prompt_templates" in data_dict:
@@ -505,18 +665,18 @@ async def update_config(
     for key in CONFIG_SECRET_KEYS:
         val = getattr(data, key, None)
         if val and val != "********":
-            set_secret_value(key, val)
-            encrypted = encrypt_secret(val)
-
-            # Upsert into database
-            res = await db.execute(select(ConfigSecret).where(ConfigSecret.key == key))
-            secret_obj = res.scalar_one_or_none()
-            if secret_obj:
-                secret_obj.encrypted_value = encrypted  # type: ignore
-            else:
-                db.add(ConfigSecret(key=key, encrypted_value=encrypted))
+            await upsert_secret(db, key, val)
 
     await db.commit()
+
+    scheduler_setting_keys = {
+        "gmail_auto_sync_enabled",
+        "gmail_poll_interval_minutes",
+        "gmail_auto_sync_query",
+        "gmail_auto_sync_max_results",
+    }
+    if scheduler_setting_keys.intersection(data_dict.keys()):
+        await configure_gmail_auto_sync_scheduler()
 
     return {"success": True}
 
@@ -1035,7 +1195,7 @@ async def process_item_task(
         item_id: int,
         pipeline_id: str = "default",
         settings_str: str = "{}"):
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-locals,too-many-statements
     try:
         settings = json.loads(settings_str)
     except json.JSONDecodeError:
@@ -1057,6 +1217,12 @@ async def process_item_task(
         res = await db.execute(select(Batch).where(Batch.id == item.batch_id))
         batch = res.scalar_one_or_none()
         batch_text = batch.description if batch else None
+        item_seed_text = ""
+        if isinstance(item.ai_output, dict):
+            item_seed_text = str(item.ai_output.get("gmail_seed_text") or "").strip()
+        combined_text = "\n".join(
+            [part for part in [batch_text or "", item_seed_text] if part]
+        ).strip()
 
         try:
             image_data_uri = item_source_image_data_uri(item)
@@ -1066,7 +1232,13 @@ async def process_item_task(
             image_bytes = decode_data_uri_to_bytes(image_data_uri)
             img = Image.open(io.BytesIO(image_bytes))
             img = ImageOps.exif_transpose(img)  # type: ignore
-            results = await run_in_threadpool(core_pipeline.run, img, batch_text, settings, log_it)
+            results = await run_in_threadpool(
+                core_pipeline.run,
+                img,
+                combined_text or None,
+                settings,
+                log_it,
+            )
             results["review_image_data_uri"] = build_review_image_data_uri(img)
 
             enrichment_tasks = [
@@ -1124,6 +1296,99 @@ async def process_item_task(
 
         session_logger.end_session(sid)
         await db.commit()
+
+
+async def ingest_gmail_receipts_direct(
+    db: AsyncSession,
+    background_tasks: BackgroundTasks,
+    receipts_payload: List[Dict[str, Any]],
+    pipeline_id: str,
+    settings: Dict[str, Any],
+) -> Dict[str, Any]:
+    # pylint: disable=too-many-locals,too-many-statements
+    if not receipts_payload:
+        return {"batch_id": None, "created_items": 0, "receipt_count": 0}
+
+    batch = Batch(
+        name=f"Gmail Receipts {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        description="Gmail direct receipt ingestion",
+        status="processing",
+    )
+    db.add(batch)
+    await db.commit()
+    await db.refresh(batch)
+
+    seed_image_uri = build_seed_image_data_uri()
+    settings_str = json.dumps(settings if isinstance(settings, dict) else {})
+    created_items = 0
+
+    for receipt in receipts_payload:
+        message_raw = receipt.get("message")
+        message: Dict[str, Any] = message_raw if isinstance(message_raw, dict) else {}
+        line_items_raw = receipt.get("line_items")
+        line_items: List[Any] = line_items_raw if isinstance(line_items_raw, list) else []
+        if not line_items:
+            continue
+
+        subject = str(message.get("subject") or "").strip()
+        sender = str(message.get("from") or "").strip()
+        snippet = str(message.get("snippet") or "").strip()
+        message_id = str(message.get("message_id") or "").strip()
+
+        for line_item in line_items:
+            if not isinstance(line_item, dict):
+                continue
+            item_name = str(line_item.get("name") or "Receipt Item").strip() or "Receipt Item"
+            line_text_value = str(line_item.get("line_text") or "").strip()
+            price_value = str(line_item.get("price") or "").strip()
+            seed_text = "\n".join(
+                [
+                    f"Receipt Message Subject: {subject}",
+                    f"Sender: {sender}",
+                    f"Snippet: {snippet}",
+                    f"Line Item: {item_name}",
+                    f"Line Text: {line_text_value}",
+                    f"Price: {price_value}",
+                ]
+            ).strip()
+
+            ai_seed = {
+                "source": "gmail_direct",
+                "gmail_message_id": message_id,
+                "gmail_subject": subject,
+                "gmail_sender": sender,
+                "receipt_line_item": line_item,
+                "gmail_seed_text": seed_text,
+            }
+
+            item = Item(
+                batch_id=batch.id,
+                image_path=seed_image_uri,
+                raw_image_path=seed_image_uri,
+                status="processing",
+                ai_output=ai_seed,
+                product_type="product",
+            )
+            db.add(item)
+            await db.commit()
+            await db.refresh(item)
+            background_tasks.add_task(
+                process_item_task_safe,
+                int(item.id),
+                pipeline_id,
+                settings_str,
+            )
+            created_items += 1
+
+    await db.execute(
+        update(Batch).where(Batch.id == batch.id).values(status="completed")
+    )
+    await db.commit()
+    return {
+        "batch_id": batch.id,
+        "created_items": created_items,
+        "receipt_count": len(receipts_payload),
+    }
 
 
 async def process_item_task_safe(
@@ -1222,6 +1487,17 @@ async def bulk_approve(data: dict, db: AsyncSession = Depends(get_db)):
             results["failed"].append(
                 {"id": iid, "error": exec_res.get("error")})
     return results
+
+
+api_router.include_router(
+    build_gmail_router(
+        get_db=get_db,
+        gmail_ingestor=gmail_ingestor,
+        receipt_wrangler_client=receipt_wrangler_client,
+        ingest_direct_receipts=ingest_gmail_receipts_direct,
+        upsert_secret=upsert_secret,
+    )
+)
 
 app.include_router(api_router)
 

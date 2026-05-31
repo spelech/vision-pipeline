@@ -1,6 +1,14 @@
 import logging
 from .base import BasePipeline
-from .nodes import scan_barcode, vision_identify, web_search, web_scrape, data_refine
+from .nodes import (
+    scan_barcode,
+    vision_identify,
+    web_search,
+    web_scrape,
+    data_refine,
+    upc_lookup_node,
+    gmail_search_node,
+)
 
 logger = logging.getLogger("ComposablePipeline")
 
@@ -26,7 +34,15 @@ class ComposablePipeline(BasePipeline):
                 "type": "multiselect",
                 "label": "Pipeline Nodes",
                 "default": ["barcode", "vision", "search", "refine"],
-                "options": ["barcode", "vision", "search", "scrape", "refine"]
+                "options": [
+                    "barcode",
+                    "gmail_search",
+                    "upc_lookup",
+                    "vision",
+                    "search",
+                    "scrape",
+                    "refine",
+                ]
             },
             "vision_model": {
                 "type": "string",
@@ -72,7 +88,7 @@ class ComposablePipeline(BasePipeline):
             text_description=None,
             settings=None,
             log_cb=None):
-        # pylint: disable=too-many-branches,too-many-locals
+        # pylint: disable=too-many-branches,too-many-locals,too-many-statements
         if not settings:
             settings = {}
 
@@ -85,6 +101,8 @@ class ComposablePipeline(BasePipeline):
 
         results = {
             "barcode": None,
+            "gmail_results": [],
+            "upc_lookup": {},
             "llm_output": {},
             "searxng_results": [],
             "scraped_content": None
@@ -96,6 +114,31 @@ class ComposablePipeline(BasePipeline):
         for node_type in sequence:
             if node_type == "barcode" and image:
                 results["barcode"] = scan_barcode(image, log_cb=log_cb)
+
+            elif node_type == "gmail_search":
+                gmail_query = settings.get("gmail_search_query") or text_description or ""
+                gmail_max_results = settings.get("gmail_search_results_limit", 20)
+                results["gmail_results"] = gmail_search_node(
+                    gmail_query,
+                    max_results=gmail_max_results,
+                    log_cb=log_cb,
+                )
+
+            elif node_type == "upc_lookup":
+                barcode_input = results.get("barcode")
+                if not barcode_input and isinstance(results.get("llm_output"), dict):
+                    barcode_input = results["llm_output"].get("barcode")
+                is_food = False
+                if isinstance(results.get("llm_output"), dict):
+                    is_food = bool(results["llm_output"].get("is_food"))
+                if barcode_input:
+                    results["upc_lookup"] = upc_lookup_node(
+                        barcode_input,
+                        is_food=is_food,
+                        log_cb=log_cb,
+                    )
+                elif log_cb:
+                    log_cb("⚠️ [Node: UPC] Skipped: no barcode available yet.")
 
             elif node_type == "vision" and image:
                 model = settings.get("vision_model") or self.get_settings_schema()[
@@ -112,8 +155,12 @@ class ComposablePipeline(BasePipeline):
 
             elif node_type == "search":
                 # Requires a query from either Barcode or Vision
-                query = results["barcode"] or results["llm_output"].get(
-                    "search_query") or results["llm_output"].get("product_name")
+                query = (
+                    results["barcode"]
+                    or results["llm_output"].get("search_query")
+                    or results["upc_lookup"].get("product_name")
+                    or results["llm_output"].get("product_name")
+                )
                 if query and query not in ["Unknown", "Error"]:
                     search_results_limit = settings.get("search_results_limit", 7)
                     results["searxng_results"] = web_search(
