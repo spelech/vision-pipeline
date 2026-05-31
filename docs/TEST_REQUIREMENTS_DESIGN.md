@@ -602,6 +602,7 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_access_token_api_get_and_download_attachment_paths
     - test_search_receipts_get_message_and_skip_failed_detail
     - test_extract_attachment_text_pdf_image_and_fallback_paths
+    - test_extract_text_with_vision_llm_uses_configurable_llm_base_url_and_key
 - src/tests/test_gmail_routes.py
   - Test functions:
     - test_gmail_status_endpoint_reports_settings_and_connection_state
@@ -665,9 +666,13 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_upc_lookup_node_food_and_generic_paths
     - test_upc_lookup_node_handles_request_failure
     - test_gmail_search_node_success_and_failure_paths
+    - test_get_client_uses_litellm_base_url_and_api_key_overrides
+    - test_get_client_requires_key_for_openrouter_default
 - src/tests/test_receipt_pipeline.py
   - Test functions:
     - test_receipt_pipeline_identity_and_defaults
+    - test_receipt_pipeline_node_interactions
+    - test_receipt_pipeline_default_sequence_skips_initial_upc_without_barcode
 - src/tests/test_receipt_wrangler.py
   - Test functions:
     - test_get_pending_receipts_list_and_wrapped_payloads
