@@ -17,7 +17,15 @@ const SECRET_KEYS = [
   "HOMEBOX_PASSWORD",
   "MEALIE_API_TOKEN",
   "PRICEBUDDY_API_KEY",
-  "CHANGEDETECTION_API_KEY"
+  "CHANGEDETECTION_API_KEY",
+  "GWS_CLIENT_ID",
+  "GWS_CLIENT_SECRET",
+  "GWS_REFRESH_TOKEN",
+  "RECEIPT_WRANGLER_URL",
+  "RECEIPT_WRANGLER_API_KEY",
+  "RECEIPT_WRANGLER_GROUP_ID",
+  "GMAIL_OCR_BACKEND",
+  "GMAIL_OCR_VISION_MODEL",
 ];
 
 interface ImageOptimization {
@@ -39,6 +47,12 @@ export function Settings() {
   const [newModelId, setNewModelId] = useState("");
   const [saving, setSaving] = useState(false);
   const [templatesFromConfig, setTemplatesFromConfig] = useState(false);
+  const [gmailAutoSyncEnabled, setGmailAutoSyncEnabled] = useState(false);
+  const [gmailPollIntervalMinutes, setGmailPollIntervalMinutes] = useState(30);
+  const [gmailAutoSyncQuery, setGmailAutoSyncQuery] = useState(
+    'has:attachment (subject:receipt OR subject:"order confirmation" OR subject:invoice)'
+  );
+  const [gmailAutoSyncMaxResults, setGmailAutoSyncMaxResults] = useState(25);
 
   useEffect(() => {
     void (async () => {
@@ -94,6 +108,15 @@ export function Settings() {
         const derivedTemplates = derivePromptTemplatesFromPipelines(pipelinesData.pipelines);
         setTemplatesFromConfig(savedTemplates.length > 0);
         setPromptTemplates(savedTemplates.length > 0 ? savedTemplates : derivedTemplates);
+        setGmailAutoSyncEnabled(Boolean(configData.gmail_auto_sync_enabled));
+        setGmailPollIntervalMinutes(Number(configData.gmail_poll_interval_minutes || 30));
+        setGmailAutoSyncQuery(
+          String(
+            configData.gmail_auto_sync_query
+              || 'has:attachment (subject:receipt OR subject:"order confirmation" OR subject:invoice)'
+          )
+        );
+        setGmailAutoSyncMaxResults(Number(configData.gmail_auto_sync_max_results || 25));
       } catch (e) {
         console.error(e);
       }
@@ -111,6 +134,10 @@ export function Settings() {
         model_favorites: modelFavorites,
         starred_models: starredModels,
         image_optimization: imageOptimization,
+        gmail_auto_sync_enabled: gmailAutoSyncEnabled,
+        gmail_poll_interval_minutes: gmailPollIntervalMinutes,
+        gmail_auto_sync_query: gmailAutoSyncQuery,
+        gmail_auto_sync_max_results: gmailAutoSyncMaxResults,
         ...secrets
       };
       if (templatesFromConfig || promptTemplates.length > 0) {
@@ -267,6 +294,52 @@ export function Settings() {
               />
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="space-y-6">
+        <label className="label-apple">Gmail Auto Sync</label>
+        <div className="glass rounded-[3rem] p-10 grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
+            <label className="text-xs font-bold text-white/70 tracking-wider">Enable Background Sync</label>
+            <input
+              type="checkbox"
+              checked={gmailAutoSyncEnabled}
+              onChange={(e) => setGmailAutoSyncEnabled(e.target.checked)}
+              className="h-5 w-5"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-white/50 tracking-wider">Poll Interval (minutes)</label>
+            <input
+              type="number"
+              min={1}
+              max={1440}
+              value={gmailPollIntervalMinutes}
+              onChange={(e) => setGmailPollIntervalMinutes(Number(e.target.value) || 30)}
+              className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-white/50 tracking-wider">Auto Sync Max Results</label>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={gmailAutoSyncMaxResults}
+              onChange={(e) => setGmailAutoSyncMaxResults(Number(e.target.value) || 25)}
+              className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <label className="text-xs font-bold text-white/50 tracking-wider">Auto Sync Query</label>
+            <input
+              type="text"
+              value={gmailAutoSyncQuery}
+              onChange={(e) => setGmailAutoSyncQuery(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white focus:outline-none"
+            />
+          </div>
         </div>
       </section>
 

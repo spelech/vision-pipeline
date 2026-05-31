@@ -9,7 +9,7 @@ interface NavbarProps {
 
 export function Navbar({ activeTab, setActiveTab }: NavbarProps) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const tabs: ActiveTab[] = ['identify', 'batch', 'review', 'pipelines', 'system'];
+  const tabs: ActiveTab[] = ['identify', 'batch', 'review', 'receipts', 'pipelines', 'system'];
 
   const handleTabClick = (tab: ActiveTab) => {
     setActiveTab(tab);
