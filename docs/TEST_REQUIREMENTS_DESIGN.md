@@ -409,6 +409,18 @@ Updated by script: scripts/update-test-requirements-index.mjs
   - processing-dashboard-empty | returns null when no processing file
   - processing-dashboard-stages-and-logs | renders active completed pending and log styles
   - processing-dashboard-error | shows dismiss controls and error message
+- web/src/test/ReceiptsTab.test.tsx
+  - receipts-status-load | loads and displays gmail status on mount
+  - receipts-search-and-ingest | searches gmail receipts and ingests selected items
+  - receipts-selection-guard | informs user when action is attempted without selected messages
+  - receipts-action-error | surfaces API detail when selected action fails
+  - receipts-status-error | shows toast when status refresh fails
+  - receipts-select-all-toggle | toggles between selecting and clearing all receipts
+  - receipts-non-json-status | safely handles non-json status payloads
+  - receipts-action-network-error | shows generic error when action request throws
+  - receipts-rw-process-pending | processes pending receipt wrangler receipts
+  - receipts-rw-process-error | surfaces API detail when pending processing fails
+  - receipts-rw-process-network-error | shows generic error when pending processing request throws
 - web/src/test/Settings.test.tsx
   - settings-load | renders correctly and loads data
   - settings-model-add | allows adding a new model
@@ -425,6 +437,9 @@ Updated by script: scripts/update-test-requirements-index.mjs
   - settings-load-fallback | keeps UI stable when config/models/pipelines requests fail
   - settings-save-empty-template-array | persists prompt_templates as empty when templates originated from config
   - settings-save-updated-secret-and-image-optimization | persists edited secret key and optimization values
+  - settings-gmail-auto-sync-payload | persists gmail scheduler settings
+  - settings-connect-gmail | opens auth url from backend when connect is clicked
+  - settings-connect-gmail-error | shows alert when auth url request fails
 
 ### 9.2 Backend Feature Tests
 - src/tests/test_advanced_pipeline.py
@@ -485,6 +500,12 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_process_item_task_success_and_error_and_safe_wrapper
     - test_queue_item_update_delete_and_rerun_endpoints
     - test_bulk_approve_success_failure_and_missing_item_paths
+- src/tests/test_app_gmail_scheduler.py
+  - Test functions:
+    - test_run_gmail_auto_sync_once_skips_when_disabled
+    - test_run_gmail_auto_sync_once_sets_error_when_not_connected
+    - test_run_gmail_auto_sync_once_success_and_error_paths
+    - test_configure_scheduler_adds_job_only_when_enabled
 - src/tests/test_app_utils.py
   - Feature labels:
     - normalize mixed prompt template representations into stable objects.
@@ -516,6 +537,7 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_service_feedback_gate_and_fallback_population
     - test_get_service_prompt_config_overlays_defaults_and_overrides
     - test_item_data_helpers_project_base_context_and_service_data
+    - test_item_data_helpers_include_receipt_metadata_with_user_overrides
     - test_helper_catalog_and_settings_seed_paths
     - test_helper_pipeline_catalog_error_and_listing_paths
     - test_helper_pipeline_exists_and_custom_persistence_paths
@@ -567,6 +589,31 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_changedetection_execute_request_exception_returns_error
     - test_changedetection_pre_enrichment_no_matching_watch_and_exception_paths
     - test_changedetection_execute_supports_multiple_monitor_urls
+- src/tests/test_gmail_ingestor.py
+  - Test functions:
+    - test_extract_line_items_from_message_uses_plain_text_prices
+    - test_extract_line_items_from_message_falls_back_to_subject
+    - test_extract_line_items_from_message_uses_attachment_text_when_plain_text_missing
+    - test_ocr_backend_defaults_to_tesseract_for_unknown_values
+    - test_ocr_backend_accepts_vision_llm_value
+    - test_receipt_wrangler_configured_accepts_api_token_fallback
+    - test_build_auth_url_and_validation_paths
+    - test_exchange_code_for_tokens_success_and_missing_configuration
+    - test_access_token_api_get_and_download_attachment_paths
+    - test_search_receipts_get_message_and_skip_failed_detail
+    - test_extract_attachment_text_pdf_image_and_fallback_paths
+- src/tests/test_gmail_routes.py
+  - Test functions:
+    - test_gmail_status_endpoint_reports_settings_and_connection_state
+    - test_gmail_search_endpoint_excludes_processed_ids_by_default
+    - test_gmail_search_builds_query_from_preset_and_filters
+    - test_gmail_sync_marks_messages_processed_when_requested
+    - test_receipt_wrangler_sync_requires_explicit_selection_and_is_separate
+    - test_receipt_wrangler_sync_processes_selected_message_attachments
+    - test_gmail_direct_ingest_requires_selection
+    - test_gmail_direct_ingest_uses_attachment_text_for_line_items
+    - test_receipt_wrangler_process_pulls_and_resolves_pending_receipts
+    - test_receipt_wrangler_helpers_cover_line_item_and_data_uri_fallbacks
 - src/tests/test_homebox.py
   - Test functions:
     - test_homebox_execution_new_item
@@ -615,6 +662,19 @@ Updated by script: scripts/update-test-requirements-index.mjs
     - test_web_search_and_scrape_paths
     - test_data_refine_success_and_fallback
     - test_data_refine_client_init_error_returns_current_data
+    - test_upc_lookup_node_food_and_generic_paths
+    - test_upc_lookup_node_handles_request_failure
+    - test_gmail_search_node_success_and_failure_paths
+- src/tests/test_receipt_pipeline.py
+  - Test functions:
+    - test_receipt_pipeline_identity_and_defaults
+- src/tests/test_receipt_wrangler.py
+  - Test functions:
+    - test_get_pending_receipts_list_and_wrapped_payloads
+    - test_download_receipt_image_requires_id_and_returns_bytes
+    - test_update_receipt_status_json_and_fallback_paths
+    - test_quick_scan_empty_bytes_raises_error
+    - test_receipt_wrangler_uses_api_token_fallback_when_api_key_missing
 - src/tests/test_validation.py
   - Test functions:
     - test_pipeline_validation_logic
