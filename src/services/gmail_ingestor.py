@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 import requests
 from PIL import Image
 from pypdf import PdfReader
-from openai import OpenAI
+from llm_client import create_openai_client
 
 logger = logging.getLogger(__name__)
 
@@ -175,13 +175,9 @@ class GmailIngestor:
         return text.strip()[:10000]
 
     def _extract_text_with_vision_llm(self, image_bytes: bytes, mime_type: str) -> str:
-        api_key = self._get_secret("OPENROUTER_API_KEY")
-        if not api_key:
-            raise ValueError("Missing OPENROUTER_API_KEY for vision OCR backend")
-
         model = self.ocr_vision_model()
         data_uri = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode()}"
-        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+        client = create_openai_client(self._get_secret)
         response = client.chat.completions.create(
             model=model,
             temperature=0,

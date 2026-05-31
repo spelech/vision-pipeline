@@ -7,6 +7,8 @@ import {
 } from './settingsUtils';
 
 const SECRET_KEYS = [
+  "LLM_BASE_URL",
+  "LLM_API_KEY",
   "OPENROUTER_API_KEY",
   "SEARXNG_URL",
   "HOMEBOX_URL",

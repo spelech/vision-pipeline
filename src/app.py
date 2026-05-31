@@ -126,6 +126,8 @@ def decrypt_secret(val: str) -> str:
     return cipher.decrypt(val.encode()).decode()
 
 CONFIG_SECRET_KEYS = [
+    "LLM_BASE_URL",
+    "LLM_API_KEY",
     "OPENROUTER_API_KEY",
     "SEARXNG_URL",
     "HOMEBOX_URL",
@@ -155,6 +157,8 @@ def get_secret_value(key: str) -> str:
         return direct_value
 
     aliases = {
+        "LLM_API_KEY": "OPENROUTER_API_KEY",
+        "OPENROUTER_API_KEY": "LLM_API_KEY",
         "RECEIPT_WRANGLER_API_KEY": "RECEIPT_WRANGLER_API_TOKEN",
         "RECEIPT_WRANGLER_API_TOKEN": "RECEIPT_WRANGLER_API_KEY",
     }
@@ -206,7 +210,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="Vision Pipeline API",
-    version="3.5.0",
+    version="3.6.0",
     redoc_url=None,
 )
 api_router = APIRouter(prefix="/api")
