@@ -347,6 +347,14 @@ export default function App() {
     setCameraError('');
   };
 
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const openCamera = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       cameraInputRef.current?.click();
@@ -368,9 +376,17 @@ export default function App() {
     }
   };
 
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const showToast = (message: string, type: ToastType = 'info') => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
     setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimeoutRef.current = null;
+    }, 4000);
   };
 
   const capturePhoto = async () => {

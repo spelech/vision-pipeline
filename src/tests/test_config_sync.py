@@ -7,6 +7,7 @@ from database import ConfigSecret, AppSetting, PipelineDefinition
 @pytest.mark.asyncio
 async def test_export_config():
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     
     # Mock settings
     mock_settings_result = MagicMock()
@@ -55,6 +56,7 @@ async def test_export_config():
 @pytest.mark.asyncio
 async def test_import_config():
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     
     import_payload = {
         "prompt_templates": [{"id": "t2", "name": "n2", "prompt": "p2"}],
@@ -75,15 +77,16 @@ async def test_import_config():
     try:
         with patch("app.decrypt_secret", return_value="decrypted"):
             with patch("app.upsert_app_setting", new=AsyncMock()) as mock_upsert:
-                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-                    response = await ac.post("/api/config/import", json=import_payload)
-                    assert response.status_code == 200
-                    assert response.json()["success"] is True
-                    
-                    # Verify settings were upserted
-                    mock_upsert.assert_any_call(mock_session, "prompt_templates", import_payload["prompt_templates"])
-                    # Verify secret was added to session
-                    mock_session.add.assert_called()
-                    assert mock_session.commit.called
+                with patch("app.configure_gmail_auto_sync_scheduler", new=AsyncMock()):
+                    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                        response = await ac.post("/api/config/import", json=import_payload)
+                        assert response.status_code == 200
+                        assert response.json()["success"] is True
+                        
+                        # Verify settings were upserted
+                        mock_upsert.assert_any_call(mock_session, "prompt_templates", import_payload["prompt_templates"])
+                        # Verify secret was added to session
+                        mock_session.add.assert_called()
+                        assert mock_session.commit.called
     finally:
         app.dependency_overrides.pop(get_db, None)
