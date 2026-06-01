@@ -9,12 +9,14 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const packageJsonPath = resolve(currentDir, 'package.json')
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as { version?: string }
 const appVersion = packageJson.version ?? '0.0.0'
+const buildTime = new Date().toISOString()
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+    'import.meta.env.VITE_BUILD_TIME': JSON.stringify(buildTime),
   },
   test: {
     globals: true,

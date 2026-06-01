@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Camera, Menu, X } from 'lucide-react';
 import type { ActiveTab } from '../app/types';
-import { APP_VERSION } from '../version';
+import { APP_VERSION, BUILD_TIME } from '../version';
 
 interface NavbarProps {
   activeTab: ActiveTab;
@@ -17,6 +17,13 @@ export function Navbar({ activeTab, setActiveTab }: NavbarProps) {
     setIsMobileOpen(false);
   };
 
+  const formattedBuildTime = new Date(BUILD_TIME).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
   return (
     <nav className="fixed top-0 w-full z-50 glass-dark border-b border-white/5 px-6 py-4">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -26,7 +33,10 @@ export function Navbar({ activeTab, setActiveTab }: NavbarProps) {
           </div>
           <h1 className="text-lg font-black tracking-tighter uppercase italic flex items-center gap-2">
             <div>Vision<span className="text-blue-500 ml-1">Pipeline</span></div>
-            <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[8px] tracking-[0.2em] font-black text-white/30 not-italic">V{APP_VERSION}</span>
+            <div className="flex flex-col items-start gap-1">
+              <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[8px] tracking-[0.2em] font-black text-white/30 not-italic">V{APP_VERSION}</span>
+              <span className="text-[6px] text-white/10 uppercase tracking-[0.1em] font-bold ml-1">{formattedBuildTime}</span>
+            </div>
           </h1>
         </div>
 
