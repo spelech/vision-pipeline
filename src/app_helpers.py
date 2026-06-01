@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 # pylint: disable=line-too-long,too-many-locals
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -453,27 +453,46 @@ async def get_runtime_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
 async def ensure_pipeline_catalog(db: AsyncSession) -> None:
     try:
         registry_entries = normalize_pipeline_list(pipelines.get_all_pipelines())
-        result = await db.execute(select(PipelineDefinition.pipeline_id))
-        existing_ids = {str(item[0]) for item in result.all()}
+        result = await db.execute(select(PipelineDefinition))
+        existing_rows = {str(row.pipeline_id): row for row in result.scalars().all()}
 
-        created = False
+        changed = False
         for entry in registry_entries:
             pipeline_id = str(entry.get("id", "")).strip()
-            if not pipeline_id or pipeline_id in existing_ids:
+            if not pipeline_id:
                 continue
-            db.add(
-                PipelineDefinition(
-                    pipeline_id=pipeline_id,
-                    name=str(entry.get("name", pipeline_id)),
-                    schema=normalize_pipeline_schema(entry.get("schema") or {}),
-                    is_system=True,
-                    is_editable=True,
-                    service_target=_service_target_for_pipeline_id(pipeline_id),
-                )
-            )
-            created = True
 
-        if created:
+            name = str(entry.get("name", pipeline_id))
+            schema = normalize_pipeline_schema(entry.get("schema") or {})
+            service_target = _service_target_for_pipeline_id(pipeline_id)
+
+            if pipeline_id in existing_rows:
+                row = existing_rows[pipeline_id]
+                if not row.is_system:
+                    continue  # Don't touch user-created pipelines with same ID (unlikely)
+
+                # Force sync system pipelines
+                if (row.name != name or
+                        row.schema != schema or
+                        row.service_target != service_target):
+                    row.name = name
+                    row.schema = schema
+                    row.service_target = service_target
+                    changed = True
+            else:
+                db.add(
+                    PipelineDefinition(
+                        pipeline_id=pipeline_id,
+                        name=name,
+                        schema=schema,
+                        is_system=True,
+                        is_editable=True,
+                        service_target=service_target,
+                    )
+                )
+                changed = True
+
+        if changed:
             await db.commit()
     except SQLAlchemyError:
         logger.warning("Skipping pipeline catalog sync because DB is unavailable")
