@@ -1,12 +1,12 @@
-import json
 import logging
+import json
 import uuid
 from typing import Any, Dict, List, Optional, cast
 from urllib.parse import urlparse
 
 # pylint: disable=line-too-long,too-many-locals
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +16,7 @@ from database import (
     PipelineDefinition,
     async_session_local as AsyncSessionLocal,
 )
-from pipelines import ComposablePipeline, DefaultPipeline, PIPELINE_REGISTRY
+from pipelines import ComposablePipeline, DefaultPipeline, PIPELINE_REGISTRY, get_all_pipelines
 import pipelines
 from pipelines.nodes import data_refine
 
@@ -412,9 +412,7 @@ async def ensure_model_catalog(db: AsyncSession) -> None:
 
 async def ensure_app_settings_seed(db: AsyncSession) -> None:
     existing = await get_app_settings(db)
-    if all(key in existing for key in DB_SETTING_KEYS):
-        return
-
+    
     defaults: Dict[str, Any] = {
         "prompt_templates": [],
         "service_prompts": default_service_prompt_configs(),
@@ -428,17 +426,74 @@ async def ensure_app_settings_seed(db: AsyncSession) -> None:
         ),
         "gmail_auto_sync_max_results": 25,
     }
+
+    # Smart Prompt Migration logic
+    changed = False
+
+    # 1. System Prompts (service_prompts)
+    db_service_prompts = normalize_service_prompts(existing.get("service_prompts", {}))
+    default_service_prompts = defaults["service_prompts"]
+    
+    final_service_prompts = dict(db_service_prompts)
+    
+    for service_id, default_cfg in default_service_prompts.items():
+        if service_id not in db_service_prompts:
+            final_service_prompts[service_id] = default_cfg
+            changed = True
+            continue
+            
+        db_cfg = db_service_prompts[service_id]
+        # Compare prompts
+        db_prompt = str(db_cfg.get("prompt", "")).strip()
+        def_prompt = str(default_cfg.get("prompt", "")).strip()
+        
+        if db_prompt != def_prompt and def_prompt:
+            logger.info("System prompt for %s has changed in codebase. Preserving user version.", service_id)
+            # Create a backup ID for the user's custom prompt
+            custom_id = f"{service_id}_custom"
+            
+            # Save user prompt as a regular prompt template (since service_prompts are fixed keys)
+            # Or just let them keep it as f"{service_id}_custom" if we had a registry.
+            # Decision: Add to prompt_templates as a backup.
+            user_prompt_template = {
+                "id": custom_id,
+                "name": f"Legacy {service_id.title()} Prompt (User)",
+                "prompt": db_prompt
+            }
+            
+            # Add to prompt_templates if not already there
+            current_templates = normalize_prompt_templates(existing.get("prompt_templates", []))
+            if not any(t["id"] == custom_id for t in current_templates):
+                current_templates.append(user_prompt_template)
+                await upsert_app_setting(db, "prompt_templates", current_templates)
+                existing["prompt_templates"] = current_templates # Update local cache
+            
+            # Update any custom pipelines that were using this service (if they explicitly refer to it)
+            # Note: custom pipelines usually have their own prompt fields in schema, 
+            # but they might reference system prompts in some future implementation.
+            # For now, we update the service prompt to the new default.
+            final_service_prompts[service_id] = default_cfg
+            changed = True
+
+    if changed:
+        await upsert_app_setting(db, "service_prompts", final_service_prompts)
+        existing["service_prompts"] = final_service_prompts
+
+    # 2. General Settings Seed
     for key in DB_SETTING_KEYS:
         if key in existing:
             continue
         await upsert_app_setting(db, key, defaults.get(key))
 
+    # 3. Model Favorites Sync
     model_ids: set[str] = set()
-
     catalog_result = await db.execute(select(ModelCatalog.model_id))
     for item in catalog_result.all():
         model_ids.add(str(item[0]))
-    await upsert_app_setting(db, "model_favorites", list(model_ids))
+    
+    db_favorites = set(merge_unique_str_lists(existing.get("model_favorites", [])))
+    if not model_ids.issubset(db_favorites):
+        await upsert_app_setting(db, "model_favorites", list(model_ids | db_favorites))
 
     await db.commit()
 
@@ -453,27 +508,46 @@ async def get_runtime_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
 async def ensure_pipeline_catalog(db: AsyncSession) -> None:
     try:
         registry_entries = normalize_pipeline_list(pipelines.get_all_pipelines())
-        result = await db.execute(select(PipelineDefinition.pipeline_id))
-        existing_ids = {str(item[0]) for item in result.all()}
+        result = await db.execute(select(PipelineDefinition))
+        existing_rows = {str(row.pipeline_id): row for row in result.scalars().all()}
 
-        created = False
+        changed = False
         for entry in registry_entries:
             pipeline_id = str(entry.get("id", "")).strip()
-            if not pipeline_id or pipeline_id in existing_ids:
+            if not pipeline_id:
                 continue
-            db.add(
-                PipelineDefinition(
-                    pipeline_id=pipeline_id,
-                    name=str(entry.get("name", pipeline_id)),
-                    schema=normalize_pipeline_schema(entry.get("schema") or {}),
-                    is_system=True,
-                    is_editable=True,
-                    service_target=_service_target_for_pipeline_id(pipeline_id),
-                )
-            )
-            created = True
 
-        if created:
+            name = str(entry.get("name", pipeline_id))
+            schema = normalize_pipeline_schema(entry.get("schema") or {})
+            service_target = _service_target_for_pipeline_id(pipeline_id)
+
+            if pipeline_id in existing_rows:
+                row = existing_rows[pipeline_id]
+                if not row.is_system:
+                    continue  # Don't touch user-created pipelines with same ID (unlikely)
+
+                # Force sync system pipelines
+                if (row.name != name or
+                        row.schema != schema or
+                        row.service_target != service_target):
+                    row.name = name
+                    row.schema = schema
+                    row.service_target = service_target
+                    changed = True
+            else:
+                db.add(
+                    PipelineDefinition(
+                        pipeline_id=pipeline_id,
+                        name=name,
+                        schema=schema,
+                        is_system=True,
+                        is_editable=True,
+                        service_target=service_target,
+                    )
+                )
+                changed = True
+
+        if changed:
             await db.commit()
     except SQLAlchemyError:
         logger.warning("Skipping pipeline catalog sync because DB is unavailable")

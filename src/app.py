@@ -716,6 +716,78 @@ async def update_config(
     return {"success": True}
 
 
+@api_router.get("/config/export")
+async def export_config(db: AsyncSession = Depends(get_db)):
+    """Export all non-system configuration as a JSON file."""
+    # We use the existing get_config logic but ensure we get all data
+    config_resp = await get_config(db)
+    config_data = config_resp.model_dump()
+    
+    # Include the encrypted secrets so Import can restore them.
+    res = await db.execute(select(ConfigSecret))
+    secrets = res.scalars().all()
+    config_data["encrypted_secrets"] = {s.key: s.encrypted_value for s in secrets}
+    
+    return config_data
+
+
+@api_router.post("/config/import")
+async def import_config(
+        data: Dict[str, Any],
+        db: AsyncSession = Depends(get_db)):
+    """Import configuration from a JSON dump."""
+    try:
+        # 1. Update general settings
+        keys_to_persist = [
+            "prompt_templates",
+            "service_prompts",
+            "model_favorites",
+            "starred_models",
+            "image_optimization",
+            "gmail_auto_sync_enabled",
+            "gmail_poll_interval_minutes",
+            "gmail_auto_sync_query",
+            "gmail_auto_sync_max_results",
+        ]
+        
+        for key in keys_to_persist:
+            if key in data:
+                await upsert_app_setting(db, key, data[key])
+        
+        # 2. Update custom pipelines
+        if "custom_pipelines" in data:
+            normalized = normalize_pipeline_list(data["custom_pipelines"])
+            await persist_custom_pipelines(db, normalized)
+            
+        # 3. Update secrets
+        encrypted_secrets = data.get("encrypted_secrets", {})
+        for key, enc_val in encrypted_secrets.items():
+            # Verify it's a known secret key
+            if key in CONFIG_SECRET_KEYS:
+                result = await db.execute(select(ConfigSecret).where(ConfigSecret.key == key))
+                secret_obj = result.scalar_one_or_none()
+                if secret_obj:
+                    secret_obj.encrypted_value = enc_val  # type: ignore
+                else:
+                    db.add(ConfigSecret(key=key, encrypted_value=enc_val))
+                
+                # Try to decrypt and put into environment immediately
+                try:
+                    os.environ[key] = decrypt_secret(enc_val)
+                except Exception: # pylint: disable=broad-exception-caught
+                    pass
+
+        await db.commit()
+        
+        # Reload scheduler if needed
+        await configure_gmail_auto_sync_scheduler()
+        
+        return {"success": True}
+    except Exception as e: # pylint: disable=broad-exception-caught
+        logger.error("Import failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @api_router.get("/search", response_model=SearchResponse)
 async def search_items(
         query: str,

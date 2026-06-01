@@ -234,6 +234,57 @@ export function Settings() {
     }
   };
 
+  const exportConfig = async () => {
+    try {
+      const response = await fetch('/api/config/export');
+      if (!response.ok) throw new Error('Export failed');
+      const data = await response.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `vision-pipeline-config-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to export configuration.');
+    }
+  };
+
+  const importConfig = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        if (!confirm('This will overwrite current settings and custom pipelines. Continue?')) return;
+
+        const response = await fetch('/api/config/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+
+        if (response.ok) {
+          alert('Configuration imported successfully! Reloading...');
+          window.location.reload();
+        } else {
+          const err = await response.json();
+          alert(`Import failed: ${err.detail || 'Unknown error'}`);
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Invalid JSON file.');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    event.target.value = '';
+  };
+
   return (
     <div className="space-y-12 pb-32">
       <header className="flex justify-between items-end">
@@ -248,6 +299,35 @@ export function Settings() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Import/Export */}
+        <section className="space-y-6 flex flex-col md:col-span-2">
+          <label className="label-apple">Backup & Sync</label>
+          <div className="glass p-8 rounded-[2.5rem] flex gap-4 items-center">
+            <button
+              onClick={() => void exportConfig()}
+              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase tracking-widest px-8 py-4 rounded-2xl transition-all shadow-lg shadow-blue-900/20"
+            >
+              Export Configuration
+            </button>
+            <div className="relative">
+              <input
+                type="file"
+                accept=".json"
+                onChange={(e) => void importConfig(e)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              <button
+                className="bg-white/5 hover:bg-white/10 text-white/70 text-xs font-black uppercase tracking-widest px-8 py-4 rounded-2xl border border-white/10 transition-all"
+              >
+                Import Configuration
+              </button>
+            </div>
+            <p className="text-[10px] text-white/30 italic ml-auto max-w-[200px] text-right">
+              Sync prompts, pipelines, and secrets between dev and production environments.
+            </p>
+          </div>
+        </section>
+
         {/* Image Processing */}
         <section className="space-y-6 flex flex-col">
           <label className="label-apple">Image Processing</label>
