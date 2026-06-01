@@ -31,11 +31,11 @@ export function Navbar({ activeTab, setActiveTab }: NavbarProps) {
           <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-purple-500 rounded-xl shadow-lg shadow-blue-500/20 flex items-center justify-center">
             <Camera className="w-5 h-5 text-white" />
           </div>
-          <h1 className="text-lg font-black tracking-tighter uppercase italic flex items-center gap-2">
+          <h1 className="text-lg font-black tracking-tighter uppercase italic flex items-center gap-4">
             <div>Vision<span className="text-blue-500 ml-1">Pipeline</span></div>
-            <div className="flex flex-col items-start gap-1">
+            <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[8px] tracking-[0.2em] font-black text-white/30 not-italic">V{APP_VERSION}</span>
-              <span className="text-[6px] text-white/10 uppercase tracking-[0.1em] font-bold ml-1">{formattedBuildTime}</span>
+              <span className="text-[7px] text-white/60 uppercase tracking-widest font-black not-italic border-l border-white/10 pl-2">{formattedBuildTime}</span>
             </div>
           </h1>
         </div>
