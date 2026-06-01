@@ -13,11 +13,17 @@ An automated product identification and enrichment system that bridges physical 
 
 ## Feature Development Workflow
 
-For every new feature request:
-1.  **Planning:** Create a documented plan (usually in a dedicated markdown file or a new section in the feature's design doc).
-2.  **Tracking:** Update `FEATURES.md` with the new capability and its status.
-3.  **Implementation:** Follow the Research -> Strategy -> Execution cycle.
-4.  **Verification:** Add and run tests to confirm the feature works as intended and doesn't break existing integrations.
+For every new request (feature, bug fix, or refactor):
+1.  **Branching:** ALWAYS create a new feature branch from the latest `master` (e.g., `feat/my-new-capability`).
+2.  **Implementation:**
+    -   Follow the Research -> Strategy -> Execution cycle.
+    -   Use **atomic commits** that capture single logical changes.
+3.  **Verification:**
+    -   Add or update unit/E2E tests to verify the change.
+    -   Verify all quality gates (tests, linting) pass **inside the container environment** (`docker exec vision-pipeline pytest tests/`).
+4.  **Merging:**
+    -   Merge the feature branch back into `master` using **no-squash merge** (`git merge --no-ff`) to preserve the atomic commit history.
+5.  **Tracking:** Update `FEATURES.md` with the new capability and its status.
 
 ## Project Overview
 
