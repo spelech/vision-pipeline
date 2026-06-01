@@ -376,7 +376,7 @@ export default function App() {
     }
   };
 
-  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (message: string, type: ToastType = 'info') => {
     if (toastTimeoutRef.current) {
