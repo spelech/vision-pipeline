@@ -21,9 +21,12 @@ For every new request (feature, bug fix, or refactor):
 3.  **Verification:**
     -   Add or update unit/E2E tests to verify the change.
     -   Verify all quality gates (tests, linting) pass **inside the container environment** (`docker exec vision-pipeline pytest tests/`).
-4.  **Merging:**
+4.  **Versioning:**
+    -   BEFORE merging, bump the version in `package.json` and `web/package.json`.
+    -   Follow SemVer (typically a patch bump `x.x.+1` for minor features/fixes).
+5.  **Merging:**
     -   Merge the feature branch back into `master` using **no-squash merge** (`git merge --no-ff`) to preserve the atomic commit history.
-5.  **Tracking:** Update `FEATURES.md` with the new capability and its status.
+6.  **Tracking:** Update `FEATURES.md` with the new capability and its status.
 
 ## Project Overview
 
