@@ -585,7 +585,10 @@ async def list_models(db: AsyncSession = Depends(get_db)) -> ModelListResponse:
 
 
 @api_router.get("/config", response_model=ConfigResponse)
-async def get_config(db: AsyncSession = Depends(get_db)) -> ConfigResponse:
+async def get_config(
+    db: AsyncSession = Depends(get_db),
+    reveal_secrets: bool = False,
+) -> ConfigResponse:
     await ensure_app_settings_seed(db)
     settings = await get_app_settings(db)
     prompt_templates = normalize_prompt_templates(settings.get("prompt_templates"))
@@ -630,7 +633,7 @@ async def get_config(db: AsyncSession = Depends(get_db)) -> ConfigResponse:
     for key in CONFIG_SECRET_KEYS:
         val = get_secret_value(key)
         if val:
-            if "URL" in key:
+            if reveal_secrets or "URL" in key:
                 secrets_status[key] = val
             else:
                 secrets_status[key] = "********"

@@ -192,6 +192,33 @@ async def test_get_config_masks_secrets_and_handles_pipeline_failure():
 
 
 @pytest.mark.asyncio
+async def test_get_config_reveals_secrets_when_requested():
+    db = SimpleNamespace()
+    settings = {
+        "prompt_templates": [],
+        "service_prompts": {},
+        "model_favorites": [],
+        "starred_models": [],
+        "image_optimization": {},
+    }
+
+    secret_values = {"HOMEBOX_URL": "http://example.test", "OPENROUTER_API_KEY": "secret-token"}
+
+    def _secret(key: str) -> str:
+        return secret_values.get(key, "")
+
+    with patch("app.ensure_app_settings_seed", AsyncMock()), patch(
+        "app.get_app_settings", AsyncMock(return_value=settings)
+    ), patch("app.ensure_pipeline_catalog", AsyncMock()), patch(
+        "app.list_pipeline_definitions", AsyncMock(return_value=[])
+    ), patch("app.get_secret_value", side_effect=_secret):
+        response = await get_config(db, reveal_secrets=True)
+
+    assert response.secrets_status["HOMEBOX_URL"] == "http://example.test"
+    assert response.secrets_status["OPENROUTER_API_KEY"] == "secret-token"
+
+
+@pytest.mark.asyncio
 async def test_get_config_derives_prompt_templates_from_pipeline_defaults_when_empty():
     db = SimpleNamespace()
     settings = {

@@ -533,7 +533,7 @@ describe('Settings', () => {
     render(<Settings />);
     await screen.findByText('System Settings');
 
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByLabelText('Enable Background Sync'));
     fireEvent.change(screen.getByDisplayValue('30'), { target: { value: '45' } });
     fireEvent.change(screen.getByDisplayValue('subject:receipt'), { target: { value: 'subject:invoice' } });
     fireEvent.change(screen.getByDisplayValue('10'), { target: { value: '35' } });
@@ -640,5 +640,60 @@ describe('Settings', () => {
       expect(alertSpy).toHaveBeenCalledWith('OAuth is not configured');
     });
     alertSpy.mockRestore();
+  });
+
+  it('Feature: settings-reveal-secrets | allows toggling secret visibility and fetching raw secrets', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/config')) {
+        const isReveal = url.includes('reveal_secrets=true');
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            secrets_status: {
+              OPENROUTER_API_KEY: isReveal ? 'secret-token' : '********',
+            },
+            model_favorites: [],
+            starred_models: [],
+            image_optimization: { max_dimension: 1024, quality: 85 },
+            prompt_templates: [],
+          }),
+        });
+      }
+      if (url === '/api/models') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, models: [] }) });
+      }
+      if (url === '/api/pipelines') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, pipelines: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<Settings />);
+    await screen.findByText('System Settings');
+
+    // Initially masked
+    const keyInput = screen.getByPlaceholderText(/Enter OPENROUTER API KEY/i) as HTMLInputElement;
+    expect(keyInput.type).toBe('password');
+    expect(keyInput.value).toBe('********');
+
+    // Click reveal secrets toggle
+    const toggle = screen.getByLabelText('Show Hidden Secrets') as HTMLInputElement;
+    fireEvent.click(toggle);
+
+    // Wait for the mock update and assertion of unmasked key and type change
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/config?reveal_secrets=true');
+      expect(keyInput.type).toBe('text');
+      expect(keyInput.value).toBe('secret-token');
+    });
+
+    // Toggle back off
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/config?reveal_secrets=false');
+      expect(keyInput.type).toBe('password');
+      expect(keyInput.value).toBe('********');
+    });
   });
 });

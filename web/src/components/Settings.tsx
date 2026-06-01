@@ -46,6 +46,7 @@ interface ModelApiResponse {
 
 export function Settings() {
   const [secrets, setSecrets] = useState<Record<string, string>>({});
+  const [revealSecrets, setRevealSecrets] = useState(false);
   const [modelFavorites, setModelFavorites] = useState<string[]>([]);
   const [starredModels, setStarredModels] = useState<string[]>([]);
   const [imageOptimization, setImageOptimization] = useState<ImageOptimization>({ max_dimension: 1024, quality: 85 });
@@ -132,6 +133,31 @@ export function Settings() {
 
   const handleChange = (key: string, value: string) => {
     setSecrets(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleRevealSecretsToggle = async (checked: boolean) => {
+    setRevealSecrets(checked);
+    try {
+      const response = await fetch(`/api/config?reveal_secrets=${checked}`);
+      if (response.ok) {
+        const configData = await response.json();
+        const statuses = configData.secrets_status || {};
+        const loaded: Record<string, string> = {};
+        SECRET_KEYS.forEach(key => {
+          if (!statuses[key]) {
+            loaded[key] = '';
+          } else if (key.includes('URL') || checked) {
+            loaded[key] = String(statuses[key]);
+          } else {
+            loaded[key] = '********';
+          }
+        });
+        setSecrets(loaded);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update secrets display.');
+    }
   };
 
   const saveSettings = async () => {
@@ -308,7 +334,21 @@ export function Settings() {
       </div>
 
       <section className="space-y-6">
-        <label className="label-apple">Secrets & Infrastructure</label>
+        <div className="flex justify-between items-center">
+          <label className="label-apple">Secrets & Infrastructure</label>
+          <label className="flex items-center gap-3 cursor-pointer text-xs font-bold text-white/50 tracking-wider hover:text-white/80 transition-colors">
+            <span>Show Hidden Secrets</span>
+            <div className="relative">
+              <input
+                type="checkbox"
+                checked={revealSecrets}
+                onChange={(e) => void handleRevealSecretsToggle(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+            </div>
+          </label>
+        </div>
         <div className="glass rounded-[3rem] p-10 grid grid-cols-1 md:grid-cols-2 gap-8">
           {SECRET_KEYS.map(key => (
             <div key={key} className="flex flex-col gap-2">
@@ -316,7 +356,11 @@ export function Settings() {
                 {key.replace(/_/g, ' ')}
               </label>
               <input 
-                type={key.includes('PASSWORD') || key.includes('TOKEN') || key.includes('KEY') ? "password" : "text"}
+                type={
+                  (key.includes('PASSWORD') || key.includes('TOKEN') || key.includes('KEY')) && !revealSecrets
+                    ? "password" 
+                    : "text"
+                }
                 value={secrets[key] || ""}
                 onChange={(e) => handleChange(key, e.target.value)}
                 placeholder={`Enter ${key.replace(/_/g, ' ')}`}
@@ -345,8 +389,9 @@ export function Settings() {
             </button>
           </div>
           <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
-            <label className="text-xs font-bold text-white/70 tracking-wider">Enable Background Sync</label>
+            <label htmlFor="gmail-auto-sync-checkbox" className="text-xs font-bold text-white/70 tracking-wider">Enable Background Sync</label>
             <input
+              id="gmail-auto-sync-checkbox"
               type="checkbox"
               checked={gmailAutoSyncEnabled}
               onChange={(e) => setGmailAutoSyncEnabled(e.target.checked)}
