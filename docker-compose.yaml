@@ -41,6 +41,7 @@ services:
     ports:
       - "${APP_PORT:-8460}:8501"
     volumes:
+      - ./src:/app
       - ./config:/app/config
       - ./data:/app/data
     environment:
