@@ -28,12 +28,13 @@ services:
       dockerfile: src/Dockerfile
     container_name: vision-pipeline
     env_file:
-      - .env.remote
+      - .env
     image: ${VISION_PIPELINE_IMAGE:-ghcr.io/spelech/vision-pipeline}:${VISION_PIPELINE_TAG:-latest}
     labels:
       - "wud.watch=true"
       - "wud.display.name=vision-pipeline"
       - "wud.tag.include=^latest$|^v?[0-9]+\\.[0-9]+\\.[0-9]+$"
+      - "wud.trigger.docker.autoupdate=true"
     networks:
       - default
       - net_webservices
