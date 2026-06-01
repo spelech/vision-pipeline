@@ -29,6 +29,6 @@ COPY --from=web-build /web/dist /app/web_dist
 # FastAPI on 8501 to match existing proxy
 EXPOSE 8501
 
-HEALTHCHECK CMD curl --fail http://localhost:8501/health || exit 1
+HEALTHCHECK CMD curl --fail http://localhost:8501/api/health || exit 1
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
