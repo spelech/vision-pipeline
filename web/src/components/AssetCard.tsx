@@ -60,6 +60,7 @@ export function AssetCard({ item, isSelected, onToggleSelect, onDelete, onPrevie
   const aiSessionId = typeof item.ai_output?.session_id === 'string' ? item.ai_output.session_id : undefined;
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     setEditData(
       (item.user_overrides && Object.keys(item.user_overrides).length > 0)
         ? (item.user_overrides as AssetEditData)
@@ -75,6 +76,7 @@ export function AssetCard({ item, isSelected, onToggleSelect, onDelete, onPrevie
       pricebuddy: item.selected_services?.includes('pricebuddy') ? 'ready' : 'idle',
     });
     setLogs([]);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [item]);
 
   useEffect(() => {
