@@ -609,4 +609,15 @@ describe('AssetCard', () => {
 
     errSpy.mockRestore();
   });
+
+  it('Feature: asset-card-collapse-visibility | renders expand button only when service checkbox is active', () => {
+    render(<AssetCard item={mockItem} onPreview={vi.fn()} onExecute={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Expand Asset'));
+
+    // Homebox is active, so its expand button should be visible
+    expect(screen.getByLabelText(/Expand Homebox details/i)).toBeInTheDocument();
+
+    // Mealie is not active, so its expand button should NOT be visible
+    expect(screen.queryByLabelText(/Expand Mealie details/i)).not.toBeInTheDocument();
+  });
 });
