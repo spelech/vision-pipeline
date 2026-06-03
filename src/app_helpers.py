@@ -241,10 +241,20 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
             "model": "qwen/qwen3-235b-a22b-2507",
             "enabled": True,
             "prompt": (
-                "Create Homebox-ready inventory JSON from the provided product data and context. "
-                "Prioritize product_name, brand, model_number, category, description, "
-                "and technical_details. "
-                "Prefer factual values supported by search/scrape context. Return strict JSON only."
+                "You are an expert inventory cataloging assistant. Create a Homebox-ready JSON object from the provided product data and search/scrape context.\n"
+                "Extract or infer the following keys:\n"
+                "- product_name: The descriptive, clean name of the product.\n"
+                "- brand: The manufacturer or brand name.\n"
+                "- model_number: Specific model/part number if visible in the context or description.\n"
+                "- serial_number: Serial number if specified by the user or visible.\n"
+                "- category: The product category tag (e.g., Electronics, Tools, Kitchenware, Pantry).\n"
+                "- description: A short, high-quality description of what the product is.\n"
+                "- location: A logical storage location in a home environment (e.g., Garage, Pantry, Kitchen, closet, workbench, tool cabinet, laundry room) inferred from the product type and user notes.\n"
+                "- quantity: Default to 1, or parse from user notes.\n"
+                "- purchase_price: Inferred purchase price or MSRP as a decimal number (no currency signs).\n"
+                "- notes: Additional context, including where it was bought or user instructions.\n"
+                "- technical_details: A string or JSON block of detailed specs, dimensions, power requirements, etc.\n\n"
+                "Return a valid JSON object with these exact keys, using null or defaults if unknown. Do not include markdown code block formatting, return raw JSON text only."
             ),
             "feedback_enabled": False,
         },
@@ -253,10 +263,14 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
             "model": "qwen/qwen3-235b-a22b-2507",
             "enabled": True,
             "prompt": (
-                "Create Mealie-ready recipe JSON from the provided food data and context. "
-                "Prioritize product_name, recipe_ingredients, and recipe_instructions. "
-                "Include recipe_notes when available. "
-                "If data is uncertain, preserve confidence in notes. Return strict JSON only."
+                "You are an expert culinary assistant. Create a Mealie-ready recipe JSON object from the provided food/recipe data and search/scrape context.\n"
+                "Extract the following keys:\n"
+                "- product_name: The name of the dish or recipe.\n"
+                "- description: A brief summary of the recipe or food item.\n"
+                "- recipe_ingredients_raw: A string containing the list of ingredients, with one ingredient per line.\n"
+                "- recipe_instructions_raw: A string containing step-by-step cooking instructions, with one step/instruction per line.\n"
+                "- yield: The number of servings or yield quantity (e.g., '4 servings', '1 loaf').\n\n"
+                "Return a valid JSON object with these exact keys, using null or defaults if unknown. Do not include markdown code block formatting, return raw JSON text only."
             ),
             "feedback_enabled": False,
         },
@@ -265,18 +279,27 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
             "model": "qwen/qwen3-235b-a22b-2507",
             "enabled": True,
             "prompt": (
-                "Create PriceBuddy-ready product tracking JSON from the provided data and context. "
-                "Prioritize product_name, barcode, product_url, and "
-                "monitor_urls/comparable_urls from search evidence. "
-                "Prefer retailer product pages over blogs or forums. "
-                "Return strict JSON only."
+                "You are a price comparison and tracking assistant. Create a PriceBuddy-ready JSON object from the provided data and search/scrape context.\n"
+                "Extract or locate the following keys:\n"
+                "- product_name: The clean name of the product.\n"
+                "- barcode: UPC/EAN barcode string if available.\n"
+                "- category: Product category tag (e.g., Groceries, Electronics).\n"
+                "- product_url: The official or main retailer product page URL (e.g., Amazon, Walmart, Target, Home Depot).\n"
+                "- monitor_urls: A list of alternative retailer product page URLs for the exact same item.\n"
+                "- target_price: The target price to track or current lowest price found, as a decimal number or string.\n"
+                "- currency: The ISO currency code (e.g., 'USD', 'EUR').\n"
+                "- retailer: The name of the primary retailer.\n\n"
+                "Prefer direct retailer product pages over blogs, news sites, or general directories. "
+                "Return a valid JSON object with these exact keys, using null or defaults if unknown. Do not include markdown code block formatting, return raw JSON text only."
             ),
             "feedback_enabled": True,
             "feedback_prompt": (
-                "Revise the PriceBuddy JSON using feedback candidates from search results. "
-                "Choose URLs that best match the same product across major retailers, "
-                "remove irrelevant links, "
-                "and keep only concise, valid JSON fields. Return strict JSON only."
+                "You are revising the PriceBuddy tracking JSON. Review the initial output and the search/scrape context.\n"
+                "Ensure that:\n"
+                "- product_url is a high-quality primary retailer link.\n"
+                "- monitor_urls contains valid, alternative retailer links for the exact same product.\n"
+                "- target_price, currency, and retailer are correctly populated based on candidates.\n"
+                "Return a valid JSON object with the final updated keys. Do not include markdown code block formatting, return raw JSON text only."
             ),
         },
         "changedetection": {
@@ -284,17 +307,22 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
             "model": "qwen/qwen3-235b-a22b-2507",
             "enabled": True,
             "prompt": (
-                "Create ChangeDetection-ready monitoring JSON from the provided data and context. "
-                "Prioritize product_name, product_url, monitor_urls, and change_monitoring_notes. "
-                "When possible, select multiple matching retailer product URLs for monitoring. "
-                "Return strict JSON only."
+                "You are an automated price and page monitoring assistant. Create a ChangeDetection-ready JSON object from the provided data and search/scrape context.\n"
+                "Extract the following keys:\n"
+                "- product_name: The clean name of the product.\n"
+                "- product_url: The primary product URL to monitor for price/stock changes.\n"
+                "- category: Tag or category name for grouping the watch (e.g., Electronics, Grocery).\n"
+                "- check_every_hours: The check frequency as an integer (e.g., 12, 24).\n"
+                "- fetch_backend: Set to 'html_requests' or 'playwright'. Use 'playwright' if the target retailer uses heavy JavaScript (e.g. Amazon, BestBuy), else 'html_requests'.\n"
+                "- monitor_urls: A list of alternative retailer URLs to monitor for the same product.\n\n"
+                "Return a valid JSON object with these exact keys. Do not include markdown code block formatting, return raw JSON text only."
             ),
             "feedback_enabled": True,
             "feedback_prompt": (
-                "Revise the ChangeDetection JSON using feedback candidates from search results. "
-                "Ensure product_url is the best primary URL and monitor_urls contains "
-                "additional relevant retailers "
-                "for the same product. Keep strict JSON only."
+                "You are revising the ChangeDetection monitoring JSON. Review the initial output and the search/scrape context.\n"
+                "Refine the product_url, check_every_hours, and fetch_backend settings. Ensure fetch_backend is set to 'playwright' for sites with heavy JavaScript.\n"
+                "Ensure monitor_urls lists additional high-quality product pages from alternative retailers.\n"
+                "Return a valid JSON object with the final updated keys. Do not include markdown code block formatting, return raw JSON text only."
             ),
         },
     }
