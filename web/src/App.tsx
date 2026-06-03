@@ -31,6 +31,7 @@ export default function App() {
   const [cameraError, setCameraError] = useState('');
   const [lastIdentifyResult, setLastIdentifyResult] = useState<Asset | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [helperText, setHelperText] = useState('');
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const batchInputRef = useRef<HTMLInputElement>(null);
@@ -255,7 +256,7 @@ export default function App() {
     }
   };
 
-  const uploadFiles = async (files: File[]) => {
+  const uploadFiles = async (files: File[], text?: string) => {
     if (files.length === 0) return;
 
     setLoading(true);
@@ -276,6 +277,9 @@ export default function App() {
         formData.append('pipeline_id', selectedPipelineId);
         formData.append('settings', JSON.stringify({ search_results_limit: searchResultsLimit }));
         formData.append('session_id', sessionId);
+        if (text) {
+          formData.append('text', text);
+        }
         
         const resp = await fetch('/api/identify', {
           method: 'POST',
@@ -300,6 +304,7 @@ export default function App() {
           // Clear processing state on success
           setProcessingFile(null);
           setProcessingSessionId(null);
+          setHelperText('');
         } else {
           showToast('Upload failed', 'error');
           setProcessingError('The pipeline failed to process the image. Please check logs or try another image.');
@@ -310,6 +315,9 @@ export default function App() {
         files.forEach((file) => formData.append('files', file));
         formData.append('pipeline_id', selectedPipelineId);
         formData.append('settings', JSON.stringify({ search_results_limit: searchResultsLimit }));
+        if (text) {
+          formData.append('text', text);
+        }
         
         const resp = await fetch('/api/batch-upload', {
           method: 'POST',
@@ -317,6 +325,7 @@ export default function App() {
         });
         if (resp.ok) {
           showToast(`Batch of ${files.length} images uploaded!`, 'success');
+          setHelperText('');
           await fetchQueue(queueStatus);
         } else {
           showToast('Batch upload failed', 'error');
@@ -336,7 +345,7 @@ export default function App() {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    await uploadFiles(Array.from(files));
+    await uploadFiles(Array.from(files), helperText);
     event.target.value = '';
   };
 
@@ -414,7 +423,7 @@ export default function App() {
 
     const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
     closeCamera();
-    await uploadFiles([file]);
+    await uploadFiles([file], helperText);
   };
 
   const selectedPipelineName = pipelines.find((pipeline) => pipeline.id === selectedPipelineId)?.name || DEFAULT_PIPELINE_OPTION.name;
@@ -459,6 +468,8 @@ export default function App() {
                 processingLogs={processingLogs}
                 processingError={processingError}
                 lastIdentifyResult={lastIdentifyResult}
+                helperText={helperText}
+                onSetHelperText={setHelperText}
                 cameraInputRef={cameraInputRef}
                 galleryInputRef={galleryInputRef}
                 onSetSelectedPipelineId={setSelectedPipelineId}

@@ -18,6 +18,8 @@ interface IdentifyTabProps {
   processingLogs: string[];
   processingError: string | null;
   lastIdentifyResult: Asset | null;
+  helperText: string;
+  onSetHelperText: (value: string) => void;
   cameraInputRef: React.RefObject<HTMLInputElement | null>;
   galleryInputRef: React.RefObject<HTMLInputElement | null>;
   onSetSelectedPipelineId: (pipelineId: string) => void;
@@ -44,6 +46,8 @@ export function IdentifyTab({
   processingLogs,
   processingError,
   lastIdentifyResult,
+  helperText,
+  onSetHelperText,
   cameraInputRef,
   galleryInputRef,
   onSetSelectedPipelineId,
@@ -101,6 +105,21 @@ export function IdentifyTab({
           </button>
         </div>
       </div>
+
+      {!processingFile && (
+        <div className="glass rounded-[2rem] p-6 border border-white/10 space-y-3 animate-in fade-in duration-500">
+          <label htmlFor="helper-text-input" className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 block">
+            Helper Text / Context (Optional)
+          </label>
+          <textarea
+            id="helper-text-input"
+            value={helperText}
+            onChange={(e) => onSetHelperText(e.target.value)}
+            placeholder="e.g. Bought at Home Depot for $15, will put in garage"
+            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:outline-none focus:border-blue-500/30 transition-colors placeholder:text-white/20 h-20 resize-none text-white"
+          />
+        </div>
+      )}
 
       {processingFile ? (
         <ProcessingDashboard

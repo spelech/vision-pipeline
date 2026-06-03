@@ -249,6 +249,8 @@ describe('App tab wrappers', () => {
         processingLogs={[]}
         processingError={null}
         lastIdentifyResult={baseAsset}
+        helperText=""
+        onSetHelperText={vi.fn()}
         cameraInputRef={{ current: null }}
         galleryInputRef={{ current: null }}
         onSetSelectedPipelineId={vi.fn()}
@@ -270,6 +272,7 @@ describe('App tab wrappers', () => {
     expect(onOpenCamera).toHaveBeenCalled();
     expect(onOpenEditor).toHaveBeenCalled();
     expect(screen.getByText(/Last Identification Result/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/e.g. Bought at Home Depot/i)).toBeInTheDocument();
 
     rerender(
       <IdentifyTab
@@ -284,6 +287,8 @@ describe('App tab wrappers', () => {
         processingLogs={['running']}
         processingError={null}
         lastIdentifyResult={null}
+        helperText=""
+        onSetHelperText={vi.fn()}
         cameraInputRef={{ current: null }}
         galleryInputRef={{ current: null }}
         onSetSelectedPipelineId={vi.fn()}
@@ -300,6 +305,7 @@ describe('App tab wrappers', () => {
     );
 
     expect(screen.getByTestId('processing-dashboard')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/e.g. Bought at Home Depot/i)).not.toBeInTheDocument();
   });
 
   it('Feature: identify-tab-upload-and-fallback-pipeline | uses default pipeline option and triggers gallery input click', () => {
@@ -318,6 +324,8 @@ describe('App tab wrappers', () => {
         processingLogs={[]}
         processingError={null}
         lastIdentifyResult={null}
+        helperText=""
+        onSetHelperText={vi.fn()}
         cameraInputRef={{ current: null }}
         galleryInputRef={{ current: null }}
         onSetSelectedPipelineId={vi.fn()}
@@ -357,6 +365,8 @@ describe('App tab wrappers', () => {
         processingLogs={[]}
         processingError={null}
         lastIdentifyResult={baseAsset}
+        helperText=""
+        onSetHelperText={vi.fn()}
         cameraInputRef={{ current: null }}
         galleryInputRef={{ current: null }}
         onSetSelectedPipelineId={onSetSelectedPipelineId}
