@@ -60,6 +60,24 @@ export function AssetCard({ item, isSelected, onToggleSelect, onDelete, onPrevie
   const aiSessionId = typeof item.ai_output?.session_id === 'string' ? item.ai_output.session_id : undefined;
 
   useEffect(() => {
+    setEditData(
+      (item.user_overrides && Object.keys(item.user_overrides).length > 0)
+        ? (item.user_overrides as AssetEditData)
+        : ((item.ai_output?.llm_output as AssetEditData) || {})
+    );
+    setSelectedServices(
+      item.selected_services?.length ? item.selected_services : []
+    );
+    setServiceRunState({
+      homebox: item.selected_services?.includes('homebox') ? 'ready' : 'idle',
+      mealie: item.selected_services?.includes('mealie') ? 'ready' : 'idle',
+      changedetection: item.selected_services?.includes('changedetection') ? 'ready' : 'idle',
+      pricebuddy: item.selected_services?.includes('pricebuddy') ? 'ready' : 'idle',
+    });
+    setLogs([]);
+  }, [item]);
+
+  useEffect(() => {
     if (!isExpanded) return;
     
     const sessionId = aiSessionId || `batch-item-${item.id}`;
@@ -353,14 +371,16 @@ export function AssetCard({ item, isSelected, onToggleSelect, onDelete, onPrevie
                       />
                       <Icon className={`w-4 h-4 ${active ? svc.color : 'text-white/60'}`} />
                       <span className="text-[10px] font-black uppercase tracking-widest flex-1">{svc.name}</span>
-                      <button
-                        onClick={() => toggleServiceExpanded(svc.id)}
-                        aria-label={`Expand ${svc.name} details`}
-                        className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5"
-                        disabled={!active || runState !== 'ready'}
-                      >
-                        <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-                      </button>
+                      {active && (
+                        <button
+                          onClick={() => toggleServiceExpanded(svc.id)}
+                          aria-label={`Expand ${svc.name} details`}
+                          className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5"
+                          disabled={runState !== 'ready'}
+                        >
+                          <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      )}
                     </div>
                     {active && runState === 'running' && (
                       <div className="px-4 pb-4 border-t border-white/10 pt-4">
