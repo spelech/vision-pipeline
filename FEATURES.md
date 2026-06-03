@@ -1,4 +1,4 @@
-# Vision Pipeline v3.6.1
+# Vision Pipeline v3.6.5
 
 # Project Features
 
@@ -8,6 +8,8 @@ This file tracks the current capabilities and planned enhancements for the Visio
 
 ### 📸 Capture & Identification
 - **Single Capture:** Real-time photo capture and upload for single-item identification.
+- **Helper Text Context:** Restored helper text input during uploads and photo captures, allowing additional user instruction to guide the pipeline.
+- **Initial Ingestion Context for Services:** Scanned barcodes and user helper text descriptions are now preserved and fed forward to downstream destination services for improved generation accuracy.
 - **Precision Lasso:** Interactive image cropping and rotation using `Cropper.js` to focus the AI on specific details.
 - **Vision ID:** Multi-modal identification using high-parameter Vision LLMs (e.g., Qwen2.5-VL).
 - **Barcode Scanning:** Automated EAN/UPC extraction with multi-pass image preprocessing.

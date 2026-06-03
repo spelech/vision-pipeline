@@ -22,6 +22,7 @@
             "name": "Python: FastAPI (Local)",
             "type": "python",
             "request": "launch",
+            "python": "${workspaceFolder}/venv/Scripts/python.exe",
             "module": "uvicorn",
             "args": [
                 "app:app",
