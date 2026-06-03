@@ -822,6 +822,8 @@ def get_item_base_data(item: Any) -> Dict[str, Any]:
             "receipt_image_data_uri",
             "receipt_filename",
             "source_receipt_id",
+            "helper_text",
+            "barcode",
         ):
             value = ai_output_for_receipt.get(key)
             if isinstance(value, str) and value.strip():
@@ -841,6 +843,8 @@ def get_item_base_data(item: Any) -> Dict[str, Any]:
         "receipt_image_data_uri",
         "receipt_filename",
         "source_receipt_id",
+        "helper_text",
+        "barcode",
     ):
         value = ai_output.get(key)
         if isinstance(value, str) and value.strip():

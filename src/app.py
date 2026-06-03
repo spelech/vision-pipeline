@@ -995,6 +995,8 @@ async def identify(
 
         # type: ignore
         results = await run_in_threadpool(core_pipeline.run, img, text, pipeline_settings, log_it)
+        if text:
+            results["helper_text"] = text
 
         llm_output = results.get("llm_output") or {}
         service_prompt_configs = await get_runtime_service_prompt_configs()
@@ -1351,6 +1353,8 @@ async def process_item_task(
                 log_it,
             )
             results["review_image_data_uri"] = build_review_image_data_uri(img)
+            if combined_text:
+                results["helper_text"] = combined_text
 
             enrichment_tasks = [
                 s.get_pre_enrichment(
