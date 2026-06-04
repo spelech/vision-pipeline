@@ -37,6 +37,7 @@ This file tracks the current capabilities and planned enhancements for the Visio
 - **Responsive PWA UI:** Apple-style dark mode interface optimized for mobile use.
 - **SQLite Persistence:** Async database storage for batches, items, and AI outputs.
 - **Configurable LLM Gateway:** Supports OpenAI-compatible endpoints (including local LiteLLM) without hardcoding OpenRouter URLs.
+- **Settings Autodiscovery:** Auto-probes local networks for container services (Homebox, Mealie, SearxNG, ChangeDetection, PriceBuddy, Receipt Wrangler) and scans for Google Workspace client credentials on disk or in shared databases to simplify setup.
 
 ### 🧾 Receipt Automation (New)
 - **Dedicated Receipt Pipeline:** New receipt-specific pipeline class and registration for OCR-oriented extraction flows.
