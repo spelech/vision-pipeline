@@ -398,6 +398,21 @@ export default function App() {
     }, 4000);
   };
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const sharedBatchId = params.get('shared_batch_id');
+      if (sharedBatchId) {
+        setActiveTab('batch');
+        setQueueStatus('processing');
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+        showToast('Shared batch loaded for review!', 'success');
+      }
+    }
+  }, []);
+
+
   const capturePhoto = async () => {
     const video = cameraVideoRef.current;
     if (!video || video.videoWidth === 0 || video.videoHeight === 0) {

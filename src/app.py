@@ -214,7 +214,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="Vision Pipeline API",
-    version="3.6.8",
+    version="3.6.9",
     redoc_url=None,
 )
 api_router = APIRouter(prefix="/api")
@@ -1305,6 +1305,41 @@ async def batch_upload(
             new_item.id), pipeline_id, settings)  # type: ignore
 
     return {"success": True, "batch_id": new_batch.id}
+
+
+@api_router.post("/share-target")
+async def share_target(
+    background_tasks: BackgroundTasks,
+    images: List[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    new_batch = Batch(description="Shared from device")
+    db.add(new_batch)
+    await db.commit()
+    await db.refresh(new_batch)
+
+    for file in images:
+        if file.content_type and not file.content_type.startswith("image/"):
+            continue
+        content = await file.read()
+        img = Image.open(io.BytesIO(content))
+        img = ImageOps.exif_transpose(img)  # type: ignore
+        review_image_data_uri = build_review_image_data_uri(img)
+        raw_image_data_uri = encode_image_bytes_to_data_uri(content, mime="image/jpeg")
+
+        new_item = Item(
+            batch_id=new_batch.id,
+            image_path=review_image_data_uri,
+            raw_image_path=raw_image_data_uri,
+            status="processing")
+        db.add(new_item)
+        await db.commit()
+        await db.refresh(new_item)
+        background_tasks.add_task(process_item_task_safe, int(
+            new_item.id), "default", "{}")  # type: ignore
+
+    return RedirectResponse(url=f"/?shared_batch_id={new_batch.id}", status_code=303)
+
 
 
 async def process_item_task(
