@@ -14,6 +14,7 @@ import { ReceiptsTab } from './app/ReceiptsTab';
 import { CameraCaptureModal } from './app/CameraCaptureModal';
 import { ToastBanner } from './app/ToastBanner';
 import type { ActiveTab, PipelineSummary, QueueStatus, ToastState, ToastType } from './app/types';
+import { OfflineStore } from './utils/offlineStore';
 
 const DEFAULT_PIPELINE_OPTION: PipelineSummary = { id: 'default', name: 'Default Vision Pipeline' };
 
@@ -259,6 +260,38 @@ export default function App() {
   const uploadFiles = async (files: File[], text?: string) => {
     if (files.length === 0) return;
 
+    if (typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined' && !navigator.onLine) {
+      setLoading(true);
+      try {
+        for (const file of files) {
+          await OfflineStore.saveItem({
+            file,
+            fileName: file.name,
+            fileType: file.type,
+            helperText: text || '',
+            pipelineId: selectedPipelineId,
+            searchResultsLimit
+          });
+        }
+        showToast(
+          files.length === 1
+            ? 'Offline - Saved capture locally for sync!'
+            : `Offline - Saved ${files.length} captures locally for sync!`,
+          'info'
+        );
+        setLastIdentifyResult(null);
+        setProcessingFile(null);
+        setProcessingSessionId(null);
+        setHelperText('');
+      } catch (err) {
+        console.error('Failed to save offline capture', err);
+        showToast('Failed to save capture offline', 'error');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     setLoading(true);
     if (files.length > 1) {
       showToast(`Uploading ${files.length} images...`, 'info');
@@ -411,6 +444,66 @@ export default function App() {
       }
     }
   }, []);
+
+  const syncOfflineQueue = useCallback(async () => {
+    try {
+      if (typeof window === 'undefined' || typeof window.indexedDB === 'undefined') {
+        return;
+      }
+      const items = await OfflineStore.getItems();
+      if (items.length === 0) return;
+
+      showToast(`Syncing ${items.length} offline captures...`, 'info');
+      setLoading(true);
+
+      const formData = new FormData();
+      items.forEach((item) => {
+        const file = new File([item.file], item.fileName, { type: item.fileType });
+        formData.append('files', file);
+      });
+      
+      const firstItem = items[0];
+      formData.append('pipeline_id', firstItem.pipelineId);
+      formData.append('settings', JSON.stringify({ search_results_limit: firstItem.searchResultsLimit }));
+      if (firstItem.helperText) {
+        formData.append('text', firstItem.helperText);
+      }
+
+      const resp = await fetch('/api/batch-upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (resp.ok) {
+        await OfflineStore.clear();
+        showToast(`Successfully synced ${items.length} captures!`, 'success');
+        await fetchQueue(queueStatus);
+      } else {
+        showToast('Failed to sync offline captures', 'error');
+      }
+    } catch (e) {
+      console.error('Offline sync failed', e);
+      showToast('Error syncing offline captures', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchQueue, queueStatus]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      void syncOfflineQueue();
+    };
+
+    window.addEventListener('online', handleOnline);
+    if (navigator.onLine) {
+      void syncOfflineQueue();
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [syncOfflineQueue]);
+
 
 
   const capturePhoto = async () => {
