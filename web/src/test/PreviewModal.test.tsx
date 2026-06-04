@@ -14,14 +14,15 @@ describe('PreviewModal', () => {
       selected_services: [],
     } as Asset,
     service: 'homebox',
-    payload: { test_key: 'test_value' }
+    payload: { name: 'Test Item', quantity: 2, location: 'Kitchen' }
   };
 
-  it('Feature: preview-modal-render | renders correctly and shows payload', () => {
+  it('Feature: preview-modal-render | renders Form Review by default', () => {
     render(<PreviewModal preview={mockPreview} onClose={vi.fn()} onConfirm={vi.fn()} />);
     expect(screen.getByText('Pre-flight Review')).toBeInTheDocument();
     expect(screen.getByText('homebox')).toBeInTheDocument();
-    expect(screen.getByDisplayValue(/test_key/)).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Test Item')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Kitchen')).toBeInTheDocument();
   });
 
   it('Feature: preview-modal-close | calls onClose when close button clicked', () => {
@@ -41,21 +42,40 @@ describe('PreviewModal', () => {
     expect(handleClose).toHaveBeenCalled();
   });
 
-  it('Feature: preview-modal-confirm | allows payload editing and confirms', () => {
+  it('Feature: preview-modal-confirm-form | submits form overrides directly', () => {
     const handleConfirm = vi.fn();
     render(<PreviewModal preview={mockPreview} onClose={vi.fn()} onConfirm={handleConfirm} />);
     
-    const textarea = screen.getByRole('textbox');
-    fireEvent.change(textarea, { target: { value: '{"test_key": "new_value"}' } });
+    const nameInput = screen.getByDisplayValue('Test Item');
+    fireEvent.change(nameInput, { target: { value: 'New Test Name' } });
 
     fireEvent.click(screen.getByText(/Confirm & Transmit to/));
-    expect(handleConfirm).toHaveBeenCalledWith({ test_key: 'new_value' });
+    expect(handleConfirm).toHaveBeenCalledWith(expect.objectContaining({ name: 'New Test Name', quantity: 2 }));
   });
 
-  it('Feature: preview-modal-invalid-json | shows error on bad JSON and clears when editing', () => {
+  it('Feature: preview-modal-json-toggle | allows switching to JSON and editing raw text', () => {
     const handleConfirm = vi.fn();
     render(<PreviewModal preview={mockPreview} onClose={vi.fn()} onConfirm={handleConfirm} />);
 
+    // Toggle Raw JSON view
+    fireEvent.click(screen.getByText('Raw JSON'));
+    
+    const textarea = screen.getByRole('textbox');
+    expect(textarea).toBeInTheDocument();
+    expect(textarea.innerHTML).toContain('Test Item');
+
+    fireEvent.change(textarea, { target: { value: '{"name": "JSON Edit", "quantity": 10}' } });
+    fireEvent.click(screen.getByText(/Confirm & Transmit to/));
+    expect(handleConfirm).toHaveBeenCalledWith({ name: 'JSON Edit', quantity: 10 });
+  });
+
+  it('Feature: preview-modal-invalid-json | shows error on bad JSON and blocks confirm', () => {
+    const handleConfirm = vi.fn();
+    render(<PreviewModal preview={mockPreview} onClose={vi.fn()} onConfirm={handleConfirm} />);
+
+    // Switch to Raw JSON view
+    fireEvent.click(screen.getByText('Raw JSON'));
+    
     const textarea = screen.getByRole('textbox');
     fireEvent.change(textarea, { target: { value: '{bad json' } });
     fireEvent.click(screen.getByText(/Confirm & Transmit to/));
@@ -63,7 +83,8 @@ describe('PreviewModal', () => {
     expect(screen.getByText(/Invalid JSON format/i)).toBeInTheDocument();
     expect(handleConfirm).not.toHaveBeenCalled();
 
-    fireEvent.change(textarea, { target: { value: '{"fixed": true}' } });
+    // Fix JSON
+    fireEvent.change(textarea, { target: { value: '{"name": "Fixed"}' } });
     expect(screen.queryByText(/Invalid JSON format/i)).not.toBeInTheDocument();
   });
 });
