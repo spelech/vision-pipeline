@@ -203,6 +203,36 @@ async def test_batch_upload_endpoint():
                 assert added_item.raw_image_path.startswith("data:image/jpeg;base64,")
 
 
+@pytest.mark.asyncio
+async def test_share_target_endpoint():
+    with patch("app.AsyncSessionLocal") as mock_session_factory:
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock()
+        mock_session.commit = AsyncMock()
+
+        async def refresh_side_effect(obj):
+            if getattr(obj, "id", None) is None:
+                obj.id = 2
+
+        mock_session.refresh = AsyncMock(side_effect=refresh_side_effect)
+        mock_session.add = MagicMock()
+        mock_session_factory.return_value.__aenter__.return_value = mock_session
+
+        with patch("app.process_item_task_safe", AsyncMock()):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                img = Image.new('RGB', (10, 10))
+                buf = io.BytesIO()
+                img.save(buf, format='JPEG')
+
+                files = [
+                    ('images', ('img1.jpg', buf.getvalue(), 'image/jpeg'))
+                ]
+
+                response = await ac.post("/api/share-target", files=files)
+                assert response.status_code == 303
+                assert response.headers["location"] == "/?shared_batch_id=2"
+
+
 def test_image_data_uri_helper_round_trip_and_item_source_resolution():
     payload = b"hello-image"
     uri = encode_image_bytes_to_data_uri(payload)

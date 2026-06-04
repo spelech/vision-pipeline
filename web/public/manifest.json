@@ -12,5 +12,18 @@
   "background_color": "#000000",
   "theme_color": "#000000",
   "display": "standalone",
-  "orientation": "portrait"
+  "orientation": "portrait",
+  "share_target": {
+    "action": "/api/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "images",
+          "accept": ["image/*"]
+        }
+      ]
+    }
+  }
 }
