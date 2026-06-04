@@ -214,7 +214,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="Vision Pipeline API",
-    version="3.6.9",
+    version="3.6.10",
     redoc_url=None,
 )
 api_router = APIRouter(prefix="/api")
