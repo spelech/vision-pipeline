@@ -1,4 +1,4 @@
-# Vision Pipeline v3.6.6
+# Vision Pipeline v3.6.11
 
 # Project Features
 
@@ -21,7 +21,7 @@ This file tracks the current capabilities and planned enhancements for the Visio
 - **Batch Upload:** Support for uploading multiple images simultaneously.
 - **Background Processing:** Asynchronous pipeline execution for batches using FastAPI BackgroundTasks.
 - **Queue Management:** UI for monitoring, rerunning, or deleting items in the processing queue.
-- **Pre-flight Previews:** UI modal to review and edit exact JSON payloads before dispatching to external services.
+- **Pre-flight Previews:** Interactive schema-aware Form Review modal (with fallback to raw JSON editor) to verify and edit exact payloads before dispatching to external services (Homebox, Mealie, PriceBuddy, ChangeDetection).
 
 ### 🔌 Integrations
 - **Homebox Service:** Automated item creation, metadata updates (manufacturer, model, serial), and image attachment uploads.
@@ -34,7 +34,10 @@ This file tracks the current capabilities and planned enhancements for the Visio
 ### 🛠 System & UI
 - **Composable Pipelines:** Visual Drag-and-drop style node builder for creating custom workflow sequences (e.g., Barcode -> Vision -> Scrape).
 - **Real-time Logging:** Custom session-based logger providing live feedback to the UI during pipeline execution.
-- **Responsive PWA UI:** Apple-style dark mode interface optimized for mobile use.
+- **Progressive Web App (PWA):** Installs as a standalone web application on Android and iOS (black status bar, no browser chrome, manifest-driven icon integration).
+- **Offline Ingestion & Queuing:** Cache captured item images and text locally in IndexedDB when network is offline, with a warning banner in the UI.
+- **Background Auto-Sync:** Automatic background synchronization of locally queued captures to the backend when online connectivity is restored.
+- **Android Web Share Target:** Support for native Android gallery sharing; selecting multiple photos and sharing to "Vision Pipeline" automatically uploads them as a batch and navigates to the review dashboard.
 - **SQLite Persistence:** Async database storage for batches, items, and AI outputs.
 - **Configurable LLM Gateway:** Supports OpenAI-compatible endpoints (including local LiteLLM) without hardcoding OpenRouter URLs.
 - **Settings Autodiscovery:** Auto-probes local networks for container services (Homebox, Mealie, SearxNG, ChangeDetection, PriceBuddy, Receipt Wrangler) and scans for Google Workspace client credentials on disk or in shared databases to simplify setup.
