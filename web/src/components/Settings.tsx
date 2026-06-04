@@ -65,7 +65,6 @@ export function Settings() {
   const [scanResults, setScanResults] = useState<{
     success: boolean;
     discovered_urls: Record<string, string>;
-    discovered_gws: Record<string, string>;
     error?: string;
   } | null>(null);
 
@@ -82,7 +81,6 @@ export function Settings() {
       setScanResults({
         success: false,
         discovered_urls: {},
-        discovered_gws: {},
         error: String(e)
       });
     } finally {
@@ -94,8 +92,7 @@ export function Settings() {
     if (!scanResults) return;
     setSecrets(prev => ({
       ...prev,
-      ...scanResults.discovered_urls,
-      ...scanResults.discovered_gws
+      ...scanResults.discovered_urls
     }));
     alert('Discovered settings applied to form! Click "Apply Full Configuration" at the bottom to save permanently.');
   };
@@ -380,18 +377,18 @@ export function Settings() {
                 {scanning ? 'Scanning Network...' : 'Scan Local Environment'}
               </button>
               <p className="text-[10px] text-white/30 italic max-w-[300px]">
-                Detect other Docker containers on your network (Mealie, Homebox, SearxNG, etc.) and scan for Google credentials on disk.
+                Detect other Docker containers on your network (Mealie, Homebox, SearxNG, etc.) using safe hostname probes.
               </p>
             </div>
 
             {scanResults && (
               <div className="pt-6 border-t border-white/5 space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="max-w-md">
                   {/* Services discovered */}
                   <div className="space-y-3">
                     <span className="text-[10px] font-black uppercase tracking-widest text-white/40 block">Discovered Services</span>
                     {Object.keys(scanResults.discovered_urls).length === 0 ? (
-                      <p className="text-xs text-white/30 italic">No services detected on standard container names or ports.</p>
+                       <p className="text-xs text-white/30 italic">No services detected on standard container names or ports.</p>
                     ) : (
                       <div className="space-y-2">
                         {Object.entries(scanResults.discovered_urls).map(([key, val]) => (
@@ -404,29 +401,9 @@ export function Settings() {
                       </div>
                     )}
                   </div>
-
-                  {/* Credentials discovered */}
-                  <div className="space-y-3">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-white/40 block">Discovered GWS Credentials</span>
-                    {Object.keys(scanResults.discovered_gws).length === 0 ? (
-                      <p className="text-xs text-white/30 italic">No Google credentials detected in standard files or local DB.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {Object.entries(scanResults.discovered_gws).map(([key, val]) => (
-                          <div key={key} className="flex items-center gap-2 text-xs bg-white/5 rounded-xl px-4 py-3 border border-white/5">
-                            <span className="text-green-400">✓</span>
-                            <span className="font-bold text-white/85">{key.replace('GWS_', '')}</span>
-                            <span className="text-[10px] font-mono text-white/40 truncate ml-auto">
-                              {val.length > 20 ? `${val.substring(0, 15)}...` : val}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
                 </div>
 
-                {(Object.keys(scanResults.discovered_urls).length > 0 || Object.keys(scanResults.discovered_gws).length > 0) && (
+                {Object.keys(scanResults.discovered_urls).length > 0 && (
                   <div className="flex justify-end pt-4">
                     <button
                       type="button"
