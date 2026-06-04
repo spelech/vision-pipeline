@@ -74,6 +74,7 @@ from services.mealie import MealieService  # pylint: disable=wrong-import-positi
 from services.enrichers import PriceBuddyService, ChangeDetectionService  # pylint: disable=wrong-import-position
 from services.gmail_ingestor import GmailIngestor  # pylint: disable=wrong-import-position
 from services.receipt_wrangler import ReceiptWranglerClient  # pylint: disable=wrong-import-position
+from services.discovery import run_autodiscovery, DiscoveryResult  # pylint: disable=wrong-import-position
 from gmail_routes import build_gmail_router  # pylint: disable=wrong-import-position
 from logger import session_logger  # pylint: disable=wrong-import-position
 from app_helpers import (  # pylint: disable=wrong-import-position,unused-import
@@ -213,7 +214,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="Vision Pipeline API",
-    version="3.6.1",
+    version="3.6.7",
     redoc_url=None,
 )
 api_router = APIRouter(prefix="/api")
@@ -786,6 +787,12 @@ async def import_config(
     except Exception as e: # pylint: disable=broad-exception-caught
         logger.error("Import failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@api_router.get("/config/discover", response_model=DiscoveryResult)
+async def autodiscover_settings() -> DiscoveryResult:
+    """Scan the network and local filesystem for settings and GWS credentials."""
+    return await run_autodiscovery()
 
 
 @api_router.get("/search", response_model=SearchResponse)

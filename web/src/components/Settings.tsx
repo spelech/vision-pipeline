@@ -61,6 +61,44 @@ export function Settings() {
     'has:attachment (subject:receipt OR subject:"order confirmation" OR subject:invoice)'
   );
   const [gmailAutoSyncMaxResults, setGmailAutoSyncMaxResults] = useState(25);
+  const [scanning, setScanning] = useState(false);
+  const [scanResults, setScanResults] = useState<{
+    success: boolean;
+    discovered_urls: Record<string, string>;
+    discovered_gws: Record<string, string>;
+    error?: string;
+  } | null>(null);
+
+  const runAutodiscover = async () => {
+    setScanning(true);
+    setScanResults(null);
+    try {
+      const response = await fetch('/api/config/discover');
+      if (!response.ok) throw new Error('Discovery failed');
+      const data = await response.json();
+      setScanResults(data);
+    } catch (e) {
+      console.error(e);
+      setScanResults({
+        success: false,
+        discovered_urls: {},
+        discovered_gws: {},
+        error: String(e)
+      });
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const applyDiscovered = () => {
+    if (!scanResults) return;
+    setSecrets(prev => ({
+      ...prev,
+      ...scanResults.discovered_urls,
+      ...scanResults.discovered_gws
+    }));
+    alert('Discovered settings applied to form! Click "Apply Full Configuration" at the bottom to save permanently.');
+  };
 
   useEffect(() => {
     void (async () => {
@@ -325,6 +363,82 @@ export function Settings() {
             <p className="text-[10px] text-white/30 italic ml-auto max-w-[200px] text-right">
               Sync prompts, pipelines, and secrets between dev and production environments.
             </p>
+          </div>
+        </section>
+
+        {/* Autodiscovery */}
+        <section className="space-y-6 flex flex-col md:col-span-2">
+          <label className="label-apple">Environment Autodiscovery</label>
+          <div className="glass p-8 rounded-[2.5rem] space-y-6">
+            <div className="flex gap-4 items-center">
+              <button
+                type="button"
+                onClick={() => void runAutodiscover()}
+                disabled={scanning}
+                className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-black uppercase tracking-widest px-8 py-4 rounded-2xl transition-all shadow-lg shadow-purple-900/20"
+              >
+                {scanning ? 'Scanning Network...' : 'Scan Local Environment'}
+              </button>
+              <p className="text-[10px] text-white/30 italic max-w-[300px]">
+                Detect other Docker containers on your network (Mealie, Homebox, SearxNG, etc.) and scan for Google credentials on disk.
+              </p>
+            </div>
+
+            {scanResults && (
+              <div className="pt-6 border-t border-white/5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Services discovered */}
+                  <div className="space-y-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white/40 block">Discovered Services</span>
+                    {Object.keys(scanResults.discovered_urls).length === 0 ? (
+                      <p className="text-xs text-white/30 italic">No services detected on standard container names or ports.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {Object.entries(scanResults.discovered_urls).map(([key, val]) => (
+                          <div key={key} className="flex items-center gap-2 text-xs bg-white/5 rounded-xl px-4 py-3 border border-white/5">
+                            <span className="text-green-400">✓</span>
+                            <span className="font-bold text-white/85">{key.replace('_URL', '')}</span>
+                            <span className="text-[10px] font-mono text-white/40 truncate ml-auto">{val}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Credentials discovered */}
+                  <div className="space-y-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white/40 block">Discovered GWS Credentials</span>
+                    {Object.keys(scanResults.discovered_gws).length === 0 ? (
+                      <p className="text-xs text-white/30 italic">No Google credentials detected in standard files or local DB.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {Object.entries(scanResults.discovered_gws).map(([key, val]) => (
+                          <div key={key} className="flex items-center gap-2 text-xs bg-white/5 rounded-xl px-4 py-3 border border-white/5">
+                            <span className="text-green-400">✓</span>
+                            <span className="font-bold text-white/85">{key.replace('GWS_', '')}</span>
+                            <span className="text-[10px] font-mono text-white/40 truncate ml-auto">
+                              {val.length > 20 ? `${val.substring(0, 15)}...` : val}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {(Object.keys(scanResults.discovered_urls).length > 0 || Object.keys(scanResults.discovered_gws).length > 0) && (
+                  <div className="flex justify-end pt-4">
+                    <button
+                      type="button"
+                      onClick={applyDiscovered}
+                      className="bg-white/10 hover:bg-white/20 text-white text-xs font-black uppercase tracking-widest px-6 py-3 rounded-xl border border-white/10 transition-all"
+                    >
+                      Apply Discovered Settings
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </section>
 

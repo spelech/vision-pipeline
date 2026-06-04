@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [3.6.7] - 2026-06-04
+
+### Added
+- Environment Autodiscovery feature to auto-probe container names and localhost ports for services (Homebox, Mealie, SearxNG, ChangeDetection, PriceBuddy, Receipt Wrangler).
+- Disk and SQLite scanning for Google Workspace (GWS) client credentials (client_secret.json/credentials.json) and shared DB bundles, allowing automatic configuration extraction.
+- Autodiscovery control panel in the Settings UI with one-click settings application.
+
+### Tests
+- Unit tests for the discovery utilities (TCP socket checks, SQLite decryption, file discovery).
+- API endpoint integration tests for `/api/config/discover`.
+
 ## [3.6.1] - 2026-05-31
 
 ### Added
