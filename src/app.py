@@ -226,7 +226,7 @@ class ScrapeRequest(BaseModel):
 @app.post("/internal/scrape", include_in_schema=False)
 async def scrape_url(req: ScrapeRequest):
     try:
-        from playwright.async_api import async_playwright
+        from playwright.async_api import async_playwright  # type: ignore[import-not-found]
     except ImportError as e:
         raise HTTPException(
             status_code=503,
