@@ -75,9 +75,9 @@ async def test_import_config():
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        with patch("app.decrypt_secret", return_value="decrypted"):
-            with patch("app.upsert_app_setting", new=AsyncMock()) as mock_upsert:
-                with patch("app.configure_gmail_auto_sync_scheduler", new=AsyncMock()):
+        with patch("routes.config_routes.decrypt_secret", return_value="decrypted"):
+            with patch("routes.config_routes.upsert_app_setting", new=AsyncMock()) as mock_upsert:
+                with patch("routes.config_routes.configure_gmail_auto_sync_scheduler", new=AsyncMock()):
                     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
                         response = await ac.post("/api/config/import", json=import_payload)
                         assert response.status_code == 200

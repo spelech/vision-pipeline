@@ -373,7 +373,7 @@ async def test_helper_runtime_service_prompt_configs_merges_settings() -> None:
     cm.__aenter__.return_value = db
     cm.__aexit__.return_value = None
 
-    with patch("app_helpers.AsyncSessionLocal", return_value=cm), patch(
+    with patch("database.async_session_local", return_value=cm), patch(
         "app_helpers.ensure_app_settings_seed", AsyncMock()
     ), patch(
         "app_helpers.get_app_settings",
