@@ -41,16 +41,21 @@ describe('Settings', () => {
     render(<Settings />);
     expect(await screen.findByText('System Settings')).toBeInTheDocument();
     
-    // Config items should load
+    // Switch to General Config tab
+    fireEvent.click(screen.getByText('General Config'));
     expect(await screen.findByText('qwen2.5-vl-72b-instruct')).toBeInTheDocument();
     
-    // Wait for prompts to load
+    // Switch to Prompt Suite tab
+    fireEvent.click(screen.getByText('Prompt Suite'));
     expect(await screen.findByDisplayValue('Default')).toBeInTheDocument();
   });
 
   it('Feature: settings-model-add | allows adding a new model', async () => {
     render(<Settings />);
     await screen.findByText('System Settings');
+
+    // Switch to General Config tab
+    fireEvent.click(screen.getByText('General Config'));
 
     // Find the input with placeholder
     const modelInput = screen.getByPlaceholderText('owner/model-name');
@@ -154,6 +159,8 @@ describe('Settings', () => {
     });
 
     render(<Settings />);
+    // Switch to Prompt Suite tab
+    fireEvent.click(screen.getByText('Prompt Suite'));
     expect(await screen.findByDisplayValue(/Default Vision Pipeline vision prompt/i)).toBeInTheDocument();
     expect(await screen.findByDisplayValue(/Default Vision Pipeline refine prompt/i)).toBeInTheDocument();
     expect(await screen.findByDisplayValue(/Receipt Pipeline vision prompt/i)).toBeInTheDocument();
@@ -163,6 +170,9 @@ describe('Settings', () => {
   it('Feature: settings-star-remove | toggles star and removes model from registry', async () => {
     render(<Settings />);
     await screen.findByText('System Settings');
+
+    // Switch to General Config tab
+    fireEvent.click(screen.getByText('General Config'));
 
     const emptyStar = screen.getByText('☆');
     fireEvent.click(emptyStar);
@@ -261,6 +271,9 @@ describe('Settings', () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     render(<Settings />);
     await screen.findByText('System Settings');
+
+    // Switch to Prompt Suite tab
+    fireEvent.click(screen.getByText('Prompt Suite'));
 
     const promptTextAreas = screen.getAllByRole('textbox').filter((el) => el.tagName.toLowerCase() === 'textarea');
     fireEvent.change(promptTextAreas[0], { target: { value: '  Keep this trimmed  ' } });
@@ -381,6 +394,9 @@ describe('Settings', () => {
     render(<Settings />);
     await screen.findByText('System Settings');
 
+    // Switch to General Config tab
+    fireEvent.click(screen.getByText('General Config'));
+
     const modelInput = screen.getByPlaceholderText('owner/model-name');
     fireEvent.change(modelInput, { target: { value: 'qwen/qwen2.5-vl-72b-instruct' } });
     fireEvent.click(screen.getByText('Add'));
@@ -394,6 +410,9 @@ describe('Settings', () => {
     render(<Settings />);
 
     expect(await screen.findByText('System Settings')).toBeInTheDocument();
+    
+    // Switch to General Config tab
+    fireEvent.click(screen.getByText('General Config'));
     expect(screen.getByPlaceholderText('owner/model-name')).toBeInTheDocument();
     expect(screen.getByText('Apply Full Configuration')).toBeInTheDocument();
   });
@@ -427,6 +446,9 @@ describe('Settings', () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     render(<Settings />);
     await screen.findByText('System Settings');
+
+    // Switch to Prompt Suite tab
+    fireEvent.click(screen.getByText('Prompt Suite'));
 
     fireEvent.click(screen.getByText('Delete'));
     fireEvent.click(screen.getByText('Apply Full Configuration'));
@@ -477,6 +499,9 @@ describe('Settings', () => {
     await screen.findByText('System Settings');
 
     fireEvent.change(screen.getByPlaceholderText(/Enter OPENROUTER API KEY/i), { target: { value: 'test-key-123' } });
+    
+    // Switch to General Config tab for image optimization fields
+    fireEvent.click(screen.getByText('General Config'));
     fireEvent.change(screen.getByDisplayValue('1024'), { target: { value: '1600' } });
     fireEvent.change(screen.getByDisplayValue('85'), { target: { value: '92' } });
 
@@ -533,6 +558,9 @@ describe('Settings', () => {
     render(<Settings />);
     await screen.findByText('System Settings');
 
+    // Switch to General Config tab
+    fireEvent.click(screen.getByText('General Config'));
+
     fireEvent.click(screen.getByLabelText('Enable Background Sync'));
     fireEvent.change(screen.getByDisplayValue('30'), { target: { value: '45' } });
     fireEvent.change(screen.getByDisplayValue('subject:receipt'), { target: { value: 'subject:invoice' } });
@@ -588,6 +616,9 @@ describe('Settings', () => {
     render(<Settings />);
     await screen.findByText('System Settings');
 
+    // Switch to General Config tab
+    fireEvent.click(screen.getByText('General Config'));
+
     fireEvent.click(screen.getByText('Connect Gmail'));
 
     await waitFor(() => {
@@ -633,6 +664,9 @@ describe('Settings', () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     render(<Settings />);
     await screen.findByText('System Settings');
+
+    // Switch to General Config tab
+    fireEvent.click(screen.getByText('General Config'));
 
     fireEvent.click(screen.getByText('Connect Gmail'));
 

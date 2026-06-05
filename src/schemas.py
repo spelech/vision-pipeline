@@ -65,6 +65,8 @@ class ConfigSecretStatus(BaseModel):
     RECEIPT_WRANGLER_GROUP_ID: str = ""
     GMAIL_OCR_BACKEND: str = ""
     GMAIL_OCR_VISION_MODEL: str = ""
+    VISION_MODEL_DEFAULT: str = ""
+    REFINE_MODEL_DEFAULT: str = ""
 
 
 class ConfigResponse(BaseModel):
@@ -79,6 +81,7 @@ class ConfigResponse(BaseModel):
     gmail_auto_sync_query: Optional[str] = None
     gmail_auto_sync_max_results: Optional[int] = None
     secrets_status: Optional[Dict[str, str]] = None
+    secrets_sources: Optional[Dict[str, str]] = None
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -116,6 +119,8 @@ class ConfigUpdateRequest(BaseModel):
     RECEIPT_WRANGLER_GROUP_ID: Optional[str] = None
     GMAIL_OCR_BACKEND: Optional[str] = None
     GMAIL_OCR_VISION_MODEL: Optional[str] = None
+    VISION_MODEL_DEFAULT: Optional[str] = None
+    REFINE_MODEL_DEFAULT: Optional[str] = None
 
 
 class ServiceMappingInfo(BaseModel):
