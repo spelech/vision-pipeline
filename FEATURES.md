@@ -1,4 +1,4 @@
-# Vision Pipeline v3.6.13
+# Vision Pipeline v3.6.14
 
 # Project Features
 
@@ -45,6 +45,7 @@ This file tracks the current capabilities and planned enhancements for the Visio
 - **Modular API Routers**: Decoupled monolithic backend routes into dedicated, modular API sub-routers (`config`, `pipeline`, `model`, `gmail`, `item`, `service`).
 - **Encrypted Secrets Management**: Standardized secret store with Fernet encryption support (`secrets_manager.py`).
 - **Development Tooling**: Enforced code quality standards with `mypy` typing, `pylint` analysis, and pre-commit automation hook configurations.
+- **Strict Quality Gates CI/CD**: Enforced automated linting (ESLint, Pylint), typechecking (TypeScript, Mypy), and unit testing gates in GitHub Actions to guarantee all quality checks pass before code can be merged to master.
 
 ### 🧾 Receipt Automation (New)
 - **Dedicated Receipt Pipeline:** New receipt-specific pipeline class and registration for OCR-oriented extraction flows.
