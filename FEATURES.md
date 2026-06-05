@@ -1,4 +1,4 @@
-# Vision Pipeline v3.6.11
+# Vision Pipeline v3.6.12
 
 # Project Features
 
@@ -32,6 +32,7 @@ This file tracks the current capabilities and planned enhancements for the Visio
 - **Service Mapping:** Persistent tracking of links between local items and external service unique identifiers.
 
 ### 🛠 System & UI
+- **Setup Guide & Config UI:** Comprehensive setup guide tab with provider toggling (OpenRouter vs LiteLLM), real-time database vs environment variables source indicators, and explicit role-to-model configuration dropdowns.
 - **Composable Pipelines:** Visual Drag-and-drop style node builder for creating custom workflow sequences (e.g., Barcode -> Vision -> Scrape).
 - **Real-time Logging:** Custom session-based logger providing live feedback to the UI during pipeline execution.
 - **Progressive Web App (PWA):** Installs as a standalone web application on Android and iOS (black status bar, no browser chrome, manifest-driven icon integration).

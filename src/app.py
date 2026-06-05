@@ -42,6 +42,8 @@ import pipelines
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
+ORIGINAL_ENV = dict(os.environ)
+
 # These imports rely on environment variables being loaded above.
 from database import (  # pylint: disable=wrong-import-position
     init_db,
@@ -153,6 +155,8 @@ CONFIG_SECRET_KEYS = [
     "RECEIPT_WRANGLER_GROUP_ID",
     "GMAIL_OCR_BACKEND",
     "GMAIL_OCR_VISION_MODEL",
+    "VISION_MODEL_DEFAULT",
+    "REFINE_MODEL_DEFAULT",
 ]
 
 def get_secret_value(key: str) -> str:
@@ -214,7 +218,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="Vision Pipeline API",
-    version="3.6.11",
+    version="3.6.12",
     redoc_url=None,
 )
 api_router = APIRouter(prefix="/api")
@@ -630,18 +634,29 @@ async def get_config(
         data["custom_pipelines"] = []
 
     # Mask secrets - return only presence status
+    res = await db.execute(select(ConfigSecret))
+    db_secrets = {s.key for s in res.scalars().all() if s.encrypted_value}
+
     secrets_status = {}
+    secrets_sources = {}
     for key in CONFIG_SECRET_KEYS:
         val = get_secret_value(key)
         if val:
-            if reveal_secrets or "URL" in key:
+            if reveal_secrets or "URL" in key or "MODEL" in key:
                 secrets_status[key] = val
             else:
                 secrets_status[key] = "********"
         else:
             secrets_status[key] = ""
 
-    return ConfigResponse(**data, secrets_status=secrets_status)
+        if key in db_secrets:
+            secrets_sources[key] = "database"
+        elif ORIGINAL_ENV.get(key):
+            secrets_sources[key] = "environment"
+        else:
+            secrets_sources[key] = "none"
+
+    return ConfigResponse(**data, secrets_status=secrets_status, secrets_sources=secrets_sources)
 
 
 @api_router.post("/config")
@@ -700,7 +715,17 @@ async def update_config(
 
     for key in CONFIG_SECRET_KEYS:
         val = getattr(data, key, None)
-        if val and val != "********":
+        if val == "":
+            result = await db.execute(select(ConfigSecret).where(ConfigSecret.key == key))
+            secret_obj = result.scalar_one_or_none()
+            if secret_obj:
+                await db.delete(secret_obj)
+            orig_val = ORIGINAL_ENV.get(key)
+            if orig_val:
+                os.environ[key] = orig_val
+            elif key in os.environ:
+                del os.environ[key]
+        elif val and val != "********":
             await upsert_secret(db, key, val)
 
     await db.commit()

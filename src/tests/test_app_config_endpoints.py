@@ -165,7 +165,11 @@ async def test_list_models_success_and_error_paths():
 
 @pytest.mark.asyncio
 async def test_get_config_masks_secrets_and_handles_pipeline_failure():
-    db = SimpleNamespace()
+    db = SimpleNamespace(
+        execute=AsyncMock(return_value=_Result(rows=[
+            SimpleNamespace(key="HOMEBOX_URL", encrypted_value="enc-val")
+        ]))
+    )
     settings = {
         "prompt_templates": [{"id": "a", "name": "A", "prompt": "x"}],
         "service_prompts": {"homebox": {"prompt": "p", "enabled": True}},
@@ -183,17 +187,22 @@ async def test_get_config_masks_secrets_and_handles_pipeline_failure():
         "app.get_app_settings", AsyncMock(return_value=settings)
     ), patch("app.ensure_pipeline_catalog", AsyncMock(side_effect=SQLAlchemyError("skip"))), patch(
         "app.get_secret_value", side_effect=_secret
-    ):
+    ), patch("app.ORIGINAL_ENV", {"OPENROUTER_API_KEY": "env-val"}):
         response = await get_config(db)
 
     assert response.secrets_status["HOMEBOX_URL"] == "http://example.test"
     assert response.secrets_status["OPENROUTER_API_KEY"] == "********"
+    assert response.secrets_sources["HOMEBOX_URL"] == "database"
+    assert response.secrets_sources["OPENROUTER_API_KEY"] == "environment"
+    assert response.secrets_sources["LLM_API_KEY"] == "none"
     assert response.custom_pipelines == []
 
 
 @pytest.mark.asyncio
 async def test_get_config_reveals_secrets_when_requested():
-    db = SimpleNamespace()
+    db = SimpleNamespace(
+        execute=AsyncMock(return_value=_Result(rows=[]))
+    )
     settings = {
         "prompt_templates": [],
         "service_prompts": {},
@@ -220,7 +229,9 @@ async def test_get_config_reveals_secrets_when_requested():
 
 @pytest.mark.asyncio
 async def test_get_config_derives_prompt_templates_from_pipeline_defaults_when_empty():
-    db = SimpleNamespace()
+    db = SimpleNamespace(
+        execute=AsyncMock(return_value=_Result(rows=[]))
+    )
     settings = {
         "prompt_templates": [],
         "service_prompts": {},
@@ -286,6 +297,31 @@ async def test_update_config_persists_settings_models_and_secret_values():
     assert db.commit.await_count == 1
     assert db.add.call_count >= 2
     set_secret.assert_called_once_with("OPENROUTER_API_KEY", "token-123")
+
+
+@pytest.mark.asyncio
+async def test_update_config_reset_secret_to_empty_string():
+    import os
+    secret_obj = SimpleNamespace(key="OPENROUTER_API_KEY", encrypted_value="enc")
+    db = SimpleNamespace(
+        execute=AsyncMock(return_value=_Result(scalar=secret_obj)),
+        delete=AsyncMock(),
+        commit=AsyncMock(),
+    )
+
+    payload = ConfigUpdateRequest(
+        OPENROUTER_API_KEY="",
+    )
+
+    with patch("app.ensure_app_settings_seed", AsyncMock()), patch(
+        "app.ORIGINAL_ENV", {"OPENROUTER_API_KEY": "fallback-key"}
+    ), patch("app.set_secret_value") as set_secret:
+        response = await update_config(payload, db)
+
+    assert response["success"] is True
+    db.delete.assert_awaited_once_with(secret_obj)
+    db.commit.assert_awaited_once()
+    assert os.environ.get("OPENROUTER_API_KEY") == "fallback-key"
 
 
 @pytest.mark.asyncio
