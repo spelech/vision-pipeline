@@ -1,4 +1,4 @@
-# Vision Pipeline v3.6.12
+# Vision Pipeline v3.6.13
 
 # Project Features
 
@@ -42,6 +42,9 @@ This file tracks the current capabilities and planned enhancements for the Visio
 - **SQLite Persistence:** Async database storage for batches, items, and AI outputs.
 - **Configurable LLM Gateway:** Supports OpenAI-compatible endpoints (including local LiteLLM) without hardcoding OpenRouter URLs.
 - **Settings Autodiscovery:** Auto-probes local networks for container services (Homebox, Mealie, SearxNG, ChangeDetection, PriceBuddy, Receipt Wrangler) and scans for Google Workspace client credentials on disk or in shared databases to simplify setup.
+- **Modular API Routers**: Decoupled monolithic backend routes into dedicated, modular API sub-routers (`config`, `pipeline`, `model`, `gmail`, `item`, `service`).
+- **Encrypted Secrets Management**: Standardized secret store with Fernet encryption support (`secrets_manager.py`).
+- **Development Tooling**: Enforced code quality standards with `mypy` typing, `pylint` analysis, and pre-commit automation hook configurations.
 
 ### 🧾 Receipt Automation (New)
 - **Dedicated Receipt Pipeline:** New receipt-specific pipeline class and registration for OCR-oriented extraction flows.
