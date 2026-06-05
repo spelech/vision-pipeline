@@ -154,6 +154,12 @@ async_session_local = sessionmaker(
     expire_on_commit=False)  # type: ignore
 
 
+async def get_db():
+    async with async_session_local() as session:
+        yield session
+
+
+
 def to_sync_database_url(url: str) -> str:
     """Convert async SQLAlchemy URLs into sync URLs for Alembic migrations."""
     if "+asyncpg" in url:
