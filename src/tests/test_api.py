@@ -430,17 +430,29 @@ async def test_get_config_masks_and_preserves_url_secrets():
         "prompt_templates": [{"id": "1", "name": "Default", "prompt": "Analyze"}],
     }
 
-    with patch("routes.config_routes.ensure_app_settings_seed", new=AsyncMock()):
-        with patch("routes.config_routes.get_app_settings", new=AsyncMock(return_value=fake_config)):
-            with patch("routes.config_routes.ensure_pipeline_catalog", new=AsyncMock()):
-                with patch("routes.config_routes.list_pipeline_definitions", new=AsyncMock(return_value=[])):
-                    with patch("routes.config_routes.get_secret_value", side_effect=lambda key: "https://example.com" if "URL" in key else "secret"):
-                        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-                            response = await ac.get("/api/config")
-                            assert response.status_code == 200
-                            body = response.json()
-                            assert body["secrets_status"]["SEARXNG_URL"] == "https://example.com"
-                            assert body["secrets_status"]["OPENROUTER_API_KEY"] == "********"
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_session.execute.return_value = mock_result
+
+    async def override_get_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with patch("routes.config_routes.ensure_app_settings_seed", new=AsyncMock()):
+            with patch("routes.config_routes.get_app_settings", new=AsyncMock(return_value=fake_config)):
+                with patch("routes.config_routes.ensure_pipeline_catalog", new=AsyncMock()):
+                    with patch("routes.config_routes.list_pipeline_definitions", new=AsyncMock(return_value=[])):
+                        with patch("routes.config_routes.get_secret_value", side_effect=lambda key: "https://example.com" if "URL" in key else "secret"):
+                            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                                response = await ac.get("/api/config")
+                                assert response.status_code == 200
+                                body = response.json()
+                                assert body["secrets_status"]["SEARXNG_URL"] == "https://example.com"
+                                assert body["secrets_status"]["OPENROUTER_API_KEY"] == "********"
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.mark.feature("config-write")
