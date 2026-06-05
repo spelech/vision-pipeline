@@ -1,0 +1,32 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - id: pylint
+        name: pylint
+        entry: venv/Scripts/pylint
+        language: system
+        types: [python]
+        files: ^src/
+
+      - id: mypy
+        name: mypy
+        entry: powershell -Command "$env:MYPYPATH='src'; venv/Scripts/mypy --explicit-package-bases"
+        language: system
+        types: [python]
+        files: ^src/
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest
+        entry: venv/Scripts/pytest src/tests/
+        language: system
+        pass_filenames: false
+        always_run: true
