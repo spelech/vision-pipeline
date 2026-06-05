@@ -2,6 +2,29 @@ import { useState } from 'react';
 import { X, Save, AlertCircle, Edit3, Code } from 'lucide-react';
 import type { Asset } from '../types';
 
+interface PreviewFormData {
+  name?: string;
+  quantity?: number;
+  purchasePrice?: number;
+  location?: string;
+  manufacturer?: string;
+  modelNumber?: string;
+  serialNumber?: string;
+  description?: string;
+  notes?: string;
+  technical_details?: string;
+  recipeIngredients?: unknown[];
+  recipeInstructions?: unknown[];
+  yield?: string;
+  barcode?: string;
+  urls?: string[];
+  tags?: string[];
+  title?: string;
+  url?: string;
+  tag?: string;
+  [key: string]: unknown;
+}
+
 interface PreviewModalProps {
   preview: {
     item: Asset;
@@ -14,7 +37,7 @@ interface PreviewModalProps {
 
 export function PreviewModal({ preview, onClose, onConfirm }: PreviewModalProps) {
   const [viewMode, setViewMode] = useState<'form' | 'json'>('form');
-  const [formData, setFormData] = useState<Record<string, any>>(preview.payload || {});
+  const [formData, setFormData] = useState<PreviewFormData>(preview.payload || {});
   const [editedPayload, setEditedPayload] = useState(JSON.stringify(preview.payload, null, 2));
   const [error, setError] = useState<string | null>(null);
 
@@ -149,11 +172,11 @@ export function PreviewModal({ preview, onClose, onConfirm }: PreviewModalProps)
 
   const renderMealieForm = () => {
     const rawIngredients = Array.isArray(formData.recipeIngredients)
-      ? formData.recipeIngredients.map((x: any) => typeof x === 'object' && x ? (x.note || '') : String(x)).join('\n')
+      ? formData.recipeIngredients.map((x) => typeof x === 'object' && x ? ((x as { note?: string }).note || '') : String(x)).join('\n')
       : '';
 
     const rawInstructions = Array.isArray(formData.recipeInstructions)
-      ? formData.recipeInstructions.map((x: any) => typeof x === 'object' && x ? (x.text || '') : String(x)).join('\n')
+      ? formData.recipeInstructions.map((x) => typeof x === 'object' && x ? ((x as { text?: string }).text || '') : String(x)).join('\n')
       : '';
 
     const handleIngredientsChange = (val: string) => {

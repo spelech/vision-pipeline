@@ -46,6 +46,13 @@ interface ModelApiResponse {
   models?: Array<{ id: string }>;
 }
 
+interface ServicePromptConfig {
+  model?: string;
+  system_prompt?: string;
+  user_prompt?: string;
+  [key: string]: unknown;
+}
+
 export function Settings() {
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [revealSecrets, setRevealSecrets] = useState(false);
@@ -74,7 +81,7 @@ export function Settings() {
   const [activeTab, setActiveTab] = useState<'setup' | 'general' | 'prompts'>('setup');
   const [llmProvider, setLlmProvider] = useState<'openrouter' | 'litellm'>('openrouter');
   const [secretsSources, setSecretsSources] = useState<Record<string, string>>({});
-  const [servicePrompts, setServicePrompts] = useState<Record<string, any>>({});
+  const [servicePrompts, setServicePrompts] = useState<Record<string, ServicePromptConfig>>({});
 
   const runAutodiscover = async () => {
     setScanning(true);
