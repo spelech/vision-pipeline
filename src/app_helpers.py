@@ -10,11 +10,11 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import database
 from database import (
     AppSetting,
     ModelCatalog,
     PipelineDefinition,
-    async_session_local as AsyncSessionLocal,
 )
 from pipelines import ComposablePipeline, DefaultPipeline, PIPELINE_REGISTRY, get_all_pipelines
 import pipelines
@@ -527,7 +527,7 @@ async def ensure_app_settings_seed(db: AsyncSession) -> None:
 
 
 async def get_runtime_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
-    async with AsyncSessionLocal() as db:
+    async with database.async_session_local() as db:
         await ensure_app_settings_seed(db)
         settings = await get_app_settings(db)
         return merge_service_prompt_configs(settings.get("service_prompts"))
@@ -558,9 +558,9 @@ async def ensure_pipeline_catalog(db: AsyncSession) -> None:
                 if (row.name != name or
                         row.schema != schema or
                         row.service_target != service_target):
-                    row.name = name
+                    row.name = name  # type: ignore
                     row.schema = schema
-                    row.service_target = service_target
+                    row.service_target = service_target  # type: ignore
                     changed = True
             else:
                 db.add(

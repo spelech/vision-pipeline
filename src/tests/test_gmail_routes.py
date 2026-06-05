@@ -7,7 +7,7 @@ with patch("os.makedirs"), patch("os.path.exists", return_value=True), patch(
     "fastapi.staticfiles.StaticFiles", return_value=MagicMock()
 ):
     from app import app, get_db
-    from gmail_routes import _extract_rw_line_items, _to_data_uri
+    from routes.gmail_routes import _extract_rw_line_items, _to_data_uri
 
 
 @pytest.mark.asyncio
@@ -19,8 +19,8 @@ async def test_gmail_status_endpoint_reports_settings_and_connection_state():
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        with patch("gmail_routes.ensure_app_settings_seed", AsyncMock()), patch(
-            "gmail_routes.get_app_settings",
+        with patch("routes.gmail_routes.ensure_app_settings_seed", AsyncMock()), patch(
+            "routes.gmail_routes.get_app_settings",
             AsyncMock(
                 return_value={
                     "gmail_processed_message_ids": ["m1", "m2"],
@@ -58,8 +58,8 @@ async def test_gmail_search_endpoint_excludes_processed_ids_by_default():
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        with patch("gmail_routes.ensure_app_settings_seed", AsyncMock()), patch(
-            "gmail_routes.get_app_settings",
+        with patch("routes.gmail_routes.ensure_app_settings_seed", AsyncMock()), patch(
+            "routes.gmail_routes.get_app_settings",
             AsyncMock(return_value={"gmail_processed_message_ids": ["seen-1"]}),
         ), patch(
             "app.gmail_ingestor.search_receipts",
@@ -86,8 +86,8 @@ async def test_gmail_search_builds_query_from_preset_and_filters():
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        with patch("gmail_routes.ensure_app_settings_seed", AsyncMock()), patch(
-            "gmail_routes.get_app_settings",
+        with patch("routes.gmail_routes.ensure_app_settings_seed", AsyncMock()), patch(
+            "routes.gmail_routes.get_app_settings",
             AsyncMock(return_value={"gmail_processed_message_ids": []}),
         ), patch(
             "app.gmail_ingestor.search_receipts",
@@ -133,8 +133,8 @@ async def test_gmail_sync_marks_messages_processed_when_requested():
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        with patch("gmail_routes.ensure_app_settings_seed", AsyncMock()), patch(
-            "gmail_routes.get_app_settings",
+        with patch("routes.gmail_routes.ensure_app_settings_seed", AsyncMock()), patch(
+            "routes.gmail_routes.get_app_settings",
             AsyncMock(return_value={"gmail_processed_message_ids": ["old-1"]}),
         ), patch(
             "app.gmail_ingestor.search_receipts",
@@ -143,7 +143,7 @@ async def test_gmail_sync_marks_messages_processed_when_requested():
                 "message_count": 2,
                 "messages": [{"message_id": "new-1"}, {"message_id": "new-2"}],
             },
-        ), patch("gmail_routes.upsert_app_setting", AsyncMock()) as upsert_app_setting:
+        ), patch("routes.gmail_routes.upsert_app_setting", AsyncMock()) as upsert_app_setting:
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
                 response = await ac.post(
                     "/api/gmail/sync",
@@ -193,11 +193,11 @@ async def test_receipt_wrangler_sync_processes_selected_message_attachments():
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        with patch("gmail_routes.ensure_app_settings_seed", AsyncMock()), patch(
-            "gmail_routes.get_app_settings",
+        with patch("routes.gmail_routes.ensure_app_settings_seed", AsyncMock()), patch(
+            "routes.gmail_routes.get_app_settings",
             AsyncMock(return_value={"gmail_processed_message_ids": ["old-1"]}),
         ), patch(
-            "gmail_routes.upsert_app_setting", AsyncMock()
+            "routes.gmail_routes.upsert_app_setting", AsyncMock()
         ) as upsert_app_setting, patch(
             "app.receipt_wrangler_client.configured", return_value=True
         ), patch(
@@ -301,7 +301,10 @@ async def test_gmail_direct_ingest_uses_attachment_text_for_line_items():
         ), patch(
             "app.gmail_ingestor.extract_line_items_from_message",
             return_value=[{"name": "Widget Z", "line_text": "Widget Z $19.99", "price": "$19.99"}],
-        ) as extract_line_items:
+        ) as extract_line_items, patch(
+            "tasks.process_item_task_safe",
+            AsyncMock(),
+        ):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
                 response = await ac.post(
                     "/api/gmail/ingest-direct",
@@ -374,7 +377,7 @@ async def test_receipt_wrangler_process_pulls_and_resolves_pending_receipts():
             "app.receipt_wrangler_client.update_receipt_status",
             return_value={"ok": True},
         ) as update_status, patch(
-            "app.process_item_task_safe",
+            "tasks.process_item_task_safe",
             AsyncMock(),
         ):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:

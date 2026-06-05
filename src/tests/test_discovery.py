@@ -57,7 +57,7 @@ async def test_run_autodiscovery():
 
 @pytest.mark.asyncio
 async def test_discover_endpoint():
-    with patch("app.run_autodiscovery") as mock_run:
+    with patch("routes.config_routes.run_autodiscovery") as mock_run:
         from services.discovery import DiscoveryResult
         mock_result = DiscoveryResult(
             success=True,

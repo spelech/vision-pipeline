@@ -69,19 +69,19 @@ class _BackgroundTasks:
 @pytest.mark.asyncio
 async def test_list_pipelines_success_and_failure_paths():
     db = SimpleNamespace()
-    with patch("app.ensure_pipeline_catalog", AsyncMock()), patch(
-        "app.list_pipeline_definitions",
+    with patch("routes.pipeline_routes.ensure_pipeline_catalog", AsyncMock()), patch(
+        "routes.pipeline_routes.list_pipeline_definitions",
         AsyncMock(return_value=[{"id": "default", "name": "Default", "schema": {}}]),
     ):
         response = await list_pipelines(db)
         assert response.success is True
         assert response.pipelines
 
-    with patch("app.ensure_pipeline_catalog", AsyncMock()), patch(
-        "app.list_pipeline_definitions",
+    with patch("routes.pipeline_routes.ensure_pipeline_catalog", AsyncMock()), patch(
+        "routes.pipeline_routes.list_pipeline_definitions",
         AsyncMock(side_effect=RuntimeError("db down")),
     ), patch(
-        "app.pipelines.get_all_pipelines",
+        "pipelines.get_all_pipelines",
         return_value=[{"id": "fallback", "name": "Fallback", "schema": {}}],
     ):
         response = await list_pipelines(db)
@@ -105,7 +105,7 @@ async def test_upsert_pipeline_insert_and_update_paths():
         add=MagicMock(),
         commit=AsyncMock(),
     )
-    with patch("app.ensure_pipeline_catalog", AsyncMock()):
+    with patch("routes.pipeline_routes.ensure_pipeline_catalog", AsyncMock()):
         result = await upsert_pipeline(
             "custom_1",
             {"name": "Custom 1", "schema": {"vision_model": {"default": "qwen/qwen2.5-72b-instruct"}}},
@@ -119,7 +119,7 @@ async def test_upsert_pipeline_insert_and_update_paths():
         add=MagicMock(),
         commit=AsyncMock(),
     )
-    with patch("app.ensure_pipeline_catalog", AsyncMock()):
+    with patch("routes.pipeline_routes.ensure_pipeline_catalog", AsyncMock()):
         result = await upsert_pipeline("service_homebox", {"name": "Service"}, update_db)
     assert result["success"] is True
     assert existing.name == "Service"
@@ -152,13 +152,13 @@ async def test_list_models_success_and_error_paths():
     rows = [SimpleNamespace(model_id="m1", name="Model One", provider="openrouter", is_system=True)]
     db_ok = SimpleNamespace(execute=AsyncMock(return_value=_Result(rows=rows)))
 
-    with patch("app.ensure_model_catalog", AsyncMock()):
+    with patch("routes.model_routes.ensure_model_catalog", AsyncMock()):
         response = await list_models(db_ok)
     assert response.success is True
     assert response.models[0].id == "m1"
 
     db_err = SimpleNamespace(execute=AsyncMock())
-    with patch("app.ensure_model_catalog", AsyncMock(side_effect=RuntimeError("catalog error"))):
+    with patch("routes.model_routes.ensure_model_catalog", AsyncMock(side_effect=RuntimeError("catalog error"))):
         response = await list_models(db_err)
     assert response.success is False
 
@@ -183,11 +183,11 @@ async def test_get_config_masks_secrets_and_handles_pipeline_failure():
     def _secret(key: str) -> str:
         return secret_values.get(key, "")
 
-    with patch("app.ensure_app_settings_seed", AsyncMock()), patch(
-        "app.get_app_settings", AsyncMock(return_value=settings)
-    ), patch("app.ensure_pipeline_catalog", AsyncMock(side_effect=SQLAlchemyError("skip"))), patch(
-        "app.get_secret_value", side_effect=_secret
-    ), patch("app.ORIGINAL_ENV", {"OPENROUTER_API_KEY": "env-val"}):
+    with patch("routes.config_routes.ensure_app_settings_seed", AsyncMock()), patch(
+        "routes.config_routes.get_app_settings", AsyncMock(return_value=settings)
+    ), patch("routes.config_routes.ensure_pipeline_catalog", AsyncMock(side_effect=SQLAlchemyError("skip"))), patch(
+        "routes.config_routes.get_secret_value", side_effect=_secret
+    ), patch("routes.config_routes.ORIGINAL_ENV", {"OPENROUTER_API_KEY": "env-val"}):
         response = await get_config(db)
 
     assert response.secrets_status["HOMEBOX_URL"] == "http://example.test"
@@ -216,11 +216,11 @@ async def test_get_config_reveals_secrets_when_requested():
     def _secret(key: str) -> str:
         return secret_values.get(key, "")
 
-    with patch("app.ensure_app_settings_seed", AsyncMock()), patch(
-        "app.get_app_settings", AsyncMock(return_value=settings)
-    ), patch("app.ensure_pipeline_catalog", AsyncMock()), patch(
-        "app.list_pipeline_definitions", AsyncMock(return_value=[])
-    ), patch("app.get_secret_value", side_effect=_secret):
+    with patch("routes.config_routes.ensure_app_settings_seed", AsyncMock()), patch(
+        "routes.config_routes.get_app_settings", AsyncMock(return_value=settings)
+    ), patch("routes.config_routes.ensure_pipeline_catalog", AsyncMock()), patch(
+        "routes.config_routes.list_pipeline_definitions", AsyncMock(return_value=[])
+    ), patch("routes.config_routes.get_secret_value", side_effect=_secret):
         response = await get_config(db, reveal_secrets=True)
 
     assert response.secrets_status["HOMEBOX_URL"] == "http://example.test"
@@ -240,11 +240,11 @@ async def test_get_config_derives_prompt_templates_from_pipeline_defaults_when_e
         "image_optimization": {},
     }
 
-    with patch("app.ensure_app_settings_seed", AsyncMock()), patch(
-        "app.get_app_settings", AsyncMock(return_value=settings)
-    ), patch("app.ensure_pipeline_catalog", AsyncMock()), patch(
-        "app.list_pipeline_definitions", AsyncMock(return_value=[])
-    ), patch("app.pipelines.get_all_pipelines", return_value=[
+    with patch("routes.config_routes.ensure_app_settings_seed", AsyncMock()), patch(
+        "routes.config_routes.get_app_settings", AsyncMock(return_value=settings)
+    ), patch("routes.config_routes.ensure_pipeline_catalog", AsyncMock()), patch(
+        "routes.config_routes.list_pipeline_definitions", AsyncMock(return_value=[])
+    ), patch("pipelines.get_all_pipelines", return_value=[
         {
             "id": "receipt",
             "name": "Receipt",
@@ -253,7 +253,7 @@ async def test_get_config_derives_prompt_templates_from_pipeline_defaults_when_e
                 "search_results_limit": {"default": 7},
             },
         }
-    ]), patch("app.get_secret_value", return_value=""):
+    ]), patch("routes.config_routes.get_secret_value", return_value=""):
         response = await get_config(db)
 
     assert response.prompt_templates is not None
@@ -284,12 +284,12 @@ async def test_update_config_persists_settings_models_and_secret_values():
         OPENROUTER_API_KEY="token-123",
     )
 
-    with patch("app.ensure_app_settings_seed", AsyncMock()), patch(
-        "app.ensure_pipeline_catalog", AsyncMock()
-    ), patch("app.persist_custom_pipelines", AsyncMock()), patch(
-        "app.upsert_app_setting", AsyncMock()
-    ), patch("app.set_secret_value") as set_secret, patch(
-        "app.encrypt_secret", return_value="enc-token"
+    with patch("routes.config_routes.ensure_app_settings_seed", AsyncMock()), patch(
+        "routes.config_routes.ensure_pipeline_catalog", AsyncMock()
+    ), patch("routes.config_routes.persist_custom_pipelines", AsyncMock()), patch(
+        "routes.config_routes.upsert_app_setting", AsyncMock()
+    ), patch("secrets_manager.set_secret_value") as set_secret, patch(
+        "secrets_manager.encrypt_secret", return_value="enc-token"
     ):
         response = await update_config(payload, db)
 
@@ -313,9 +313,9 @@ async def test_update_config_reset_secret_to_empty_string():
         OPENROUTER_API_KEY="",
     )
 
-    with patch("app.ensure_app_settings_seed", AsyncMock()), patch(
-        "app.ORIGINAL_ENV", {"OPENROUTER_API_KEY": "fallback-key"}
-    ), patch("app.set_secret_value") as set_secret:
+    with patch("routes.config_routes.ensure_app_settings_seed", AsyncMock()), patch(
+        "routes.config_routes.ORIGINAL_ENV", {"OPENROUTER_API_KEY": "fallback-key"}
+    ), patch("secrets_manager.set_secret_value") as set_secret:
         response = await update_config(payload, db)
 
     assert response["success"] is True
@@ -518,15 +518,15 @@ async def test_process_item_task_success_and_error_and_safe_wrapper():
         "scraped_content": "",
     }
 
-    with patch("app.AsyncSessionLocal", return_value=session_cm), patch(
-        "app.get_pipeline", return_value=mock_pipeline
-    ), patch("app.run_in_threadpool", AsyncMock(return_value=mock_pipeline.run.return_value)), patch(
-        "app.decode_data_uri_to_bytes", return_value=b"bytes"
-    ), patch("app.Image.open", return_value=SimpleNamespace()), patch(
-        "app.ImageOps.exif_transpose", return_value=SimpleNamespace()
-    ), patch("app.build_review_image_data_uri", return_value=review_uri), patch(
-        "app.get_runtime_service_prompt_configs", AsyncMock(return_value={"homebox": {}})
-    ), patch("app.generate_service_output", return_value={"status": "ready", "data": {}}), patch.object(
+    with patch("database.async_session_local", return_value=session_cm), patch(
+        "tasks.get_pipeline", return_value=mock_pipeline
+    ), patch("tasks.run_in_threadpool", AsyncMock(return_value=mock_pipeline.run.return_value)), patch(
+        "tasks.decode_data_uri_to_bytes", return_value=b"bytes"
+    ), patch("tasks.Image.open", return_value=SimpleNamespace()), patch(
+        "tasks.ImageOps.exif_transpose", return_value=SimpleNamespace()
+    ), patch("tasks.build_review_image_data_uri", return_value=review_uri), patch(
+        "tasks.get_runtime_service_prompt_configs", AsyncMock(return_value={"homebox": {}})
+    ), patch("tasks.generate_service_output", return_value={"status": "ready", "data": {}}), patch.object(
         list(__import__("app").SERVICES.values())[0],
         "get_pre_enrichment",
         AsyncMock(return_value={}),
@@ -565,13 +565,13 @@ async def test_process_item_task_success_and_error_and_safe_wrapper():
     error_cm.__aenter__.return_value = error_db
     error_cm.__aexit__.return_value = None
 
-    with patch("app.AsyncSessionLocal", return_value=error_cm), patch("app.get_pipeline", return_value=mock_pipeline):
+    with patch("database.async_session_local", return_value=error_cm), patch("tasks.get_pipeline", return_value=mock_pipeline):
         await process_item_task(3, "default", "{}")
 
     assert error_item.status == "error"
     assert isinstance(error_item.error, str)
 
-    with patch("app.process_item_task", AsyncMock(side_effect=RuntimeError("bg fail"))):
+    with patch("tasks.process_item_task", AsyncMock(side_effect=RuntimeError("bg fail"))):
         await process_item_task_safe(99, "default", "{}")
 
 
@@ -624,7 +624,7 @@ async def test_bulk_approve_success_failure_and_missing_item_paths():
     )
 
     with patch(
-        "app.execute_services",
+        "routes.item_routes.execute_services",
         AsyncMock(side_effect=[{"success": True}, {"success": False, "error": "sync failed"}]),
     ):
         result = await bulk_approve({"item_ids": [1, 2, 999]}, db)
