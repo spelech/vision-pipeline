@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Save, AlertCircle, Edit3, Code } from 'lucide-react';
 import type { Asset } from '../types';
 
@@ -40,6 +40,26 @@ export function PreviewModal({ preview, onClose, onConfirm }: PreviewModalProps)
   const [formData, setFormData] = useState<PreviewFormData>(preview.payload || {});
   const [editedPayload, setEditedPayload] = useState(JSON.stringify(preview.payload, null, 2));
   const [error, setError] = useState<string | null>(null);
+  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+
+  useEffect(() => {
+    if (preview.service.toLowerCase() === 'homebox') {
+      const promise = fetch('/api/locations');
+      if (promise && typeof promise.then === 'function') {
+        promise
+          .then((res) => {
+            if (res.ok) return res.json();
+            throw new Error('failed to fetch locations');
+          })
+          .then((data) => {
+            if (data && data.success && Array.isArray(data.locations)) {
+              setLocations(data.locations);
+            }
+          })
+          .catch((err) => console.error(err));
+      }
+    }
+  }, [preview.service]);
 
   const imageSrc =
     (typeof preview.item.ai_output?.review_image_data_uri === 'string' && preview.item.ai_output.review_image_data_uri.startsWith('data:image'))
@@ -110,10 +130,16 @@ export function PreviewModal({ preview, onClose, onConfirm }: PreviewModalProps)
           <label className="text-[10px] font-bold text-white/50 tracking-wider uppercase mb-1 block">Location</label>
           <input
             type="text"
+            list="homebox-locations"
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500/50"
             value={formData.location || ''}
             onChange={(e) => setFormData({ ...formData, location: e.target.value })}
           />
+          <datalist id="homebox-locations">
+            {locations.map((loc) => (
+              <option key={loc.id} value={loc.name} />
+            ))}
+          </datalist>
         </div>
         <div>
           <label className="text-[10px] font-bold text-white/50 tracking-wider uppercase mb-1 block">Manufacturer / Brand</label>
