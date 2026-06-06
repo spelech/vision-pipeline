@@ -1,7 +1,7 @@
 {
   "frontendCoverageBaseline": {
     "source": "web/coverage/unit/coverage-summary.json",
-    "branchesPct": 71.5,
-    "functionsPct": 69.08
+    "branchesPct": 81.14,
+    "functionsPct": 76.9
   }
 }

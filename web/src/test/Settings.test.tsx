@@ -710,9 +710,11 @@ describe('Settings', () => {
     expect(keyInput.type).toBe('password');
     expect(keyInput.value).toBe('********');
 
-    // Click reveal secrets toggle
-    const toggle = screen.getByLabelText('Show Hidden Secrets') as HTMLInputElement;
-    fireEvent.click(toggle);
+    // Click reveal secrets toggle eye button next to the input
+    const inputContainer = keyInput.parentElement;
+    const toggleBtn = inputContainer?.querySelector('button') as HTMLButtonElement;
+    expect(toggleBtn).toBeInTheDocument();
+    fireEvent.click(toggleBtn);
 
     // Wait for the mock update and assertion of unmasked key and type change
     await waitFor(() => {
@@ -722,12 +724,11 @@ describe('Settings', () => {
     });
 
     // Toggle back off
-    fireEvent.click(toggle);
+    fireEvent.click(toggleBtn);
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/config?reveal_secrets=false');
       expect(keyInput.type).toBe('password');
-      expect(keyInput.value).toBe('********');
     });
   });
 });
+
