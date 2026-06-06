@@ -21,7 +21,10 @@ For every new request (feature, bug fix, or refactor):
 3.  **Verification:**
     -   Add or update unit/E2E tests to verify the change.
     -   Verify that the Docker images build successfully (`docker compose build`).
-    -   Verify all quality gates (tests, linting) pass **inside the container environment** (`docker exec vision-pipeline pytest tests/`).
+    -   Verify that all quality gates pass:
+        -   **Frontend Linting & Typechecking:** Ensure `npm run lint` and `npm run build` (which runs `tsc -b`) pass cleanly in `web/`.
+        -   **Backend Linting & Typechecking:** Ensure `pylint` (score >= 9.5/10) and `mypy` type checking pass on the backend.
+        -   **Tests:** Verify all unit/E2E tests pass (e.g. `docker exec vision-pipeline pytest tests/` and vitest).
 4.  **Versioning:**
     -   BEFORE merging, bump the version in `package.json` and `web/package.json`.
     -   Follow SemVer (typically a patch bump `x.x.+1` for minor features/fixes).
