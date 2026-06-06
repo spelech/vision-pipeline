@@ -20,6 +20,7 @@ For every new request (feature, bug fix, or refactor):
     -   Use **atomic commits** that capture single logical changes.
 3.  **Verification:**
     -   Add or update unit/E2E tests to verify the change.
+    -   Verify that the Docker images build successfully (`docker compose build`).
     -   Verify all quality gates (tests, linting) pass **inside the container environment** (`docker exec vision-pipeline pytest tests/`).
 4.  **Versioning:**
     -   BEFORE merging, bump the version in `package.json` and `web/package.json`.

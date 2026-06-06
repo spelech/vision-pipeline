@@ -47,7 +47,7 @@ describe('OfflineStore', () => {
         contains: vi.fn().mockReturnValue(false),
       },
       createObjectStore: vi.fn().mockReturnValue({}),
-      transaction: vi.fn().mockImplementation((storeName: string, mode: string) => {
+      transaction: vi.fn().mockImplementation(() => {
         const storeMock: any = {
           add: vi.fn().mockImplementation((item: OfflineItem) => {
             storeMap.set(item.id, item);
