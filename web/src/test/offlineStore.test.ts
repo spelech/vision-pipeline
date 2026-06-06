@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/ban-ts-comment */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OfflineStore, type OfflineItem } from '../utils/offlineStore';
 
