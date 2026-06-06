@@ -145,3 +145,54 @@ async def test_get_pre_enrichment_paths():
         AsyncMock(side_effect=requests.RequestException("down")),
     ):
         assert await service.get_pre_enrichment({"product_name": "milk"}) == {}
+
+
+def test_homebox_name_property():
+    service = HomeboxService()
+    assert service.name == "homebox"
+
+
+@pytest.mark.asyncio
+async def test_execute_uploads_receipt_attachment():
+    service = HomeboxService()
+    attachment_calls = []
+
+    create_resp = MagicMock()
+    create_resp.raise_for_status.return_value = None
+    create_resp.json.return_value = {"id": "item-abc"}
+    update_resp = MagicMock()
+    update_resp.raise_for_status.return_value = None
+    attach_resp = MagicMock()
+
+    async def _mock_request(method, endpoint, **kwargs):
+        if method == "POST" and endpoint == "/items":
+            return create_resp
+        if method == "PUT" and endpoint.startswith("/items/"):
+            return update_resp
+        if method == "POST" and endpoint.endswith("/attachments"):
+            attachment_calls.append(kwargs)
+            return attach_resp
+        raise AssertionError(f"Unexpected request {method} {endpoint}")
+
+    with patch.object(service, "_get_headers_async", AsyncMock(return_value={"Authorization": "Bearer t"})), patch.object(
+        service, "_request", side_effect=_mock_request
+    ), patch.object(service, "find_or_create_location_async", AsyncMock(return_value=None)):
+        result = await service.execute(
+            {
+                "product_name": "Receipt Item",
+                "receipt_attachment_data_uri": "data:image/png;base64,YWJjZGVmZw==",
+                "receipt_filename": "store_receipt.png"
+            }
+        )
+
+    assert result["success"] is True
+    assert result["item_id"] == "item-abc"
+    assert len(attachment_calls) == 1
+    
+    call_kwargs = attachment_calls[0]
+    assert "files" in call_kwargs
+    file_tuple = call_kwargs["files"]["file"]
+    assert file_tuple[0] == "store_receipt.png"
+    assert file_tuple[1] == b"abcdefg"
+    assert call_kwargs["data"] == {"type": "receipt", "name": "Receipt Image"}
+
