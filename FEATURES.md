@@ -1,4 +1,4 @@
-# Vision Pipeline v3.6.15
+# Vision Pipeline v3.6.16
 
 # Project Features
 
@@ -47,6 +47,7 @@ This file tracks the current capabilities and planned enhancements for the Visio
 - **Development Tooling**: Enforced code quality standards with `mypy` typing, `pylint` analysis, and pre-commit automation hook configurations.
 - **Strict Quality Gates CI/CD**: Enforced automated linting (ESLint, Pylint), typechecking (TypeScript, Mypy), and unit testing gates in GitHub Actions to guarantee all quality checks pass before code can be merged to master.
 - **Enhanced Settings UI**: Restructured model configuration with a dropdown menu for the Gmail OCR model under Model Role Assignments, removed global show-secrets toggle, and integrated granular show/hide eye icons next to individual credential input fields.
+- **High-Coverage Test Suite**: Achieved over **82%** statement/line coverage for web frontend and over **92%** statement coverage for backend Python code, introducing robust unit tests for `offlineStore`, custom pipeline nodes, and service integrations (Mealie, Homebox, PriceBuddy, ChangeDetection).
 
 ### 🧾 Receipt Automation (New)
 - **Dedicated Receipt Pipeline:** New receipt-specific pipeline class and registration for OCR-oriented extraction flows.
