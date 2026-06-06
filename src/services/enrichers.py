@@ -51,36 +51,42 @@ class PriceBuddyService(BaseService):
             logger.error("PriceBuddy execution failed: %s", e)
             return {"success": False, "error": str(e)}
 
+    # pylint: disable=too-many-branches
     def get_payload(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Format payload for PriceBuddy API."""
         urls = []
-        if data.get('product_url'):
-            urls.append(data['product_url'])
+        if isinstance(data.get('urls'), list):
+            for item in data['urls']:
+                if isinstance(item, str) and item.strip() and item not in urls:
+                    urls.append(item.strip())
+        else:
+            if data.get('product_url'):
+                urls.append(data['product_url'])
 
-        for key in ('monitor_urls', 'comparable_urls', 'candidate_urls'):
-            value = data.get(key)
-            if isinstance(value, list):
-                for item in value:
-                    if isinstance(item, str) and item and item not in urls:
-                        urls.append(item)
+            for key in ('monitor_urls', 'comparable_urls', 'candidate_urls'):
+                value = data.get(key)
+                if isinstance(value, list):
+                    for item in value:
+                        if isinstance(item, str) and item and item not in urls:
+                            urls.append(item)
 
-        # Add URLs from search results if available
-        for res in data.get('searxng_results', []):
-            if res.get('url') and res['url'] not in urls:
-                # Basic heuristic: ignore non-shopping sites if many results
-                if any(
-                    x in res['url'].lower() for x in [
-                        'amazon',
-                        'walmart',
-                        'target',
-                        'ebay',
-                        'bestbuy',
-                        'costco']):
-                    urls.append(res['url'])
+            # Add URLs from search results if available
+            for res in data.get('searxng_results', []):
+                if res.get('url') and res['url'] not in urls:
+                    # Basic heuristic: ignore non-shopping sites if many results
+                    if any(
+                        x in res['url'].lower() for x in [
+                            'amazon',
+                            'walmart',
+                            'target',
+                            'ebay',
+                            'bestbuy',
+                            'costco']):
+                        urls.append(res['url'])
 
-        # Fallback to top results if no shopping sites found
-        if not urls and data.get('searxng_results'):
-            urls = [r['url'] for r in data['searxng_results'][:3]]
+            # Fallback to top results if no shopping sites found
+            if not urls and data.get('searxng_results'):
+                urls = [r['url'] for r in data['searxng_results'][:3]]
 
         return {
             "name": data.get('product_name') or data.get('name'),

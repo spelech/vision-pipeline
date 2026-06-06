@@ -122,9 +122,11 @@ class HomeboxService(BaseService):
                 "description": data.get('description', ''),
                 "locationId": location_id,
                 "manufacturer": data.get('manufacturer') or data.get('brand') or "",
-                "modelNumber": data.get('model_number') or "",
-                "serialNumber": data.get('serial_number') or "",
-                "purchasePrice": float(data.get('purchase_price') or 0),
+                "modelNumber": data.get('modelNumber') or data.get('model_number') or "",
+                "serialNumber": data.get('serialNumber') or data.get('serial_number') or "",
+                "purchasePrice": float(
+                    data.get('purchasePrice') or data.get('purchase_price') or 0
+                ),
                 "notes": data.get('notes') or ""
             }
 

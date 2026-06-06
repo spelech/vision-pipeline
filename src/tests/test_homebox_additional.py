@@ -196,3 +196,42 @@ async def test_execute_uploads_receipt_attachment():
     assert file_tuple[1] == b"abcdefg"
     assert call_kwargs["data"] == {"type": "receipt", "name": "Receipt Image"}
 
+
+@pytest.mark.asyncio
+async def test_homebox_execute_uses_camelcase_overrides():
+    service = HomeboxService()
+    create_resp = MagicMock()
+    create_resp.raise_for_status.return_value = None
+    create_resp.json.return_value = {"id": "new-item"}
+    update_calls = []
+
+    async def _mock_request(method, endpoint, **kwargs):
+        if method == "POST" and endpoint == "/items":
+            return create_resp
+        if method == "PUT" and endpoint.startswith("/items/"):
+            update_calls.append(kwargs)
+            update_resp = MagicMock()
+            update_resp.raise_for_status.return_value = None
+            return update_resp
+        raise AssertionError(f"Unexpected request {method} {endpoint}")
+
+    with patch.object(service, "_get_headers_async", AsyncMock(return_value={"Authorization": "Bearer t"})), patch.object(
+        service, "_request", side_effect=_mock_request
+    ), patch.object(service, "find_or_create_location_async", AsyncMock(return_value=None)):
+        result = await service.execute(
+            {
+                "product_name": "Test Overrides",
+                "modelNumber": "MOD123",
+                "serialNumber": "SER789",
+                "purchasePrice": 45.67
+            }
+        )
+
+    assert result["success"] is True
+    assert len(update_calls) == 1
+    payload = update_calls[0]["json"]
+    assert payload["modelNumber"] == "MOD123"
+    assert payload["serialNumber"] == "SER789"
+    assert payload["purchasePrice"] == 45.67
+
+

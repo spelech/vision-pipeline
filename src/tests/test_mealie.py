@@ -190,3 +190,15 @@ async def test_mealie_pre_enrichment_request_exception():
         res = await service.get_pre_enrichment({"product_name": "x"})
         assert res == {}
 
+
+def test_mealie_payload_uses_camelcase_recipe_overrides():
+    service = MealieService()
+    payload = service.get_payload({
+        "recipeIngredients": [{"note": "1 tsp vanilla"}, "2 eggs"],
+        "recipeInstructions": [{"text": "Stir well"}, "Bake at 350"]
+    })
+    
+    assert payload["recipeIngredients"] == [{"note": "1 tsp vanilla"}, {"note": "2 eggs"}]
+    assert payload["recipeInstructions"] == [{"text": "Stir well"}, {"text": "Bake at 350"}]
+
+
