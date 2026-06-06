@@ -227,3 +227,70 @@ async def test_changedetection_execute_supports_multiple_monitor_urls():
         assert result["note"] == "Monitoring 2 URLs"
         assert len(result["data"]["created"]) == 2
         assert mock_post.call_count == 2
+
+
+def test_enrichers_names():
+    assert PriceBuddyService().name == "pricebuddy"
+    assert ChangeDetectionService().name == "changedetection"
+
+
+@pytest.mark.asyncio
+async def test_enrichers_pre_enrichment_no_headers():
+    pb = PriceBuddyService()
+    pb.api_key = None
+    assert await pb.get_pre_enrichment({"barcode": "1"}) == {}
+
+    cd = ChangeDetectionService()
+    cd.api_key = None
+    assert await cd.get_pre_enrichment({"product_url": "https://x"}) == {}
+
+
+@pytest.mark.asyncio
+async def test_pricebuddy_pre_enrichment_name_non_200():
+    service = PriceBuddyService()
+    service.api_key = "k"
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.status_code = 500
+        res = await service.get_pre_enrichment({"name": "Widget"})
+        assert res == {}
+
+
+@pytest.mark.asyncio
+async def test_changedetection_execute_no_api_key():
+    service = ChangeDetectionService()
+    service.api_key = None
+    res = await service.execute({"product_url": "https://x"})
+    assert res["success"] is False
+    assert "no api key" in res["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_changedetection_execute_multi_fail():
+    service = ChangeDetectionService()
+    service.api_key = "k"
+    with patch("requests.post", side_effect=requests.RequestException("conn error")):
+        res = await service.execute({
+            "product_name": "x",
+            "product_url": "https://a.com",
+            "monitor_urls": ["https://b.com"]
+        })
+        assert res["success"] is False
+        assert "failed to create watches" in res["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_changedetection_pre_enrichment_non_200():
+    service = ChangeDetectionService()
+    service.api_key = "k"
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.status_code = 404
+        res = await service.get_pre_enrichment({"product_url": "https://a.com"})
+        assert res == {}
+
+
+def test_changedetection_get_payload():
+    service = ChangeDetectionService()
+    payload = service.get_payload({"product_name": "x"}, "https://x.com")
+    assert payload["url"] == "https://x.com"
+    assert payload["title"] == "x"
+

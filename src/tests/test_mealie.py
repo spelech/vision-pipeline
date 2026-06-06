@@ -128,3 +128,65 @@ async def test_mealie_pre_enrichment_non_200_returns_empty_items():
         mock_get.return_value.json.return_value = {}
         res = await service.get_pre_enrichment({"product_name": "x"})
         assert res == {"existing_recipes": [], "existing_recipes_total": 0}
+
+
+def test_mealie_name_property():
+    service = MealieService()
+    assert service.name == "mealie"
+
+
+@pytest.mark.asyncio
+async def test_mealie_execute_update_existing_recipe():
+    service = MealieService()
+    service.api_key = "test_key"
+
+    data = {
+        "product_name": "Existing Recipe",
+        "description": "Updated description",
+        "recipe_ingredients": ["ingredient A", "ingredient B"],
+        "recipe_instructions": ["Step 1", "Step 2"]
+    }
+
+    with patch("requests.get") as mock_get, patch("requests.put") as mock_put:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+
+        mock_put.return_value.status_code = 200
+        mock_put.return_value.raise_for_status.return_value = None
+
+        result = await service.execute(data, external_id="recipe-123")
+
+        assert result["success"] is True
+        assert result["item_id"] == "recipe-123"
+        assert mock_get.called
+        assert mock_put.called
+
+        args, kwargs = mock_put.call_args
+        payload = kwargs["json"]
+        assert payload["name"] == "Existing Recipe"
+        assert payload["recipeIngredients"] == [{"note": "ingredient A"}, {"note": "ingredient B"}]
+        assert payload["recipeInstructions"] == [{"text": "Step 1"}, {"text": "Step 2"}]
+
+
+@pytest.mark.asyncio
+async def test_mealie_execute_request_exception():
+    import requests
+    service = MealieService()
+    service.api_key = "test_key"
+
+    with patch("requests.get", side_effect=requests.RequestException("connection error")):
+        result = await service.execute({"product_name": "Fail"}, external_id="recipe-123")
+        assert result["success"] is False
+        assert "connection error" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_mealie_pre_enrichment_request_exception():
+    import requests
+    service = MealieService()
+    service.api_key = "test_key"
+
+    with patch("requests.get", side_effect=requests.RequestException("conn error")):
+        res = await service.get_pre_enrichment({"product_name": "x"})
+        assert res == {}
+

@@ -136,3 +136,42 @@ def test_pipeline_scrape_uses_product_url_fallback_when_no_search_results(
     assert args[0] == "https://example.com/product"
     assert kwargs["wait_time"] == 1111
     assert results["scraped_content"] == {"html": "ok"}
+
+
+@patch("pipelines.composable.gmail_search_node")
+def test_pipeline_gmail_search_node(mock_gmail, pipeline, mock_image):
+    mock_gmail.return_value = [{"subject": "Receipt test"}]
+    
+    settings = {
+        "active_nodes": ["gmail_search"],
+        "gmail_search_query": "receipt",
+        "gmail_search_results_limit": 5
+    }
+    
+    results = pipeline.run(image=mock_image, settings=settings)
+    assert mock_gmail.called
+    args, kwargs = mock_gmail.call_args
+    assert args[0] == "receipt"
+    assert kwargs["max_results"] == 5
+    assert results["gmail_results"] == [{"subject": "Receipt test"}]
+
+
+@patch("pipelines.composable.upc_lookup_node")
+def test_pipeline_upc_lookup_node(mock_upc, pipeline, mock_image):
+    mock_upc.return_value = {"product_name": "UPC Item"}
+    
+    # Test case where barcode is in llm_output, and is_food is in llm_output
+    settings = {"active_nodes": ["upc_lookup"]}
+    
+    # Run with a pipeline where results already have barcode/is_food
+    # We can simulate this by running a mock sequence or setting results directly
+    # But since run() starts with empty results, we can mock vision node to run first
+    # Or we can just mock barcode scanner or vision scanner
+    with patch("pipelines.composable.scan_barcode", return_value="987654321"):
+        results = pipeline.run(image=mock_image, settings={"active_nodes": ["barcode", "upc_lookup"]})
+        assert mock_upc.called
+        args, kwargs = mock_upc.call_args
+        assert args[0] == "987654321"
+        assert kwargs["is_food"] is False
+        assert results["upc_lookup"] == {"product_name": "UPC Item"}
+
