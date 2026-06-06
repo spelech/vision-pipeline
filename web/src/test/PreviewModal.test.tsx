@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { PreviewModal } from '../components/PreviewModal';
 import type { Asset } from '../types';
@@ -217,6 +217,33 @@ describe('PreviewModal', () => {
       some_number: 123,
       some_bool: true
     }));
+  });
+
+  it('Feature: preview-modal-locations | fetches and renders locations for Homebox service', async () => {
+    const mockLocations = {
+      success: true,
+      locations: [
+        { id: '10', name: 'Kitchen Cabinet' },
+        { id: '20', name: 'Garage Shelf' }
+      ]
+    };
+    
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockLocations)
+    });
+
+    render(<PreviewModal preview={mockPreview} onClose={vi.fn()} onConfirm={vi.fn()} />);
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/locations');
+    
+    // Wait for the options to be rendered inside the datalist
+    await waitFor(() => {
+      const option1 = document.querySelector('option[value="Kitchen Cabinet"]');
+      const option2 = document.querySelector('option[value="Garage Shelf"]');
+      expect(option1).toBeInTheDocument();
+      expect(option2).toBeInTheDocument();
+    });
   });
 });
 

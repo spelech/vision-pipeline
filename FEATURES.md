@@ -1,4 +1,4 @@
-# Vision Pipeline v3.6.16
+# Vision Pipeline v3.6.17
 
 # Project Features
 
@@ -24,7 +24,7 @@ This file tracks the current capabilities and planned enhancements for the Visio
 - **Pre-flight Previews:** Interactive schema-aware Form Review modal (with fallback to raw JSON editor) to verify and edit exact payloads before dispatching to external services (Homebox, Mealie, PriceBuddy, ChangeDetection).
 
 ### 🔌 Integrations
-- **Homebox Service:** Automated item creation, metadata updates (manufacturer, model, serial), and image attachment uploads.
+- **Homebox Service:** Automated item creation, metadata updates (manufacturer, model, serial), and image attachment uploads with dynamic location autocomplete options populated from the active database.
 - **Mealie Service:** Native support for pushing food/recipe data with unit awareness.
 - **PriceBuddy Service:** Automated price tracking via barcode or product URL with smart shopping-site filtering.
 - **ChangeDetection.io:** Automated website change monitoring with JSON-LD price data tracking enabled.

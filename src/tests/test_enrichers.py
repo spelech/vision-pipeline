@@ -294,3 +294,13 @@ def test_changedetection_get_payload():
     assert payload["url"] == "https://x.com"
     assert payload["title"] == "x"
 
+
+def test_pricebuddy_payload_uses_urls_override_directly():
+    service = PriceBuddyService()
+    payload = service.get_payload({
+        "urls": ["https://my-override.com/a", "https://my-override.com/b"],
+        "searxng_results": [{"url": "https://ignore.me"}]
+    })
+    assert payload["urls"] == ["https://my-override.com/a", "https://my-override.com/b"]
+
+
