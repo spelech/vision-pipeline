@@ -1,6 +1,7 @@
 import { APP_VERSION } from '../version';
 
 import { useState, useEffect } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import {
   normalizePromptTemplates,
   derivePromptTemplatesFromPipelines,
@@ -55,7 +56,8 @@ interface ServicePromptConfig {
 
 export function Settings() {
   const [secrets, setSecrets] = useState<Record<string, string>>({});
-  const [revealSecrets, setRevealSecrets] = useState(false);
+  const [revealedSecrets, setRevealedSecrets] = useState<Record<string, boolean>>({});
+  const [hasFetchedDecrypted, setHasFetchedDecrypted] = useState(false);
   const [modelFavorites, setModelFavorites] = useState<string[]>([]);
   const [starredModels, setStarredModels] = useState<string[]>([]);
   const [imageOptimization, setImageOptimization] = useState<ImageOptimization>({ max_dimension: 1024, quality: 85 });
@@ -191,30 +193,34 @@ export function Settings() {
     setSecrets(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleRevealSecretsToggle = async (checked: boolean) => {
-    setRevealSecrets(checked);
-    try {
-      const response = await fetch(`/api/config?reveal_secrets=${checked}`);
-      if (response.ok) {
-        const configData = await response.json();
-        const statuses = configData.secrets_status || {};
-        const loaded: Record<string, string> = {};
-        SECRET_KEYS.forEach(key => {
-          if (!statuses[key]) {
-            loaded[key] = '';
-          } else if (key.includes('URL') || checked || key.includes('MODEL')) {
-            loaded[key] = String(statuses[key]);
-          } else {
-            loaded[key] = '********';
-          }
-        });
-        setSecrets(loaded);
-        if (configData.secrets_sources) setSecretsSources(configData.secrets_sources);
+  const toggleRevealSecret = async (key: string) => {
+    const isRevealing = !revealedSecrets[key];
+    
+    if (isRevealing && !hasFetchedDecrypted) {
+      try {
+        const response = await fetch('/api/config?reveal_secrets=true');
+        if (response.ok) {
+          const configData = await response.json();
+          const statuses = configData.secrets_status || {};
+          setSecrets(prev => {
+            const updated = { ...prev };
+            SECRET_KEYS.forEach(k => {
+              if (statuses[k] !== undefined) {
+                if (prev[k] === '********' || prev[k] === '') {
+                  updated[k] = String(statuses[k]);
+                }
+              }
+            });
+            return updated;
+          });
+          setHasFetchedDecrypted(true);
+        }
+      } catch (e) {
+        console.error('Failed to fetch decrypted secrets', e);
       }
-    } catch (e) {
-      console.error(e);
-      alert('Failed to update secrets display.');
     }
+    
+    setRevealedSecrets(prev => ({ ...prev, [key]: isRevealing }));
   };
 
   const saveSettings = async () => {
@@ -243,7 +249,7 @@ export function Settings() {
       alert('Settings saved successfully!');
       
       // Reload config sources to reflect saved state
-      const response = await fetch(`/api/config?reveal_secrets=${revealSecrets}`);
+      const response = await fetch(`/api/config?reveal_secrets=${hasFetchedDecrypted}`);
       if (response.ok) {
         const configData = await response.json();
         if (configData.secrets_sources) setSecretsSources(configData.secrets_sources);
@@ -380,7 +386,8 @@ export function Settings() {
     key !== 'LLM_API_KEY' && 
     key !== 'OPENROUTER_API_KEY' && 
     key !== 'VISION_MODEL_DEFAULT' && 
-    key !== 'REFINE_MODEL_DEFAULT'
+    key !== 'REFINE_MODEL_DEFAULT' &&
+    key !== 'GMAIL_OCR_VISION_MODEL'
   );
 
   return (
@@ -432,18 +439,6 @@ export function Settings() {
           Prompt Suite
         </button>
 
-        <label className="flex items-center gap-3 cursor-pointer text-xs font-bold text-white/50 tracking-wider hover:text-white/80 transition-colors ml-auto">
-          <span>Show Hidden Secrets</span>
-          <div className="relative">
-            <input
-              type="checkbox"
-              checked={revealSecrets}
-              onChange={(e) => void handleRevealSecretsToggle(e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-          </div>
-        </label>
       </div>
 
       {/* Tab 1: Setup Guide */}
@@ -523,18 +518,27 @@ export function Settings() {
                     <label className="text-xs font-bold text-white/50 tracking-wider">
                       OPENROUTER_API_KEY
                     </label>
-                    <input
-                      type={revealSecrets ? 'text' : 'password'}
-                      value={secrets['OPENROUTER_API_KEY'] || ''}
-                      onChange={e => handleChange('OPENROUTER_API_KEY', e.target.value)}
-                      placeholder="Enter OPENROUTER API KEY"
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
+                    <div className="relative">
+                      <input
+                        type={revealedSecrets['OPENROUTER_API_KEY'] ? 'text' : 'password'}
+                        value={secrets['OPENROUTER_API_KEY'] || ''}
+                        onChange={e => handleChange('OPENROUTER_API_KEY', e.target.value)}
+                        placeholder="Enter OPENROUTER API KEY"
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl pl-5 pr-12 py-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void toggleRevealSecret('OPENROUTER_API_KEY')}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 transition-colors"
+                      >
+                        {revealedSecrets['OPENROUTER_API_KEY'] ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-bold text-white/50 tracking-wider">
+                       <label className="text-xs font-bold text-white/50 tracking-wider">
                         LLM_BASE_URL
                       </label>
                       <input
@@ -549,13 +553,22 @@ export function Settings() {
                       <label className="text-xs font-bold text-white/50 tracking-wider">
                         LLM_API_KEY (Optional)
                       </label>
-                      <input
-                        type={revealSecrets ? 'text' : 'password'}
-                        value={secrets['LLM_API_KEY'] || ''}
-                        onChange={e => handleChange('LLM_API_KEY', e.target.value)}
-                        placeholder="Enter API Key or token"
-                        className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                      />
+                      <div className="relative">
+                        <input
+                          type={revealedSecrets['LLM_API_KEY'] ? 'text' : 'password'}
+                          value={secrets['LLM_API_KEY'] || ''}
+                          onChange={e => handleChange('LLM_API_KEY', e.target.value)}
+                          placeholder="Enter API Key or token"
+                          className="w-full bg-white/5 border border-white/10 rounded-2xl pl-5 pr-12 py-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void toggleRevealSecret('LLM_API_KEY')}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 transition-colors"
+                        >
+                          {revealedSecrets['LLM_API_KEY'] ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
+                      </div>
                     </div>
                   </>
                 )}
@@ -585,6 +598,20 @@ export function Settings() {
                   <select
                     value={secrets['REFINE_MODEL_DEFAULT'] || ''}
                     onChange={e => handleChange('REFINE_MODEL_DEFAULT', e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-xs text-white focus:outline-none cursor-pointer"
+                  >
+                    <option value="" className="bg-neutral-900">Select model...</option>
+                    {modelFavorites.map(m => (
+                      <option key={m} value={m} className="bg-neutral-900">{m}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-white/50 tracking-wider">Gmail OCR Vision Model</label>
+                  <select
+                    value={secrets['GMAIL_OCR_VISION_MODEL'] || ''}
+                    onChange={e => handleChange('GMAIL_OCR_VISION_MODEL', e.target.value)}
                     className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-xs text-white focus:outline-none cursor-pointer"
                   >
                     <option value="" className="bg-neutral-900">Select model...</option>
@@ -650,18 +677,27 @@ export function Settings() {
                           )}
                         </div>
                       </div>
-                      <div className="flex-1">
+                      <div className="relative flex-1">
                         <input
                           type={
-                            (key.includes('PASSWORD') || key.includes('TOKEN') || key.includes('KEY')) && !revealSecrets
+                            (key.includes('PASSWORD') || key.includes('TOKEN') || key.includes('KEY')) && !revealedSecrets[key]
                               ? "password"
                               : "text"
                           }
                           value={secrets[key] || ""}
                           onChange={e => handleChange(key, e.target.value)}
                           placeholder={`Enter ${key.replace(/_/g, ' ')}`}
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-4 pr-10 py-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                         />
+                        {(key.includes('PASSWORD') || key.includes('TOKEN') || key.includes('KEY')) && (
+                          <button
+                            type="button"
+                            onClick={() => void toggleRevealSecret(key)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 transition-colors"
+                          >
+                            {revealedSecrets[key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
