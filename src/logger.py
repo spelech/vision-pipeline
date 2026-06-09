@@ -1,5 +1,8 @@
 import asyncio
+import logging
 from typing import Dict, List
+
+logger = logging.getLogger("VisionAPI.session")
 
 class SessionLogger:
     def __init__(self):
@@ -11,7 +14,7 @@ class SessionLogger:
     def log(self, session_id: str, message: str):
         if session_id in self.sessions:
             self.sessions[session_id].append(message)
-            print(f"[SESSION {session_id}] {message}")
+            logger.info(f"[SESSION {session_id}] {message}")
 
     def get_logs(self, session_id: str) -> List[str]:
         return self.sessions.get(session_id, [])

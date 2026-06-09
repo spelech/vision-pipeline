@@ -130,7 +130,12 @@ from routes.service_routes import (
 )
 
 # --- Logging ---
-logging.basicConfig(level=logging.INFO)
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+root_logger.addHandler(handler)
 logger = logging.getLogger("VisionAPI")
 
 

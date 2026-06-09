@@ -71,3 +71,4 @@ This file tracks the current capabilities and planned enhancements for the Visio
 - [ ] Advanced User Overrides UI.
 - [ ] Integration with additional home services (e.g., Grocy, Home Assistant).
 
+- [x] Enhanced container logging (v3.6.21)
