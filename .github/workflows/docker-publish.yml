@@ -26,9 +26,6 @@ jobs:
           - image_name: vision-pipeline
             context: .
             dockerfile: src/Dockerfile
-          - image_name: vision-playwright
-            context: ./playwright
-            dockerfile: playwright/Dockerfile
 
     steps:
       - name: Checkout repository

@@ -33,12 +33,15 @@ class ModelInfo(BaseModel):
     id: str
     name: str
     provider: Optional[str] = None
+    owned_by: Optional[str] = None
     is_system: Optional[bool] = None
+    mode: Optional[str] = None
 
 
 class ModelListResponse(BaseModel):
     success: bool
     models: List[ModelInfo]
+    error: Optional[str] = None
 
 
 class ConfigSecretStatus(BaseModel):

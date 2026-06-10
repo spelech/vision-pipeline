@@ -42,19 +42,19 @@ DB_SETTING_KEYS = [
 
 DEFAULT_MODEL_CATALOG: List[Dict[str, str]] = [
     {
-        "id": "qwen/qwen2.5-vl-72b-instruct",
-        "name": "Qwen 2.5 VL 72B (OpenRouter)",
+        "id": "qwen3-vl-235b-a22b-instruct",
+        "name": "Qwen 3 VL 235B (OpenRouter)",
         "provider": "openrouter",
     },
     {
-        "id": "google/gemini-2.0-flash-001",
-        "name": "Gemini 2.0 Flash (OpenRouter)",
+        "id": "qwen3-235b-a22b-2507",
+        "name": "Qwen 3 235B (OpenRouter)",
         "provider": "openrouter",
     },
     {
-        "id": "anthropic/claude-3.5-sonnet",
-        "name": "Claude 3.5 Sonnet (OpenRouter)",
-        "provider": "openrouter",
+        "id": "gemini-2.5-flash",
+        "name": "Gemini 2.5 Flash",
+        "provider": "vertex_ai",
     },
 ]
 
@@ -238,7 +238,7 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
     return {
         "homebox": {
             "service": "homebox",
-            "model": "qwen/qwen3-235b-a22b-2507",
+            "model": None,
             "enabled": True,
             "prompt": (
                 "You are an expert inventory cataloging assistant. Create a Homebox-ready JSON object from the provided product data and search/scrape context.\n"
@@ -260,7 +260,7 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
         },
         "mealie": {
             "service": "mealie",
-            "model": "qwen/qwen3-235b-a22b-2507",
+            "model": None,
             "enabled": True,
             "prompt": (
                 "You are an expert culinary assistant. Create a Mealie-ready recipe JSON object from the provided food/recipe data and search/scrape context.\n"
@@ -276,7 +276,7 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
         },
         "pricebuddy": {
             "service": "pricebuddy",
-            "model": "qwen/qwen3-235b-a22b-2507",
+            "model": None,
             "enabled": True,
             "prompt": (
                 "You are a price comparison and tracking assistant. Create a PriceBuddy-ready JSON object from the provided data and search/scrape context.\n"
@@ -304,7 +304,7 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
         },
         "changedetection": {
             "service": "changedetection",
-            "model": "qwen/qwen3-235b-a22b-2507",
+            "model": None,
             "enabled": True,
             "prompt": (
                 "You are an automated price and page monitoring assistant. Create a ChangeDetection-ready JSON object from the provided data and search/scrape context.\n"

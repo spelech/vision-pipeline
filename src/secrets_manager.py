@@ -91,3 +91,15 @@ async def upsert_secret(db: AsyncSession, key: str, value: str) -> None:
         secret_obj.encrypted_value = encrypted  # type: ignore
     else:
         db.add(ConfigSecret(key=key, encrypted_value=encrypted))
+
+async def refresh_secrets_from_db(db: AsyncSession) -> None:
+    """
+    Reloads all secrets from the database into the environment.
+    """
+    res = await db.execute(select(ConfigSecret))
+    secrets = res.scalars().all()
+    for secret in secrets:
+        try:
+            os.environ[secret.key] = decrypt_secret(secret.encrypted_value)
+        except Exception:
+            pass

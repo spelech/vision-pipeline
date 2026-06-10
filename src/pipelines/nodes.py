@@ -20,8 +20,8 @@ except ImportError:
 
 logger = logging.getLogger("PipelineNodes")
 
-DEFAULT_VISION_MODEL = os.getenv("VISION_MODEL_DEFAULT", "qwen/qwen2.5-vl-72b-instruct")
-DEFAULT_REFINE_MODEL = os.getenv("REFINE_MODEL_DEFAULT", "qwen/qwen3-235b-a22b-2507")
+DEFAULT_VISION_MODEL = os.getenv("VISION_MODEL_DEFAULT", "qwen3-vl-235b-a22b-instruct")
+DEFAULT_REFINE_MODEL = os.getenv("REFINE_MODEL_DEFAULT", "qwen3-235b-a22b-2507")
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GMAIL_MESSAGES_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
 LEGACY_INVALID_MODEL_IDS = {

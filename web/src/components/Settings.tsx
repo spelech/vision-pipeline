@@ -1,6 +1,6 @@
 import { APP_VERSION } from '../version';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import {
   normalizePromptTemplates,
@@ -81,6 +81,26 @@ export function Settings() {
 
   // Setup Guide Tabs and LLM provider states
   const [activeTab, setActiveTab] = useState<'setup' | 'general' | 'prompts'>('setup');
+  const groupedModels = useMemo(() => {
+    const groups: Record<string, string[]> = {};
+    modelFavorites.forEach(m => {
+      const parts = m.split("/");
+      const provider = parts.length > 1 ? parts[0] : "Other";
+      if (!groups[provider]) groups[provider] = [];
+      groups[provider].push(m);
+    });
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [modelFavorites]);
+
+  const [modelSearch, setModelSearch] = useState('');
+  const filteredGroupedModels = useMemo(() => {
+    if (!modelSearch) return groupedModels;
+    const search = modelSearch.toLowerCase();
+    return groupedModels.map(([provider, ms]): [string, string[]] => [
+      provider,
+      ms.filter(m => m.toLowerCase().includes(search))
+    ]).filter(([_, ms]) => ms.length > 0);
+  }, [groupedModels, modelSearch]);
   const [llmProvider, setLlmProvider] = useState<'openrouter' | 'litellm'>('openrouter');
   const [secretsSources, setSecretsSources] = useState<Record<string, string>>({});
   const [servicePrompts, setServicePrompts] = useState<Record<string, ServicePromptConfig>>({});
@@ -261,6 +281,28 @@ export function Settings() {
       setSaving(false);
     }
   };
+
+  const [syncingModels, setSyncingModels] = useState(false);
+  const syncModels = async () => {
+    setSyncingModels(true);
+    try {
+      const response = await fetch('/api/models/sync', { method: 'POST' });
+      const data = await response.json();
+      if (data.success && data.models) {
+        const catalogModels = data.models.map((m: any) => m.id);
+        setModelFavorites(prev => Array.from(new Set([...prev, ...catalogModels])));
+        alert('Models synced successfully!');
+      } else {
+        alert('Failed to sync models: ' + (data.error || 'Unknown error'));
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error syncing models.');
+    } finally {
+      setSyncingModels(false);
+    }
+  };
+
 
   const toggleStar = (modelId: string) => {
     setStarredModels(prev => 
@@ -587,8 +629,12 @@ export function Settings() {
                     className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-xs text-white focus:outline-none cursor-pointer"
                   >
                     <option value="" className="bg-neutral-900">Select model...</option>
-                    {modelFavorites.map(m => (
-                      <option key={m} value={m} className="bg-neutral-900">{m}</option>
+                    {groupedModels.map(([provider, ms]: [string, string[]]) => (
+                      <optgroup key={provider} label={provider.toUpperCase()} className="bg-neutral-900 text-white/40 text-[10px]">
+                        {ms.map((m: string) => (
+                          <option key={m} value={m} className="bg-neutral-900 text-white">{m.includes('/') ? m.split('/').slice(1).join('/') : m}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -601,8 +647,12 @@ export function Settings() {
                     className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-xs text-white focus:outline-none cursor-pointer"
                   >
                     <option value="" className="bg-neutral-900">Select model...</option>
-                    {modelFavorites.map(m => (
-                      <option key={m} value={m} className="bg-neutral-900">{m}</option>
+                    {groupedModels.map(([provider, ms]: [string, string[]]) => (
+                      <optgroup key={provider} label={provider.toUpperCase()} className="bg-neutral-900 text-white/40 text-[10px]">
+                        {ms.map((m: string) => (
+                          <option key={m} value={m} className="bg-neutral-900 text-white">{m.includes('/') ? m.split('/').slice(1).join('/') : m}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -615,8 +665,12 @@ export function Settings() {
                     className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-xs text-white focus:outline-none cursor-pointer"
                   >
                     <option value="" className="bg-neutral-900">Select model...</option>
-                    {modelFavorites.map(m => (
-                      <option key={m} value={m} className="bg-neutral-900">{m}</option>
+                    {groupedModels.map(([provider, ms]: [string, string[]]) => (
+                      <optgroup key={provider} label={provider.toUpperCase()} className="bg-neutral-900 text-white/40 text-[10px]">
+                        {ms.map((m: string) => (
+                          <option key={m} value={m} className="bg-neutral-900 text-white">{m.includes('/') ? m.split('/').slice(1).join('/') : m}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -641,8 +695,12 @@ export function Settings() {
                       className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-xs text-white focus:outline-none cursor-pointer"
                     >
                       <option value="" className="bg-neutral-900">Use default refine model</option>
-                      {modelFavorites.map(m => (
-                        <option key={m} value={m} className="bg-neutral-900">{m}</option>
+                      {groupedModels.map(([provider, ms]: [string, string[]]) => (
+                        <optgroup key={provider} label={provider.toUpperCase()} className="bg-neutral-900 text-white/40 text-[10px]">
+                          {ms.map((m: string) => (
+                            <option key={m} value={m} className="bg-neutral-900 text-white">{m.includes('/') ? m.split('/').slice(1).join('/') : m}</option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </div>
@@ -830,32 +888,56 @@ export function Settings() {
           <section className="space-y-6 flex flex-col">
             <label className="label-apple">Model Registry</label>
             <div className="glass p-8 rounded-[2.5rem] space-y-6 flex-1 flex flex-col">
-              <div className="space-y-3 max-h-64 overflow-y-auto no-scrollbar flex-1">
-                {modelFavorites.map(m => (
-                  <div key={m} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5">
-                      <div className="flex items-center truncate">
+              <div className="flex flex-col gap-3">
+                <input 
+                  type="text" 
+                  value={modelSearch}
+                  onChange={e => setModelSearch(e.target.value)}
+                  placeholder="Search models..." 
+                  className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none text-white focus:ring-2 focus:ring-blue-500/50" 
+                />
+              </div>
+              <div className="space-y-6 max-h-96 overflow-y-auto no-scrollbar flex-1">
+                {filteredGroupedModels.map(([provider, ms]: [string, string[]]) => (
+                  <div key={provider} className="space-y-3">
+                    <span className="text-[9px] font-black uppercase text-white/20 tracking-[0.2em] sticky top-0 bg-[#0a0a0a] py-1 block z-10">{provider}</span>
+                    {ms.map((m: string) => (
+                      <div key={m} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 group hover:border-white/10 transition-all">
+                          <div className="flex items-center truncate">
+                              <button 
+                                onClick={() => toggleStar(m)} 
+                                className={`mr-3 transition-colors ${starredModels.includes(m) ? 'text-yellow-400' : 'text-white/10 hover:text-white/40'}`}
+                              >
+                                  <span className="text-lg">{starredModels.includes(m) ? '★' : '☆'}</span>
+                              </button>
+                              <span className="text-[10px] font-black uppercase tracking-widest truncate text-white">{m.includes('/') ? m.split('/').slice(1).join('/') : m}</span>
+                              <span className="ml-2 text-[8px] font-bold text-white/10 uppercase group-hover:text-white/20">{m}</span>
+                          </div>
                           <button 
-                            onClick={() => toggleStar(m)} 
-                            className={`mr-3 transition-colors ${starredModels.includes(m) ? 'text-yellow-400' : 'text-white/10 hover:text-white/40'}`}
+                            onClick={() => {
+                              setModelFavorites(prev => prev.filter(x => x !== m));
+                              setStarredModels(prev => prev.filter(x => x !== m));
+                            }} 
+                            className="text-red-500/0 group-hover:text-red-500/40 hover:!text-red-500 text-[10px] font-black transition-all"
                           >
-                              <span className="text-lg">{starredModels.includes(m) ? '★' : '☆'}</span>
+                            ✕
                           </button>
-                          <span className="text-[10px] font-black uppercase tracking-widest truncate text-white">{m.split('/')[1] || m}</span>
                       </div>
-                      <button 
-                        onClick={() => {
-                          setModelFavorites(prev => prev.filter(x => x !== m));
-                          setStarredModels(prev => prev.filter(x => x !== m));
-                        }} 
-                        className="text-red-500/40 hover:text-red-500 text-[10px] font-black"
-                      >
-                        ✕
-                      </button>
+                    ))}
                   </div>
                 ))}
               </div>
               <div className="pt-4 border-t border-white/5 space-y-3">
-                  <span className="text-[9px] font-black uppercase text-white/30">Register New Model ID</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[9px] font-black uppercase text-white/30">Register New Model ID</span>
+                    <button 
+                      onClick={() => void syncModels()} 
+                      disabled={syncingModels}
+                      className="text-[9px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300 disabled:opacity-50 transition-colors"
+                    >
+                      {syncingModels ? 'Syncing...' : 'Sync from Gateway'}
+                    </button>
+                  </div>
                   <div className="flex gap-2">
                       <input 
                         type="text" 

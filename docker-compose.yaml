@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: vision-db
+    container_name: vision-db-dev
     labels:
       - "wud.watch=false"
     environment:
@@ -17,7 +17,7 @@ services:
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5433:5432"
     networks:
       - default
     restart: unless-stopped
@@ -26,20 +26,17 @@ services:
     build:
       context: .
       dockerfile: src/Dockerfile
-    container_name: vision-pipeline
+    container_name: vision-pipeline-dev
     env_file:
       - .env
-    image: ${VISION_PIPELINE_IMAGE:-ghcr.io/spelech/vision-pipeline}:${VISION_PIPELINE_TAG:-latest}
+    image: ${VISION_PIPELINE_IMAGE:-ghcr.io/spelech/vision-pipeline}:${VISION_PIPELINE_TAG:-latest}-dev
     labels:
-      - "wud.watch=true"
-      - "wud.display.name=vision-pipeline"
-      - "wud.tag.include=^latest$|^v?[0-9]+\\.[0-9]+\\.[0-9]+$"
-      - "wud.trigger.docker.autoupdate=true"
+      - "wud.watch=false"
     networks:
       - default
       - net_webservices
     ports:
-      - "${APP_PORT:-8460}:8501"
+      - "${APP_PORT:-8461}:8501"
     volumes:
       - ./config:/app/config
       - ./data:/app/data
@@ -48,11 +45,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    entrypoint: ["sleep", "infinity"]
     restart: unless-stopped
 
 networks:
   default:
-    name: vision_default
+    name: vision_dev_default
   net_webservices:
     external: ${EXTERNAL_NETWORK_EXISTS:-false}
     name: ${EXTERNAL_NETWORK:-net_webservices}

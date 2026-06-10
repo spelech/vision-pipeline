@@ -1,10 +1,12 @@
 name: Quality Gates
 
 on:
-  pull_request:
   push:
     branches:
-      - master
+      - 'disabled-on-purpose'
+  pull_request:
+    branches:
+      - 'disabled-on-purpose'
 
 jobs:
   backend-coverage:

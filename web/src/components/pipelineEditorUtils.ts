@@ -11,7 +11,7 @@ export interface Pipeline {
   };
 }
 
-export const DEFAULT_PIPELINE_MODELS = ['qwen/qwen2.5-vl-72b-instruct'];
+export const DEFAULT_PIPELINE_MODELS = ['qwen3-vl-235b-a22b-instruct'];
 
 export function getPipelineNodes(pipeline: Pipeline): string[] {
   if (Array.isArray(pipeline.schema.active_nodes?.default) && pipeline.schema.active_nodes.default.length > 0) {

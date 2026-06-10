@@ -48,6 +48,8 @@ async def get_config(
     reveal_secrets: bool = False,
 ) -> ConfigResponse:
     await ensure_app_settings_seed(db)
+    from secrets_manager import refresh_secrets_from_db
+    await refresh_secrets_from_db(db)
     settings = await get_app_settings(db)
     prompt_templates = normalize_prompt_templates(settings.get("prompt_templates"))
     if not prompt_templates:
@@ -117,8 +119,8 @@ async def update_config(
     data: ConfigUpdateRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    # pylint: disable=too-many-locals,too-many-branches
-    # Separate secrets from general config
+    logger.info("Updating config with payload: %s", data.model_dump(exclude_unset=True))
+    # Separate secrets
     keys_to_persist = [
         "prompt_templates",
         "service_prompts",
@@ -146,6 +148,8 @@ async def update_config(
         )
 
     await ensure_app_settings_seed(db)
+    from secrets_manager import refresh_secrets_from_db
+    await refresh_secrets_from_db(db)
     for key in keys_to_persist:
         if key not in data_dict:
             continue
