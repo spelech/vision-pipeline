@@ -628,7 +628,7 @@ export default function App() {
             ) : activeTab === 'pipelines' ? (
               <PipelineEditor />
             ) : activeTab === 'system' ? (
-              <Settings />
+              <Settings onToast={showToast} />
             ) : (
               <div className="py-20 text-center glass rounded-[2rem]">
                 <p className="text-white/30 text-sm font-medium">Coming soon...</p>

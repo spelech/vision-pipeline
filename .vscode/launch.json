@@ -88,6 +88,11 @@
     ],
     "compounds": [
         {
+            "name": "Full Stack (Debug Container)",
+            "configurations": [],
+            "preLaunchTask": "Debug: Full Stack"
+        },
+        {
             "name": "Full Stack (Remote Services)",
             "configurations": [
                 "Python: FastAPI (Remote)"

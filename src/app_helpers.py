@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from database import AppSetting
 
 import database
 from database import (
@@ -29,6 +30,7 @@ MODEL_ID_ALIASES: Dict[str, str] = {
 
 SERVICE_NAMES = ["homebox", "mealie", "pricebuddy", "changedetection"]
 DB_SETTING_KEYS = [
+    "llm_provider",
     "prompt_templates",
     "service_prompts",
     "model_favorites",
@@ -45,16 +47,13 @@ DEFAULT_MODEL_CATALOG: List[Dict[str, str]] = [
         "id": "qwen3-vl-235b-a22b-instruct",
         "name": "Qwen 3 VL 235B (OpenRouter)",
         "provider": "openrouter",
+        "source_gateway": "openrouter",
     },
     {
         "id": "qwen3-235b-a22b-2507",
         "name": "Qwen 3 235B (OpenRouter)",
         "provider": "openrouter",
-    },
-    {
-        "id": "gemini-2.5-flash",
-        "name": "Gemini 2.5 Flash",
-        "provider": "vertex_ai",
+        "source_gateway": "openrouter",
     },
 ]
 
@@ -159,7 +158,7 @@ def _service_target_for_pipeline_id(pipeline_id: str) -> Optional[str]:
 def normalize_model_id(value: Any) -> Any:
     if isinstance(value, str):
         return MODEL_ID_ALIASES.get(value, value)
-    return value
+    return value.get("value") if isinstance(value, dict) and "value" in value else value
 
 
 def normalize_pipeline_schema(schema: Any) -> Any:
@@ -389,11 +388,7 @@ def normalize_app_setting(key: str, value: Any) -> Any:
         return normalize_prompt_templates(value)
     if key == "service_prompts":
         return normalize_service_prompts(value)
-    if key in {"model_favorites", "starred_models"}:
-        return merge_unique_str_lists(value)
-    if key == "image_optimization" and isinstance(value, dict):
-        return value
-    return value
+    return value.get("value") if isinstance(value, dict) and "value" in value else value
 
 
 async def upsert_app_setting(db: AsyncSession, key: str, value: Any) -> None:
@@ -429,6 +424,7 @@ async def ensure_model_catalog(db: AsyncSession) -> None:
                 provider=str(model.get("provider") or infer_model_provider(model_id)),
                 name=str(model.get("name") or model_id),
                 is_active=True,
+                source_gateway=str(model.get("source_gateway") or "litellm"),
                 is_system=True,
             )
         )
@@ -901,3 +897,17 @@ def get_service_context_from_item(item: Any, service_name: str) -> Dict[str, Any
         "scrape": ai_output.get("scraped_content"),
         "service_enrichment": service_enrichments.get(service_name, {}),
     }
+
+async def get_config_setting(db: AsyncSession, key: str, default: Any = None) -> Any:
+    """
+    Retrieves a single configuration setting from the app_settings table.
+    """
+    try:
+        from database import AppSetting
+        result = await db.execute(select(AppSetting.value).where(AppSetting.key == key))
+        val = result.scalar_one_or_none()
+        if val is None:
+            return default
+        return val.get("value") if isinstance(val, dict) and "value" in val else val
+    except Exception:
+        return default

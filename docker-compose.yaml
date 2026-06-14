@@ -45,7 +45,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    entrypoint: ["sleep", "infinity"]
     restart: unless-stopped
 
 networks:
