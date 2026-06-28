@@ -26,6 +26,7 @@ logger = logging.getLogger("VisionAPI")
 MODEL_ID_ALIASES: Dict[str, str] = {
     "qwen/qwen2.5-72b-instruct": "qwen/qwen3-235b-a22b-2507",
     "qwen/qwen2.5-32b-instruct": "qwen/qwen3-235b-a22b-2507",
+    "qwen/qwen2.5-vl-72b-instruct": "openrouter/qwen/qwen2.5-vl-72b-instruct",
 }
 
 SERVICE_NAMES = ["homebox", "mealie", "pricebuddy", "changedetection"]
@@ -388,6 +389,8 @@ def normalize_app_setting(key: str, value: Any) -> Any:
         return normalize_prompt_templates(value)
     if key == "service_prompts":
         return normalize_service_prompts(value)
+    if key == "model_favorites":
+        return merge_unique_str_lists(value)
     return value.get("value") if isinstance(value, dict) and "value" in value else value
 
 

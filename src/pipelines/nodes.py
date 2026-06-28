@@ -29,6 +29,12 @@ LEGACY_INVALID_MODEL_IDS = {
     "qwen/qwen2.5-32b-instruct",
 }
 
+MODEL_ID_ALIASES = {
+    "qwen/qwen2.5-vl-72b-instruct": "openrouter/qwen/qwen2.5-vl-72b-instruct",
+    "qwen/qwen2.5-72b-instruct": "qwen/qwen3-235b-a22b-2507",
+    "qwen/qwen2.5-32b-instruct": "qwen/qwen3-235b-a22b-2507",
+}
+
 
 def upc_lookup_node(barcode, is_food=False, log_cb=None):
     # pylint: disable=too-many-return-statements
@@ -200,6 +206,7 @@ def vision_identify(
         log_cb=None):
     if not model:
         model = DEFAULT_VISION_MODEL
+    model = MODEL_ID_ALIASES.get(model, model)
     if model in LEGACY_INVALID_MODEL_IDS:
         model = DEFAULT_VISION_MODEL
     if log_cb:
@@ -324,6 +331,7 @@ def data_refine(
         log_cb=None):
     if not model:
         model = DEFAULT_REFINE_MODEL
+    model = MODEL_ID_ALIASES.get(model, model)
     if model in LEGACY_INVALID_MODEL_IDS:
         if log_cb:
             fallback_msg = (

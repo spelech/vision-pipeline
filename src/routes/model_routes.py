@@ -74,7 +74,7 @@ async def sync_models(
             return get_secret_value(key)
 
         # Fetch models from the gateway
-        gateway_models = await fetch_models_from_gateway(sync_secret_getter)
+        gateway_models = await fetch_models_from_gateway(sync_secret_getter, provider)
         
         if not gateway_models:
             return ModelListResponse(success=False, models=[], error="No models found on gateway")

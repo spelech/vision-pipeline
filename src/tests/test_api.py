@@ -396,6 +396,40 @@ async def test_models_endpoint_returns_catalog():
         app.dependency_overrides.pop(get_db, None)
 
 
+@pytest.mark.asyncio
+async def test_models_sync_endpoint():
+    mock_session = AsyncMock()
+    model_row = SimpleNamespace(
+        model_id="qwen/qwen2.5-vl-72b-instruct",
+        name="Qwen",
+        provider="openrouter",
+        is_system=True,
+        source_gateway="openrouter",
+        owned_by="openrouter",
+        mode="",
+    )
+    model_result = MagicMock()
+    model_result.scalars.return_value.all.return_value = [model_row]
+    mock_session.execute.return_value = model_result
+
+    async def override_get_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with patch("routes.model_routes.refresh_secrets_from_db", new=AsyncMock()), \
+             patch("routes.model_routes.get_config_setting", new=AsyncMock(return_value="litellm")), \
+             patch("routes.model_routes.fetch_models_from_gateway", new=AsyncMock(return_value=[{"id": "qwen/qwen2.5-vl-72b-instruct", "model_info": {"owned_by": "openrouter"}}])), \
+             patch("routes.model_routes.list_models", new=AsyncMock(return_value={"success": True, "models": []})):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                response = await ac.post("/api/models/sync", json={})
+                assert response.status_code == 200
+                payload = response.json()
+                assert payload["success"] is True
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
 @pytest.mark.feature("pipelines-list")
 @pytest.mark.asyncio
 async def test_pipelines_endpoint_handles_success_and_error():
