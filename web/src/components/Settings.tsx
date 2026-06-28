@@ -1,6 +1,6 @@
 import { APP_VERSION } from '../version';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import {
   normalizePromptTemplates,
@@ -42,9 +42,19 @@ interface ImageOptimization {
   quality: number;
 }
 
+interface ModelInfo {
+  id: string;
+  name: string;
+  provider?: string;
+  source_gateway?: string;
+  owned_by?: string;
+  mode?: string;
+  is_system?: boolean;
+}
+
 interface ModelApiResponse {
   success?: boolean;
-  models?: Array<{ id: string }>;
+  models?: ModelInfo[];
 }
 
 interface ServicePromptConfig {
@@ -54,11 +64,12 @@ interface ServicePromptConfig {
   [key: string]: unknown;
 }
 
-export function Settings() {
+export function Settings({ onToast }: { onToast?: (msg: string, type?: "info" | "success" | "error") => void }) {
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [revealedSecrets, setRevealedSecrets] = useState<Record<string, boolean>>({});
   const [hasFetchedDecrypted, setHasFetchedDecrypted] = useState(false);
   const [modelFavorites, setModelFavorites] = useState<string[]>([]);
+  const [fullModels, setFullModels] = useState<ModelInfo[]>([]);
   const [starredModels, setStarredModels] = useState<string[]>([]);
   const [imageOptimization, setImageOptimization] = useState<ImageOptimization>({ max_dimension: 1024, quality: 85 });
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([]);
@@ -82,6 +93,44 @@ export function Settings() {
   // Setup Guide Tabs and LLM provider states
   const [activeTab, setActiveTab] = useState<'setup' | 'general' | 'prompts'>('setup');
   const [llmProvider, setLlmProvider] = useState<'openrouter' | 'litellm'>('openrouter');
+  const [llmProviderInitialized, setLlmProviderInitialized] = useState(false);
+  const groupedModels = useMemo((): [string, ModelInfo[]][] => {
+    console.log("DEBUG: Calculating groupedModels for provider:", llmProvider, "FullModels count:", fullModels.length);
+    const groups: Record<string, ModelInfo[]> = {};
+    
+    // Filter by selected provider and then group
+    fullModels
+      .filter(m => {
+        const matches = !m.source_gateway || m.source_gateway?.split(",").includes(llmProvider);
+        if (!matches) console.log("DEBUG: Model", m.id, "excluded because source_gateway", m.source_gateway, "does not match", llmProvider);
+        return matches;
+      })
+      .forEach(m => {
+        const provider = m.provider || "Other";
+        if (!groups[provider]) groups[provider] = [];
+        groups[provider].push(m);
+      });
+
+    // Sort each group alphabetically by name
+    Object.values(groups).forEach(ms => {
+      ms.sort((a, b) => a.name.localeCompare(b.name));
+    });
+
+    const result = Object.entries(groups)
+      .sort(([a], [b]) => a.localeCompare(b));
+    console.log("DEBUG: GroupedModels result:", result);
+    return result;
+  }, [fullModels, llmProvider]);
+
+  const [modelSearch, setModelSearch] = useState('');
+  const filteredGroupedModels = useMemo((): [string, ModelInfo[]][] => {
+    if (!modelSearch) return groupedModels;
+    const search = modelSearch.toLowerCase();
+    return groupedModels.map(([provider, ms]): [string, ModelInfo[]] => [
+      provider,
+      ms.filter(m => m.id.toLowerCase().includes(search) || m.name.toLowerCase().includes(search))
+    ]).filter(([_, ms]) => ms.length > 0);
+  }, [groupedModels, modelSearch]);
   const [secretsSources, setSecretsSources] = useState<Record<string, string>>({});
   const [servicePrompts, setServicePrompts] = useState<Record<string, ServicePromptConfig>>({});
 
@@ -156,19 +205,25 @@ export function Settings() {
         setSecrets(loaded);
 
         const savedFavorites = Array.isArray(configData.model_favorites) ? configData.model_favorites : [];
-        const catalogModels = modelsData?.success && Array.isArray(modelsData.models)
-          ? modelsData.models.map((m) => m.id)
-          : [];
+        const catalogModelsRaw = modelsData?.success && Array.isArray(modelsData.models) ? modelsData.models : [];
+        setFullModels(catalogModelsRaw);
+        const catalogModels = catalogModelsRaw.map((m: any) => m.id);
         setModelFavorites(Array.from(new Set([...savedFavorites, ...catalogModels])));
 
         if (Array.isArray(configData.starred_models)) setStarredModels(configData.starred_models);
         if (configData.image_optimization) setImageOptimization(configData.image_optimization);
         if (configData.secrets_sources) setSecretsSources(configData.secrets_sources);
+        if (configData.app_settings?.llm_provider) {
+          setLlmProvider(configData.app_settings.llm_provider);
+        }
+        setLlmProviderInitialized(true);
         if (configData.service_prompts) setServicePrompts(configData.service_prompts);
 
         // Derive active LLM provider mode
         const hasLlmBaseUrl = !!statuses['LLM_BASE_URL'];
-        setLlmProvider(hasLlmBaseUrl ? 'litellm' : 'openrouter');
+                if (!llmProviderInitialized) {
+          setLlmProvider(hasLlmBaseUrl ? 'litellm' : 'openrouter');
+        }
 
         const savedTemplates = normalizePromptTemplates(configData.prompt_templates);
         const derivedTemplates = derivePromptTemplatesFromPipelines(pipelinesData.pipelines);
@@ -190,6 +245,9 @@ export function Settings() {
   }, []);
 
   const handleChange = (key: string, value: string) => {
+    if (key === 'LLM_BASE_URL' || key === 'LLM_API_KEY' || key === 'OPENROUTER_API_KEY') {
+      setLlmTestStatus(null);
+    }
     setSecrets(prev => ({ ...prev, [key]: value }));
   };
 
@@ -227,6 +285,7 @@ export function Settings() {
     setSaving(true);
     try {
       const payload = {
+        llm_provider: llmProvider,
         model_favorites: modelFavorites,
         starred_models: starredModels,
         image_optimization: imageOptimization,
@@ -253,6 +312,10 @@ export function Settings() {
       if (response.ok) {
         const configData = await response.json();
         if (configData.secrets_sources) setSecretsSources(configData.secrets_sources);
+        if (configData.app_settings?.llm_provider) {
+          setLlmProvider(configData.app_settings.llm_provider);
+        }
+        setLlmProviderInitialized(true);
       }
     } catch (e) {
       console.error(e);
@@ -261,6 +324,73 @@ export function Settings() {
       setSaving(false);
     }
   };
+
+  const [llmTestStatus, setLlmTestStatus] = useState<null | { success: boolean, message: string }>(null);
+  const [testingLlmConnection, setTestingLlmConnection] = useState(false);
+  const [syncingModels, setSyncingModels] = useState(false);
+  const testLlmConnection = async (providerOverride?: 'openrouter' | 'litellm') => {
+    setTestingLlmConnection(true);
+    setLlmTestStatus(null);
+    try {
+      const payload = {
+        LLM_BASE_URL: secrets['LLM_BASE_URL'] || '',
+        LLM_API_KEY: secrets['LLM_API_KEY'] || '',
+        llm_provider: providerOverride || llmProvider,
+      };
+      const response = await fetch('/api/config/llm-connection-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      setLlmTestStatus(data);
+      if (data.success) {
+        onToast?.(data.message || 'Connection test successful!', 'success');
+        // Automatically sync models on successful test
+        void syncModels();
+      } else {
+        onToast?.('Connection test failed.', 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      setLlmTestStatus({ success: false, message: 'Failed to connect to backend for test.' });
+      onToast?.('Error testing connection.', 'error');
+    } finally {
+      setTestingLlmConnection(false);
+    }
+  };
+
+  const syncModels = async () => {
+    setSyncingModels(true);
+    onToast?.('Discovering models from gateway...', 'info');
+    try {
+      const response = await fetch('/api/models/sync', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          llm_provider: llmProvider,
+          LLM_BASE_URL: secrets['LLM_BASE_URL'] || '',
+          LLM_API_KEY: secrets['LLM_API_KEY'] || '',
+        })
+      });
+      const data = await response.json();
+      if (data.success && data.models) {
+        setFullModels(data.models);
+        const catalogModels = data.models.map((m: any) => m.id);
+        setModelFavorites(prev => Array.from(new Set([...prev, ...catalogModels])));
+        onToast?.('Models synced successfully!', 'success');
+      } else {
+        const errMsg = data.error || 'Unknown error';
+        onToast?.('Failed to sync models: ' + errMsg, 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      onToast?.('Error syncing models.', 'error');
+    } finally {
+      setSyncingModels(false);
+    }
+  };
+
 
   const toggleStar = (modelId: string) => {
     setStarredModels(prev => 
@@ -476,7 +606,7 @@ export function Settings() {
                     type="button"
                     onClick={() => {
                       setLlmProvider('openrouter');
-                      handleChange('LLM_BASE_URL', '');
+                      setLlmTestStatus(null);
                     }}
                     className={`p-6 rounded-[1.5rem] border text-left transition-all flex flex-col justify-between h-36 ${
                       llmProvider === 'openrouter'
@@ -493,9 +623,7 @@ export function Settings() {
                     type="button"
                     onClick={() => {
                       setLlmProvider('litellm');
-                      if (!secrets['LLM_BASE_URL']) {
-                        handleChange('LLM_BASE_URL', 'http://localhost:4000/v1');
-                      }
+                      setLlmTestStatus(null);
                     }}
                     className={`p-6 rounded-[1.5rem] border text-left transition-all flex flex-col justify-between h-36 ${
                       llmProvider === 'litellm'
@@ -526,6 +654,14 @@ export function Settings() {
                         placeholder="Enter OPENROUTER API KEY"
                         className="w-full bg-white/5 border border-white/10 rounded-2xl pl-5 pr-12 py-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                       />
+                      <button 
+                        type="button" 
+                        onClick={() => void testLlmConnection('openrouter')} 
+                        disabled={testingLlmConnection}
+                        className="absolute right-12 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300 disabled:opacity-50 transition-colors"
+                      >
+                        {testingLlmConnection ? '...' : 'Test'}
+                      </button>
                       <button
                         type="button"
                         onClick={() => void toggleRevealSecret('OPENROUTER_API_KEY')}
@@ -534,10 +670,29 @@ export function Settings() {
                         {revealedSecrets['OPENROUTER_API_KEY'] ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
                     </div>
+                    {llmTestStatus && llmProvider === 'openrouter' && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className={`text-[10px] italic select-text cursor-text flex-1 ${llmTestStatus.success ? 'text-green-500' : 'text-red-500'}`}>
+                          {llmTestStatus.success ? llmTestStatus.message : (llmTestStatus as any).error || 'Test failed.'}
+                        </p>
+                        {!llmTestStatus.success && (
+                          <button 
+                            onClick={() => {
+                              const err = (llmTestStatus as any).error || 'Test failed.';
+                              void navigator.clipboard.writeText(err);
+                              onToast?.('Error copied to clipboard!', 'info');
+                            }}
+                            className="text-[9px] font-black uppercase tracking-widest text-white/20 hover:text-white/60 transition-colors"
+                          >
+                            Copy
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <>
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-2 relative">
                        <label className="text-xs font-bold text-white/50 tracking-wider">
                         LLM_BASE_URL
                       </label>
@@ -548,7 +703,34 @@ export function Settings() {
                         placeholder="http://localhost:4000/v1"
                         className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                       />
+                      <button 
+                        type="button" 
+                        onClick={() => void testLlmConnection()} 
+                        disabled={testingLlmConnection}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300 disabled:opacity-50 transition-colors"
+                      >
+                        {testingLlmConnection ? 'Testing...' : 'Test Connection'}
+                      </button>
                     </div>
+                    {llmTestStatus && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className={`text-[10px] italic select-text cursor-text flex-1 ${llmTestStatus.success ? 'text-green-500' : 'text-red-500'}`}>
+                          {llmTestStatus.success ? llmTestStatus.message : (llmTestStatus as any).error || 'Test failed.'}
+                        </p>
+                        {!llmTestStatus.success && (
+                          <button 
+                            onClick={() => {
+                              const err = (llmTestStatus as any).error || 'Test failed.';
+                              void navigator.clipboard.writeText(err);
+                              onToast?.('Error copied to clipboard!', 'info');
+                            }}
+                            className="text-[9px] font-black uppercase tracking-widest text-white/20 hover:text-white/60 transition-colors"
+                          >
+                            Copy
+                          </button>
+                        )}
+                      </div>
+                    )}
                     <div className="flex flex-col gap-2">
                       <label className="text-xs font-bold text-white/50 tracking-wider">
                         LLM_API_KEY (Optional)
@@ -587,8 +769,12 @@ export function Settings() {
                     className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-xs text-white focus:outline-none cursor-pointer"
                   >
                     <option value="" className="bg-neutral-900">Select model...</option>
-                    {modelFavorites.map(m => (
-                      <option key={m} value={m} className="bg-neutral-900">{m}</option>
+                    {groupedModels.map(([provider, ms]) => (
+                      <optgroup key={provider} label={provider.toUpperCase()} className="bg-neutral-900 text-white/40 text-[10px]">
+                        {ms.map(m => (
+                          <option key={m.id} value={m.id} className="bg-neutral-900 text-white">{m.name}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -601,8 +787,12 @@ export function Settings() {
                     className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-xs text-white focus:outline-none cursor-pointer"
                   >
                     <option value="" className="bg-neutral-900">Select model...</option>
-                    {modelFavorites.map(m => (
-                      <option key={m} value={m} className="bg-neutral-900">{m}</option>
+                    {groupedModels.map(([provider, ms]) => (
+                      <optgroup key={provider} label={provider.toUpperCase()} className="bg-neutral-900 text-white/40 text-[10px]">
+                        {ms.map(m => (
+                          <option key={m.id} value={m.id} className="bg-neutral-900 text-white">{m.name}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -615,8 +805,12 @@ export function Settings() {
                     className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-xs text-white focus:outline-none cursor-pointer"
                   >
                     <option value="" className="bg-neutral-900">Select model...</option>
-                    {modelFavorites.map(m => (
-                      <option key={m} value={m} className="bg-neutral-900">{m}</option>
+                    {groupedModels.map(([provider, ms]) => (
+                      <optgroup key={provider} label={provider.toUpperCase()} className="bg-neutral-900 text-white/40 text-[10px]">
+                        {ms.map(m => (
+                          <option key={m.id} value={m.id} className="bg-neutral-900 text-white">{m.name}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -641,8 +835,12 @@ export function Settings() {
                       className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-xs text-white focus:outline-none cursor-pointer"
                     >
                       <option value="" className="bg-neutral-900">Use default refine model</option>
-                      {modelFavorites.map(m => (
-                        <option key={m} value={m} className="bg-neutral-900">{m}</option>
+                      {groupedModels.map(([provider, ms]) => (
+                        <optgroup key={provider} label={provider.toUpperCase()} className="bg-neutral-900 text-white/40 text-[10px]">
+                          {ms.map(m => (
+                            <option key={m.id} value={m.id} className="bg-neutral-900 text-white">{m.name}</option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </div>
@@ -830,32 +1028,56 @@ export function Settings() {
           <section className="space-y-6 flex flex-col">
             <label className="label-apple">Model Registry</label>
             <div className="glass p-8 rounded-[2.5rem] space-y-6 flex-1 flex flex-col">
-              <div className="space-y-3 max-h-64 overflow-y-auto no-scrollbar flex-1">
-                {modelFavorites.map(m => (
-                  <div key={m} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5">
-                      <div className="flex items-center truncate">
+              <div className="flex flex-col gap-3">
+                <input 
+                  type="text" 
+                  value={modelSearch}
+                  onChange={e => setModelSearch(e.target.value)}
+                  placeholder="Search models..." 
+                  className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none text-white focus:ring-2 focus:ring-blue-500/50" 
+                />
+              </div>
+              <div className="space-y-6 max-h-96 overflow-y-auto no-scrollbar flex-1">
+                {filteredGroupedModels.map(([provider, ms]: [string, ModelInfo[]]) => (
+                  <div key={provider} className="space-y-3">
+                    <span className="text-[9px] font-black uppercase text-white/20 tracking-[0.2em] sticky top-0 bg-[#0a0a0a] py-1 block z-10">{provider}</span>
+                    {ms.map((m: ModelInfo) => (
+                      <div key={m.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 group hover:border-white/10 transition-all">
+                          <div className="flex items-center truncate">
+                              <button 
+                                onClick={() => toggleStar(m.id)} 
+                                className={`mr-3 transition-colors ${starredModels.includes(m.id) ? 'text-yellow-400' : 'text-white/10 hover:text-white/40'}`}
+                              >
+                                  <span className="text-lg">{starredModels.includes(m.id) ? '★' : '☆'}</span>
+                              </button>
+                              <span className="text-[10px] font-black uppercase tracking-widest truncate text-white">{m.name}</span>
+                              <span className="ml-2 text-[8px] font-bold text-white/10 uppercase group-hover:text-white/20">{m.id}</span>
+                          </div>
                           <button 
-                            onClick={() => toggleStar(m)} 
-                            className={`mr-3 transition-colors ${starredModels.includes(m) ? 'text-yellow-400' : 'text-white/10 hover:text-white/40'}`}
+                            onClick={() => {
+                              setModelFavorites(prev => prev.filter(x => x !== m.id));
+                              setStarredModels(prev => prev.filter(x => x !== m.id));
+                            }} 
+                            className="text-red-500/0 group-hover:text-red-500/40 hover:!text-red-500 text-[10px] font-black transition-all"
                           >
-                              <span className="text-lg">{starredModels.includes(m) ? '★' : '☆'}</span>
+                            ✕
                           </button>
-                          <span className="text-[10px] font-black uppercase tracking-widest truncate text-white">{m.split('/')[1] || m}</span>
                       </div>
-                      <button 
-                        onClick={() => {
-                          setModelFavorites(prev => prev.filter(x => x !== m));
-                          setStarredModels(prev => prev.filter(x => x !== m));
-                        }} 
-                        className="text-red-500/40 hover:text-red-500 text-[10px] font-black"
-                      >
-                        ✕
-                      </button>
+                    ))}
                   </div>
                 ))}
               </div>
               <div className="pt-4 border-t border-white/5 space-y-3">
-                  <span className="text-[9px] font-black uppercase text-white/30">Register New Model ID</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[9px] font-black uppercase text-white/30">Register New Model ID</span>
+                    <button 
+                      onClick={() => void syncModels()} 
+                      disabled={syncingModels}
+                      className="text-[9px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300 disabled:opacity-50 transition-colors"
+                    >
+                      {syncingModels ? 'Syncing...' : 'Sync from Gateway'}
+                    </button>
+                  </div>
                   <div className="flex gap-2">
                       <input 
                         type="text" 

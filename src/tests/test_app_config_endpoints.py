@@ -263,7 +263,7 @@ async def test_get_config_derives_prompt_templates_from_pipeline_defaults_when_e
 @pytest.mark.asyncio
 async def test_update_config_persists_settings_models_and_secret_values():
     db = SimpleNamespace(
-        execute=AsyncMock(side_effect=[_Result(None), _Result(None)]),
+        execute=AsyncMock(side_effect=[_Result(None), _Result(None), _Result(None), _Result(None)]),
         add=MagicMock(),
         commit=AsyncMock(),
     )

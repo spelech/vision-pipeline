@@ -121,6 +121,9 @@ class ModelCatalog(Base):
     name = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     is_system = Column(Boolean, default=True)
+    owned_by = Column(String, nullable=True)
+    mode = Column(String, nullable=True)
+    source_gateway = Column(String, nullable=True)
     created_at = Column(DateTime, default=utc_now_naive)
     updated_at = Column(
         DateTime,

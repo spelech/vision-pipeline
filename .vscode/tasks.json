@@ -6,15 +6,6 @@
 			"type": "shell",
 			"command": "docker compose build",
 			"group": "build",
-			"options": {
-				"shell": {
-					"executable": "C:\\Windows\\System32\\cmd.exe",
-					"args": [
-						"/d",
-						"/c"
-					]
-				}
-			},
 			"problemMatcher": []
 		},
 		{
@@ -22,15 +13,6 @@
 			"type": "shell",
 			"command": "docker compose up -d",
 			"group": "none",
-			"options": {
-				"shell": {
-					"executable": "C:\\Windows\\System32\\cmd.exe",
-					"args": [
-						"/d",
-						"/c"
-					]
-				}
-			},
 			"problemMatcher": []
 		},
 		{
@@ -38,15 +20,6 @@
 			"type": "shell",
 			"command": "docker compose --env-file .env.remote up -d",
 			"group": "none",
-			"options": {
-				"shell": {
-					"executable": "C:\\Windows\\System32\\cmd.exe",
-					"args": [
-						"/d",
-						"/c"
-					]
-				}
-			},
 			"problemMatcher": []
 		},
 		{
@@ -54,15 +27,6 @@
 			"type": "shell",
 			"command": "docker compose up -d db",
 			"group": "none",
-			"options": {
-				"shell": {
-					"executable": "C:\\Windows\\System32\\cmd.exe",
-					"args": [
-						"/d",
-						"/c"
-					]
-				}
-			},
 			"problemMatcher": []
 		},
 		{
@@ -70,30 +34,12 @@
 			"type": "shell",
 			"command": "docker compose down",
 			"group": "none",
-			"options": {
-				"shell": {
-					"executable": "C:\\Windows\\System32\\cmd.exe",
-					"args": [
-						"/d",
-						"/c"
-					]
-				}
-			},
 			"problemMatcher": []
 		},
 		{
 			"label": "Python: Install Requirements",
 			"type": "shell",
 			"command": "${command:python.interpreterPath} -m pip install -r src/requirements.txt",
-			"options": {
-				"shell": {
-					"executable": "C:\\Windows\\System32\\cmd.exe",
-					"args": [
-						"/d",
-						"/c"
-					]
-				}
-			},
 			"problemMatcher": []
 		},
 		{
@@ -101,30 +47,12 @@
 			"type": "shell",
 			"command": "node scripts/update-test-requirements-index.mjs && ${command:python.interpreterPath} -m pytest src/tests",
 			"group": "test",
-			"options": {
-				"shell": {
-					"executable": "C:\\Windows\\System32\\cmd.exe",
-					"args": [
-						"/d",
-						"/c"
-					]
-				}
-			},
 			"problemMatcher": []
 		},
 		{
 			"label": "Python: Lint",
 			"type": "shell",
 			"command": "${command:python.interpreterPath} -m pylint src",
-			"options": {
-				"shell": {
-					"executable": "C:\\Windows\\System32\\cmd.exe",
-					"args": [
-						"/d",
-						"/c"
-					]
-				}
-			},
 			"problemMatcher": [
 				"$pylint"
 			]
@@ -133,15 +61,6 @@
 			"label": "Python: Typecheck",
 			"type": "shell",
 			"command": "${command:python.interpreterPath} -m mypy src",
-			"options": {
-				"shell": {
-					"executable": "C:\\Windows\\System32\\cmd.exe",
-					"args": [
-						"/d",
-						"/c"
-					]
-				}
-			},
 			"problemMatcher": [
 				"$mypy"
 			]
@@ -150,45 +69,26 @@
 			"label": "Python: DB Migration Drift Check",
 			"type": "shell",
 			"command": "${command:python.interpreterPath} scripts/check_db_migrations.py",
-			"options": {
-				"shell": {
-					"executable": "C:\\Windows\\System32\\cmd.exe",
-					"args": [
-						"/d",
-						"/c"
-					]
-				}
-			},
 			"problemMatcher": []
 		},
 		{
 			"label": "Python: DB Migration Upgrade",
 			"type": "shell",
 			"command": "docker compose exec -T vision-pipeline python -m alembic -c alembic.ini upgrade head",
-			"options": {
-				"shell": {
-					"executable": "C:\\Windows\\System32\\cmd.exe",
-					"args": [
-						"/d",
-						"/c"
-					]
-				}
-			},
 			"problemMatcher": []
 		},
 		{
 			"label": "Cleanup old files",
 			"type": "shell",
-			"command": "if exist src\\templates rd /s /q src\\templates && if exist src\\.nicegui rd /s /q src\\.nicegui && if exist src\\test_output.py del /q src\\test_output.py",
-			"options": {
-				"shell": {
-					"executable": "C:\\Windows\\System32\\cmd.exe",
-					"args": [
-						"/d",
-						"/c"
-					]
-				}
-			}
+			"command": "rm -rf src/templates src/.nicegui src/test_output.py"
+		},
+		{
+			"label": "Debug: Full Stack",
+			"dependsOn": [
+				"Debug: Start Server (Docker)",
+				"Vite: Dev (web)"
+			],
+			"problemMatcher": []
 		},
 		{
 			"label": "Prep: Local Dev (DB + Web)",
@@ -199,18 +99,18 @@
 			"problemMatcher": []
 		},
 		{
+			"label": "Debug: Start Server (Docker)",
+			"type": "shell",
+			"command": "bash scripts/start-debug.sh",
+			"group": "none",
+			"problemMatcher": []
+		},
+		{
 			"label": "Vite: Dev (web)",
 			"type": "shell",
 			"command": "npm run dev",
 			"options": {
-				"cwd": "${workspaceFolder}/web",
-				"shell": {
-					"executable": "C:\\Windows\\System32\\cmd.exe",
-					"args": [
-						"/d",
-						"/c"
-					]
-				}
+				"cwd": "${workspaceFolder}/web"
 			},
 			"isBackground": true,
 			"problemMatcher": [

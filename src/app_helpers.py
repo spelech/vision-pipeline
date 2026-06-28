@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from database import AppSetting
 
 import database
 from database import (
@@ -25,10 +26,12 @@ logger = logging.getLogger("VisionAPI")
 MODEL_ID_ALIASES: Dict[str, str] = {
     "qwen/qwen2.5-72b-instruct": "qwen/qwen3-235b-a22b-2507",
     "qwen/qwen2.5-32b-instruct": "qwen/qwen3-235b-a22b-2507",
+    "qwen/qwen2.5-vl-72b-instruct": "openrouter/qwen/qwen2.5-vl-72b-instruct",
 }
 
 SERVICE_NAMES = ["homebox", "mealie", "pricebuddy", "changedetection"]
 DB_SETTING_KEYS = [
+    "llm_provider",
     "prompt_templates",
     "service_prompts",
     "model_favorites",
@@ -42,19 +45,16 @@ DB_SETTING_KEYS = [
 
 DEFAULT_MODEL_CATALOG: List[Dict[str, str]] = [
     {
-        "id": "qwen/qwen2.5-vl-72b-instruct",
-        "name": "Qwen 2.5 VL 72B (OpenRouter)",
+        "id": "qwen3-vl-235b-a22b-instruct",
+        "name": "Qwen 3 VL 235B (OpenRouter)",
         "provider": "openrouter",
+        "source_gateway": "openrouter",
     },
     {
-        "id": "google/gemini-2.0-flash-001",
-        "name": "Gemini 2.0 Flash (OpenRouter)",
+        "id": "qwen3-235b-a22b-2507",
+        "name": "Qwen 3 235B (OpenRouter)",
         "provider": "openrouter",
-    },
-    {
-        "id": "anthropic/claude-3.5-sonnet",
-        "name": "Claude 3.5 Sonnet (OpenRouter)",
-        "provider": "openrouter",
+        "source_gateway": "openrouter",
     },
 ]
 
@@ -159,7 +159,7 @@ def _service_target_for_pipeline_id(pipeline_id: str) -> Optional[str]:
 def normalize_model_id(value: Any) -> Any:
     if isinstance(value, str):
         return MODEL_ID_ALIASES.get(value, value)
-    return value
+    return value.get("value") if isinstance(value, dict) and "value" in value else value
 
 
 def normalize_pipeline_schema(schema: Any) -> Any:
@@ -238,7 +238,7 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
     return {
         "homebox": {
             "service": "homebox",
-            "model": "qwen/qwen3-235b-a22b-2507",
+            "model": None,
             "enabled": True,
             "prompt": (
                 "You are an expert inventory cataloging assistant. Create a Homebox-ready JSON object from the provided product data and search/scrape context.\n"
@@ -260,7 +260,7 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
         },
         "mealie": {
             "service": "mealie",
-            "model": "qwen/qwen3-235b-a22b-2507",
+            "model": None,
             "enabled": True,
             "prompt": (
                 "You are an expert culinary assistant. Create a Mealie-ready recipe JSON object from the provided food/recipe data and search/scrape context.\n"
@@ -276,7 +276,7 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
         },
         "pricebuddy": {
             "service": "pricebuddy",
-            "model": "qwen/qwen3-235b-a22b-2507",
+            "model": None,
             "enabled": True,
             "prompt": (
                 "You are a price comparison and tracking assistant. Create a PriceBuddy-ready JSON object from the provided data and search/scrape context.\n"
@@ -304,7 +304,7 @@ def default_service_prompt_configs() -> Dict[str, Dict[str, Any]]:
         },
         "changedetection": {
             "service": "changedetection",
-            "model": "qwen/qwen3-235b-a22b-2507",
+            "model": None,
             "enabled": True,
             "prompt": (
                 "You are an automated price and page monitoring assistant. Create a ChangeDetection-ready JSON object from the provided data and search/scrape context.\n"
@@ -389,11 +389,9 @@ def normalize_app_setting(key: str, value: Any) -> Any:
         return normalize_prompt_templates(value)
     if key == "service_prompts":
         return normalize_service_prompts(value)
-    if key in {"model_favorites", "starred_models"}:
+    if key == "model_favorites":
         return merge_unique_str_lists(value)
-    if key == "image_optimization" and isinstance(value, dict):
-        return value
-    return value
+    return value.get("value") if isinstance(value, dict) and "value" in value else value
 
 
 async def upsert_app_setting(db: AsyncSession, key: str, value: Any) -> None:
@@ -429,6 +427,7 @@ async def ensure_model_catalog(db: AsyncSession) -> None:
                 provider=str(model.get("provider") or infer_model_provider(model_id)),
                 name=str(model.get("name") or model_id),
                 is_active=True,
+                source_gateway=str(model.get("source_gateway") or "litellm"),
                 is_system=True,
             )
         )
@@ -901,3 +900,17 @@ def get_service_context_from_item(item: Any, service_name: str) -> Dict[str, Any
         "scrape": ai_output.get("scraped_content"),
         "service_enrichment": service_enrichments.get(service_name, {}),
     }
+
+async def get_config_setting(db: AsyncSession, key: str, default: Any = None) -> Any:
+    """
+    Retrieves a single configuration setting from the app_settings table.
+    """
+    try:
+        from database import AppSetting
+        result = await db.execute(select(AppSetting.value).where(AppSetting.key == key))
+        val = result.scalar_one_or_none()
+        if val is None:
+            return default
+        return val.get("value") if isinstance(val, dict) and "value" in val else val
+    except Exception:
+        return default

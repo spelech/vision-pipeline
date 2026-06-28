@@ -18,7 +18,7 @@ export function ToastBanner({ toast }: ToastBannerProps) {
               : 'bg-blue-500/20 border-blue-500/50 text-blue-100'
         }`}
       >
-        <span className="text-sm font-black uppercase tracking-widest">{toast.message}</span>
+        <span className="text-sm font-black uppercase tracking-widest select-text cursor-text">{toast.message}</span>
       </div>
     </div>
   );

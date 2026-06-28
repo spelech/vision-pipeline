@@ -115,7 +115,7 @@ export function PipelineEditor() {
       name: "New Custom Sequence",
       schema: {
         active_nodes: { default: ["vision", "refine"] },
-        vision_model: { default: models[0] || "qwen/qwen2.5-vl-72b-instruct" },
+        vision_model: { default: models[0] || "qwen3-vl-235b-a22b-instruct" },
         vision_prompt: { default: "Analyze the image." },
         refine_prompt: { default: "Refine." },
         scrape_wait_time: { default: 2000 }

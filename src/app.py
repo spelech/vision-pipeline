@@ -131,7 +131,8 @@ from routes.service_routes import (
 
 # --- Logging ---
 root_logger = logging.getLogger()
-root_logger.setLevel(logging.INFO)
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+root_logger.setLevel(getattr(logging, log_level, logging.INFO))
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
@@ -153,10 +154,11 @@ async def lifespan(_app: FastAPI):
         secrets = res.scalars().all()
         for secret in secrets:
             try:
-                os.environ[secret.key] = decrypt_secret(secret.encrypted_value)
-                logger.info("Loaded encrypted secret: %s", secret.key)
-            except ValueError as e:
-                logger.error("Failed to decrypt secret %s: %s", secret.key, e)
+                decrypted = decrypt_secret(secret.encrypted_value)
+                os.environ[secret.key] = decrypted
+                logger.info("Loaded encrypted secret from DB: %s", secret.key)
+            except Exception as e:
+                logger.error("Failed to decrypt secret %s from DB: %s", secret.key, e)
                 
     await configure_gmail_auto_sync_scheduler()
     try:

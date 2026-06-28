@@ -33,12 +33,16 @@ class ModelInfo(BaseModel):
     id: str
     name: str
     provider: Optional[str] = None
+    owned_by: Optional[str] = None
     is_system: Optional[bool] = None
+    mode: Optional[str] = None
+    source_gateway: Optional[str] = None
 
 
 class ModelListResponse(BaseModel):
     success: bool
     models: List[ModelInfo]
+    error: Optional[str] = None
 
 
 class ConfigSecretStatus(BaseModel):
@@ -70,6 +74,8 @@ class ConfigSecretStatus(BaseModel):
 
 
 class ConfigResponse(BaseModel):
+    app_settings: Optional[Dict[str, Any]] = None
+    app_settings: Optional[Dict[str, Any]] = None
     prompt_templates: Optional[List[PromptTemplateConfig]] = None
     service_prompts: Optional[Dict[str, ServicePromptConfig]] = None
     model_favorites: Optional[List[str]] = None
@@ -85,6 +91,7 @@ class ConfigResponse(BaseModel):
 
 
 class ConfigUpdateRequest(BaseModel):
+    llm_provider: Optional[str] = None
     prompt_templates: Optional[List[PromptTemplateConfig]] = None
     service_prompts: Optional[Dict[str, ServicePromptConfig]] = None
     model_favorites: Optional[List[str]] = None

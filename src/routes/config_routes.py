@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import pipelines
 from database import get_db, ConfigSecret, ModelCatalog
+from app_helpers import get_config_setting
 from schemas import ConfigResponse, ConfigUpdateRequest
 from services.discovery import DiscoveryResult, run_autodiscovery
 from secrets_manager import (
@@ -48,6 +49,8 @@ async def get_config(
     reveal_secrets: bool = False,
 ) -> ConfigResponse:
     await ensure_app_settings_seed(db)
+    from secrets_manager import refresh_secrets_from_db
+    await refresh_secrets_from_db(db)
     settings = await get_app_settings(db)
     prompt_templates = normalize_prompt_templates(settings.get("prompt_templates"))
     if not prompt_templates:
@@ -109,7 +112,10 @@ async def get_config(
         else:
             secrets_sources[key] = "none"
 
-    return ConfigResponse(**data, secrets_status=secrets_status, secrets_sources=secrets_sources)
+    llm_provider_from_db = await get_config_setting(db, "llm_provider", "openrouter")
+    app_settings = {**settings, "llm_provider": llm_provider_from_db}
+
+    return ConfigResponse(**data, app_settings=app_settings, secrets_status=secrets_status, secrets_sources=secrets_sources)
 
 
 @router.post("")
@@ -117,9 +123,10 @@ async def update_config(
     data: ConfigUpdateRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    # pylint: disable=too-many-locals,too-many-branches
-    # Separate secrets from general config
+    logger.info("Updating config with payload: %s", data.model_dump(exclude_unset=True))
+    # Separate secrets
     keys_to_persist = [
+        "llm_provider",
         "prompt_templates",
         "service_prompts",
         "model_favorites",
@@ -146,6 +153,8 @@ async def update_config(
         )
 
     await ensure_app_settings_seed(db)
+    from secrets_manager import refresh_secrets_from_db
+    await refresh_secrets_from_db(db)
     for key in keys_to_persist:
         if key not in data_dict:
             continue
@@ -269,3 +278,35 @@ async def import_config(
 async def autodiscover_settings() -> DiscoveryResult:
     """Scan the network and local filesystem for settings and GWS credentials."""
     return await run_autodiscovery()
+
+from llm_client import test_llm_connection
+from secrets_manager import get_secret_value
+
+@router.post("/llm-connection-test")
+async def test_llm_connection_endpoint(
+    request: ConfigUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    llm_base_url = request.LLM_BASE_URL
+    llm_api_key = request.LLM_API_KEY
+    llm_provider = request.llm_provider or "auto"
+
+    # First, try to get the current values from the DB if not provided in the request
+    if not llm_base_url:
+        llm_base_url = get_secret_value("LLM_BASE_URL")
+    if not llm_api_key:
+        llm_api_key = get_secret_value("LLM_API_KEY")
+
+    # If the user is trying to test a masked key, we need to decrypt the current one
+    if llm_api_key == "********":
+        try:
+            res = await db.execute(select(ConfigSecret).where(ConfigSecret.key == "LLM_API_KEY"))
+            secret_obj = res.scalar_one_or_none()
+            if secret_obj:
+                llm_api_key = decrypt_secret(secret_obj.encrypted_value)
+            else:
+                return {"success": False, "error": "LLM API Key is masked and not found in database."}
+        except Exception as e:
+            return {"success": False, "error": f"Failed to decrypt stored API Key: {e}"}
+
+    return await test_llm_connection(llm_base_url, llm_api_key)
