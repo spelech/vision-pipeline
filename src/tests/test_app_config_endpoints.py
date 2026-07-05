@@ -32,8 +32,6 @@ with patch("os.makedirs"), patch("os.path.exists", return_value=True), patch(
         upsert_pipeline,
         process_item_task,
         process_item_task_safe,
-        scrape_url,
-        ScrapeRequest,
         encode_image_bytes_to_data_uri,
     )
 
@@ -374,112 +372,6 @@ async def test_root_uses_fallback_web_dist_when_primary_missing(
     spa_resp = await spa_fallback("settings/profile")
     assert isinstance(spa_resp, FileResponse)
 
-
-@pytest.mark.asyncio
-async def test_scrape_endpoint_returns_503_when_playwright_missing():
-    import builtins
-
-    original_import = builtins.__import__
-
-    def _raising_import(name, *args, **kwargs):
-        if name == "playwright.async_api":
-            raise ImportError("playwright not installed")
-        return original_import(name, *args, **kwargs)
-
-    with patch("builtins.__import__", side_effect=_raising_import):
-        with pytest.raises(HTTPException) as exc:
-            await scrape_url(ScrapeRequest(url="https://example.com"))
-    assert exc.value.status_code == 503
-
-
-@pytest.mark.asyncio
-async def test_scrape_endpoint_success_and_runtime_error_paths():
-    class _FakePage:
-        def __init__(self, should_fail: bool = False):
-            self.should_fail = should_fail
-
-        async def goto(self, *_args, **_kwargs):
-            if self.should_fail:
-                raise RuntimeError("boom")
-
-        async def evaluate(self, _expr):
-            return "scraped text"
-
-    class _FakeContext:
-        def __init__(self, should_fail: bool = False):
-            self._should_fail = should_fail
-
-        async def new_page(self):
-            return _FakePage(should_fail=self._should_fail)
-
-    class _FakeBrowser:
-        def __init__(self, should_fail: bool = False):
-            self._should_fail = should_fail
-
-        async def new_context(self, **_kwargs):
-            return _FakeContext(should_fail=self._should_fail)
-
-        async def close(self):
-            return None
-
-    class _FakeChromium:
-        def __init__(self, should_fail: bool = False):
-            self._should_fail = should_fail
-
-        async def launch(self, **_kwargs):
-            return _FakeBrowser(should_fail=self._should_fail)
-
-    class _PlaywrightCtx:
-        def __init__(self, should_fail: bool = False):
-            self._should_fail = should_fail
-
-        async def __aenter__(self):
-            return SimpleNamespace(chromium=_FakeChromium(should_fail=self._should_fail))
-
-        async def __aexit__(self, *_args):
-            return None
-
-    async_api_mod = types.ModuleType("playwright.async_api")
-
-    def _async_playwright_ok():
-        return _PlaywrightCtx(should_fail=False)
-
-    async_api_mod.async_playwright = _async_playwright_ok
-
-    stealth_mod = types.ModuleType("playwright_stealth")
-
-    class _Stealth:
-        async def apply_stealth_async(self, _page):
-            return None
-
-    stealth_mod.Stealth = _Stealth
-
-    with patch.dict(
-        sys.modules,
-        {
-            "playwright": types.ModuleType("playwright"),
-            "playwright.async_api": async_api_mod,
-            "playwright_stealth": stealth_mod,
-        },
-    ):
-        result = await scrape_url(ScrapeRequest(url="https://example.com", wait_time=0))
-    assert result["success"] is True
-    assert result["text"] == "scraped text"
-
-    def _async_playwright_fail():
-        return _PlaywrightCtx(should_fail=True)
-
-    async_api_mod.async_playwright = _async_playwright_fail
-    with patch.dict(
-        sys.modules,
-        {
-            "playwright": types.ModuleType("playwright"),
-            "playwright.async_api": async_api_mod,
-        },
-    ):
-        with pytest.raises(HTTPException) as exc:
-            await scrape_url(ScrapeRequest(url="https://example.com", wait_time=0))
-    assert exc.value.status_code == 500
 
 
 @pytest.mark.asyncio

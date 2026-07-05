@@ -301,25 +301,45 @@ def web_search(query, max_results=7, log_cb=None):
 
 def web_scrape(url, wait_time=2000, log_cb=None):
     if log_cb:
-        log_cb(f"🕸️ [Node: Scrape] Scraping {url}...")
+        log_cb(f"🕸️ [Node: Scrape] Agentic Scrape on {url}...")
     scraper_url = os.getenv(
         "PLAYWRIGHT_SCRAPER_URL",
-        "http://127.0.0.1:8501/internal/scrape",
+        "http://playwright-csharp-scraper:8080",
     )
+    model = os.getenv("PLAYWRIGHT_SCRAPER_MODEL", "gemini-2.5-flash")
+    api_key = os.getenv("PLAYWRIGHT_SCRAPER_API_KEY", "sk-local-wileyriley-gateway-12345")
+    
+    # Target endpoint
+    endpoint = f"{scraper_url.rstrip('/')}/api/scrape/compare?sync=true"
+    
+    payload = {
+        "urls": [url],
+        "goal": "Extract product name, price, brand, description, and specifications.",
+        "model": model,
+        "apiKey": api_key,
+        "maxSteps": 5
+    }
+    
     try:
-        resp = requests.post(
-            scraper_url,
-            json={
-                "url": url,
-                "wait_time": int(wait_time)},
-            timeout=40)
+        # Give it a larger timeout since dynamic scrapes can take up to ~90-120 seconds with LiteLLM latency
+        resp = requests.post(endpoint, json=payload, timeout=180)
+        resp.raise_for_status()
         data = resp.json()
-        if data.get("success"):
-            return data.get("text", "")[:10000]
-        return None
-    except requests.RequestException as e:
+        
+        # Parse the structured comparative result
+        results = data.get("results", [])
+        if results and results[0].get("status") == "Completed":
+            extracted = results[0].get("data")
+            if extracted:
+                return json.dumps(extracted, indent=2)
+            
+        error_msg = results[0].get("error") if results else "Scraping failed without error details."
         if log_cb:
-            log_cb(f"⚠️ [Node: Scrape] Failed: {str(e)}")
+            log_cb(f"⚠️ [Node: Scrape] Agent scrape failed: {error_msg}")
+        return None
+    except Exception as e:
+        if log_cb:
+            log_cb(f"⚠️ [Node: Scrape] Connection failed: {str(e)}")
         return None
 
 

@@ -32,6 +32,21 @@ services:
     image: ${VISION_PIPELINE_IMAGE:-ghcr.io/spelech/vision-pipeline}:${VISION_PIPELINE_TAG:-latest}-dev
     labels:
       - "wud.watch=false"
+      - caddy_ingress_network=net_webservices
+      - tinyauth.apps.vision.config.domain=vision.wileyriley.com
+      - "portal.vision.name=Vision Pipeline"
+      - "portal.vision.category=System Infrastructure"
+      - "portal.vision.icon=fa-solid fa-eye"
+      - "portal.vision.color=#3b82f6"
+      - "portal.vision.description=Advanced node-based image and vision workflows."
+      - tinyauth.apps.vision.oauth.groups=full_admin
+      - kuma.vision.http.name=Vision Pipeline
+      - kuma.vision.http.url=https://vision.wileyriley.com
+      - kuma.vision.http.group=Infrastructure
+      - caddy=vision.wileyriley.com
+      - caddy.import_1=cloudflare
+      - caddy.import_2=tinyauth
+      - caddy.reverse_proxy={{upstreams 8501}}
     networks:
       - default
       - net_webservices

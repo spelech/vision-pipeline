@@ -118,18 +118,33 @@ def test_web_search_and_scrape_paths():
     ):
         assert nodes.web_search("milk") == []
 
-    long_text = "x" * 12050
     with patch("pipelines.nodes.requests.post") as mock_post:
-        mock_post.return_value.json.return_value = {"success": True, "text": long_text}
-        assert len(nodes.web_scrape("http://example.com")) == 10000
+        mock_post.return_value.json.return_value = {
+            "results": [
+                {
+                    "status": "Completed",
+                    "data": {"product_name": "Test Product", "price": "$10.00"}
+                }
+            ]
+        }
+        res = nodes.web_scrape("http://example.com")
+        assert "Test Product" in res
+        assert "$10.00" in res
 
     with patch("pipelines.nodes.requests.post") as mock_post:
-        mock_post.return_value.json.return_value = {"success": False}
+        mock_post.return_value.json.return_value = {
+            "results": [
+                {
+                    "status": "Failed",
+                    "error": "captcha blocked"
+                }
+            ]
+        }
         assert nodes.web_scrape("http://example.com") is None
 
     with patch(
         "pipelines.nodes.requests.post",
-        side_effect=requests.RequestException("boom"),
+        side_effect=Exception("boom"),
     ):
         assert nodes.web_scrape("http://example.com") is None
 
