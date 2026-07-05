@@ -94,16 +94,32 @@ export function Settings({ onToast }: { onToast?: (msg: string, type?: "info" | 
   const [activeTab, setActiveTab] = useState<'setup' | 'general' | 'prompts'>('setup');
   const [llmProvider, setLlmProvider] = useState<'openrouter' | 'litellm'>('openrouter');
   const [llmProviderInitialized, setLlmProviderInitialized] = useState(false);
-  const groupedModels = useMemo((): [string, ModelInfo[]][] => {
-    console.log("DEBUG: Calculating groupedModels for provider:", llmProvider, "FullModels count:", fullModels.length);
+  const explorerGroupedModels = useMemo((): [string, ModelInfo[]][] => {
     const groups: Record<string, ModelInfo[]> = {};
     
-    // Filter by selected provider and then group
+    fullModels
+      .filter(m => !m.source_gateway || m.source_gateway?.split(",").includes(llmProvider))
+      .forEach(m => {
+        const provider = m.provider || "Other";
+        if (!groups[provider]) groups[provider] = [];
+        groups[provider].push(m);
+      });
+
+    Object.values(groups).forEach(ms => {
+      ms.sort((a, b) => a.name.localeCompare(b.name));
+    });
+
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [fullModels, llmProvider]);
+
+  const groupedModels = useMemo((): [string, ModelInfo[]][] => {
+    const groups: Record<string, ModelInfo[]> = {};
+    
     fullModels
       .filter(m => {
         const matches = !m.source_gateway || m.source_gateway?.split(",").includes(llmProvider);
-        if (!matches) console.log("DEBUG: Model", m.id, "excluded because source_gateway", m.source_gateway, "does not match", llmProvider);
-        return matches;
+        const isStarredOrSystem = starredModels.includes(m.id) || m.is_system;
+        return matches && isStarredOrSystem;
       })
       .forEach(m => {
         const provider = m.provider || "Other";
@@ -111,26 +127,22 @@ export function Settings({ onToast }: { onToast?: (msg: string, type?: "info" | 
         groups[provider].push(m);
       });
 
-    // Sort each group alphabetically by name
     Object.values(groups).forEach(ms => {
       ms.sort((a, b) => a.name.localeCompare(b.name));
     });
 
-    const result = Object.entries(groups)
-      .sort(([a], [b]) => a.localeCompare(b));
-    console.log("DEBUG: GroupedModels result:", result);
-    return result;
-  }, [fullModels, llmProvider]);
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [fullModels, llmProvider, starredModels]);
 
   const [modelSearch, setModelSearch] = useState('');
   const filteredGroupedModels = useMemo((): [string, ModelInfo[]][] => {
-    if (!modelSearch) return groupedModels;
+    if (!modelSearch) return explorerGroupedModels;
     const search = modelSearch.toLowerCase();
-    return groupedModels.map(([provider, ms]): [string, ModelInfo[]] => [
+    return explorerGroupedModels.map(([provider, ms]): [string, ModelInfo[]] => [
       provider,
       ms.filter(m => m.id.toLowerCase().includes(search) || m.name.toLowerCase().includes(search))
     ]).filter(([_, ms]) => ms.length > 0);
-  }, [groupedModels, modelSearch]);
+  }, [explorerGroupedModels, modelSearch]);
   const [secretsSources, setSecretsSources] = useState<Record<string, string>>({});
   const [servicePrompts, setServicePrompts] = useState<Record<string, ServicePromptConfig>>({});
 

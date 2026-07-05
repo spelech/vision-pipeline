@@ -70,12 +70,12 @@ export function PipelineEditor() {
       const configData = configResult.status === 'fulfilled' ? configResult.value : {};
       const modelsData = modelsResult.status === 'fulfilled' ? modelsResult.value : {};
 
-      const favorites = Array.isArray(configData.model_favorites) ? configData.model_favorites : [];
-      const catalog = modelsData?.success && Array.isArray(modelsData.models)
-        ? modelsData.models.map((m: { id: string }) => m.id)
+      const starred = Array.isArray(configData.starred_models) ? configData.starred_models : [];
+      const systemModels = modelsData?.success && Array.isArray(modelsData.models)
+        ? modelsData.models.filter((m: any) => m.is_system).map((m: any) => m.id)
         : DEFAULT_PIPELINE_MODELS;
 
-      const merged = Array.from(new Set([...favorites, ...catalog]));
+      const merged = Array.from(new Set([...starred, ...systemModels]));
       setModels(merged);
     } catch (e) {
       console.error(e);
